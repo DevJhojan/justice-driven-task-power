@@ -157,6 +157,11 @@ class HomeView:
     def _load_tasks(self):
         """Carga las tareas desde la base de datos."""
         tasks = self.task_service.get_all_tasks(self.current_filter)
+        
+        # Asegurarse de que el contenedor existe
+        if not hasattr(self, 'tasks_container') or self.tasks_container is None:
+            return
+        
         self.tasks_container.controls.clear()
         
         if not tasks:
@@ -173,11 +178,12 @@ class HomeView:
                 self.tasks_container.controls.append(card)
         
         # Actualizar estadísticas
-        stats = self.task_service.get_statistics()
-        self.stats_container.content = create_statistics_card(stats, self.page)
+        if hasattr(self, 'stats_container') and self.stats_container:
+            stats = self.task_service.get_statistics()
+            self.stats_container.content = create_statistics_card(stats, self.page)
+            self.stats_container.update()
         
         self.tasks_container.update()
-        self.stats_container.update()
         self.page.update()
     
     def _filter_tasks(self, filter_completed: Optional[bool]):
@@ -267,7 +273,11 @@ class HomeView:
         # Remover la última vista (el formulario)
         if len(self.page.views) > 1:
             self.page.views.pop()
-        self.page.go(self.page.views[-1].route if self.page.views else "/")
+        # Navegar a la vista principal
+        if self.page.views:
+            self.page.go(self.page.views[-1].route)
+        else:
+            self.page.go("/")
         self.page.update()
     
     def _save_task(self, *args):
@@ -282,7 +292,14 @@ class HomeView:
             title, description, priority = args
             self.task_service.create_task(title, description, priority)
         
+        # Volver a la vista principal
         self._go_back()
+        
+        # Forzar actualización de la página antes de recargar tareas
+        self.page.update()
+        
+        # Recargar las tareas después de volver
+        # El contenedor debería estar disponible ya que no se reconstruye la UI
         self._load_tasks()
     
     def _toggle_task(self, task_id: int):
