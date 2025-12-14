@@ -23,9 +23,48 @@ def main(page: ft.Page):
     """
     # Configuración de la página
     page.title = "Aplicación de Tareas"
-    page.theme_mode = ft.ThemeMode.LIGHT
+    page.theme_mode = ft.ThemeMode.DARK
     page.padding = 0
     page.spacing = 0
+    
+    # Personalizar tema claro con matices rojos
+    page.theme = ft.Theme(
+        color_scheme_seed=ft.Colors.RED_700,
+        use_material3=True,
+        color_scheme=ft.ColorScheme(
+            primary=ft.Colors.RED_700,
+            on_primary=ft.Colors.WHITE,
+            secondary=ft.Colors.RED_600,
+            on_secondary=ft.Colors.WHITE,
+            surface=ft.Colors.WHITE,
+            on_surface=ft.Colors.BLACK87,
+            background=ft.Colors.GREY_50,
+            on_background=ft.Colors.BLACK87,
+            error=ft.Colors.RED_600,
+            on_error=ft.Colors.WHITE,
+        )
+    )
+    
+    # Personalizar tema oscuro con tonos negros y matices rojos
+    page.dark_theme = ft.Theme(
+        color_scheme_seed=ft.Colors.RED_900,
+        use_material3=True,
+        color_scheme=ft.ColorScheme(
+            primary=ft.Colors.RED_700,
+            on_primary=ft.Colors.WHITE,
+            secondary=ft.Colors.RED_800,
+            on_secondary=ft.Colors.WHITE,
+            surface=ft.Colors.BLACK87,
+            on_surface=ft.Colors.WHITE,
+            background=ft.Colors.BLACK,
+            on_background=ft.Colors.WHITE,
+            error=ft.Colors.RED_400,
+            on_error=ft.Colors.WHITE,
+        )
+    )
+    
+    # Establecer el color de fondo de la página según el tema inicial
+    page.bgcolor = ft.Colors.BLACK if page.theme_mode == ft.ThemeMode.DARK else ft.Colors.GREY_50
     
     # Configuración para móvil
     page.horizontal_alignment = ft.CrossAxisAlignment.STRETCH

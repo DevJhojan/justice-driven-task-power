@@ -26,11 +26,11 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, page: ft.Page = 
     title_color = ft.Colors.GREY_400 if task.completed else (ft.Colors.WHITE if is_dark else ft.Colors.BLACK87)
     description_color = ft.Colors.GREY_500 if is_dark else ft.Colors.GREY_600
     
-    # Color según prioridad
+    # Color según prioridad (esquema rojo/negro)
     priority_colors = {
-        'high': ft.Colors.RED_300,
-        'medium': ft.Colors.ORANGE_300,
-        'low': ft.Colors.GREEN_300
+        'high': ft.Colors.RED_600,
+        'medium': ft.Colors.RED_800,
+        'low': ft.Colors.RED_900
     }
     
     priority_labels = {
@@ -44,13 +44,16 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, page: ft.Page = 
     
     # Icono de estado
     status_icon = ft.Icons.CHECK_CIRCLE if task.completed else ft.Icons.RADIO_BUTTON_UNCHECKED
-    status_color = ft.Colors.GREEN if task.completed else ft.Colors.GREY
+    status_color = ft.Colors.RED_400 if task.completed else ft.Colors.GREY_600
     
     # Estilo del texto según estado
     title_style = ft.TextStyle(
         decoration=ft.TextDecoration.LINE_THROUGH if task.completed else None,
         color=title_color
     )
+    
+    # Color de fondo de la tarjeta según el tema
+    card_bgcolor = ft.Colors.BLACK87 if is_dark else None
     
     return ft.Card(
         content=ft.Container(
@@ -104,7 +107,7 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, page: ft.Page = 
                                 [
                                     ft.IconButton(
                                         icon=ft.Icons.EDIT,
-                                        icon_color=ft.Colors.BLUE,
+                                        icon_color=ft.Colors.RED_400,
                                         icon_size=20,
                                         on_click=lambda e, t=task: on_edit(t),
                                         tooltip="Editar"
@@ -128,6 +131,7 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, page: ft.Page = 
             ),
             padding=12,
             border_radius=8,
+            bgcolor=card_bgcolor,
         ),
         elevation=2,
         margin=ft.margin.symmetric(vertical=4)
@@ -147,10 +151,10 @@ def create_empty_state(page: ft.Page = None) -> ft.Container:
     # Detectar el tema actual
     is_dark = page.theme_mode == ft.ThemeMode.DARK if page else False
     
-    # Colores adaptativos
-    icon_color = ft.Colors.GREY_500 if is_dark else ft.Colors.GREY_400
-    text_color = ft.Colors.GREY_400 if is_dark else ft.Colors.GREY_600
-    subtitle_color = ft.Colors.GREY_500 if is_dark else ft.Colors.GREY_500
+    # Colores adaptativos con matices rojos
+    icon_color = ft.Colors.RED_600 if is_dark else ft.Colors.RED_500
+    text_color = ft.Colors.RED_400 if is_dark else ft.Colors.RED_700
+    subtitle_color = ft.Colors.RED_700 if is_dark else ft.Colors.RED_600
     
     return ft.Container(
         content=ft.Column(
@@ -197,6 +201,9 @@ def create_statistics_card(stats: dict, page: ft.Page = None) -> ft.Card:
     # Color adaptativo para las etiquetas
     label_color = ft.Colors.GREY_400 if is_dark else ft.Colors.GREY_600
     
+    # Color de fondo de la tarjeta de estadísticas
+    stats_card_bgcolor = ft.Colors.BLACK87 if is_dark else None
+    
     return ft.Card(
         content=ft.Container(
             content=ft.Row(
@@ -207,7 +214,7 @@ def create_statistics_card(stats: dict, page: ft.Page = None) -> ft.Card:
                                 str(stats.get('total', 0)),
                                 size=24,
                                 weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.BLUE
+                                color=ft.Colors.RED_400
                             ),
                             ft.Text("Total", size=12, color=label_color)
                         ],
@@ -221,7 +228,7 @@ def create_statistics_card(stats: dict, page: ft.Page = None) -> ft.Card:
                                 str(stats.get('completed', 0)),
                                 size=24,
                                 weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.GREEN
+                                color=ft.Colors.RED_500
                             ),
                             ft.Text("Completadas", size=12, color=label_color)
                         ],
@@ -235,7 +242,7 @@ def create_statistics_card(stats: dict, page: ft.Page = None) -> ft.Card:
                                 str(stats.get('pending', 0)),
                                 size=24,
                                 weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.ORANGE
+                                color=ft.Colors.RED_600
                             ),
                             ft.Text("Pendientes", size=12, color=label_color)
                         ],
@@ -245,7 +252,8 @@ def create_statistics_card(stats: dict, page: ft.Page = None) -> ft.Card:
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_EVENLY
             ),
-            padding=16
+            padding=16,
+            bgcolor=stats_card_bgcolor,
         ),
         elevation=1,
         margin=ft.margin.only(bottom=8)

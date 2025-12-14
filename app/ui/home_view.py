@@ -43,7 +43,7 @@ class HomeView:
             icon=initial_icon,
             tooltip=initial_tooltip,
             on_click=self._toggle_theme,
-            icon_color=ft.Colors.BLUE
+            icon_color=ft.Colors.RED_400
         )
         
         # Barra de título
@@ -54,7 +54,7 @@ class HomeView:
                         "Mis Tareas",
                         size=28,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.BLUE,
+                        color=ft.Colors.RED_400,
                         expand=True
                     ),
                     self.theme_button
@@ -63,38 +63,46 @@ class HomeView:
                 vertical_alignment=ft.CrossAxisAlignment.CENTER
             ),
             padding=ft.padding.symmetric(vertical=16, horizontal=20),
-            bgcolor=ft.Colors.BLUE_50
+            bgcolor=ft.Colors.BLACK87 if self.page.theme_mode == ft.ThemeMode.DARK else ft.Colors.RED_50
         )
         
-        # Botón flotante para agregar tarea
+        # Botón flotante para agregar tarea - color adaptativo
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        fab_bgcolor = ft.Colors.RED_700 if is_dark else ft.Colors.RED_600
+        
         self.fab = ft.FloatingActionButton(
             icon=ft.Icons.ADD,
             text="Nueva Tarea",
             on_click=self._show_new_task_form,
-            bgcolor=ft.Colors.BLUE,
+            bgcolor=fab_bgcolor,
             foreground_color=ft.Colors.WHITE
         )
         
-        # Filtros
+        # Filtros - colores adaptativos según el tema
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        active_bg = ft.Colors.RED_700 if is_dark else ft.Colors.RED_600
+        inactive_bg = ft.Colors.GREY_800 if is_dark else ft.Colors.RED_100
+        text_color = ft.Colors.WHITE
+        
         filter_row = ft.Row(
             [
                 ft.ElevatedButton(
                     text="Todas",
                     on_click=lambda e: self._filter_tasks(None),
-                    bgcolor=ft.Colors.BLUE if self.current_filter is None else ft.Colors.GREY_300,
-                    color=ft.Colors.WHITE if self.current_filter is None else ft.Colors.BLACK87
+                    bgcolor=active_bg if self.current_filter is None else inactive_bg,
+                    color=text_color
                 ),
                 ft.ElevatedButton(
                     text="Pendientes",
                     on_click=lambda e: self._filter_tasks(False),
-                    bgcolor=ft.Colors.ORANGE if self.current_filter is False else ft.Colors.GREY_300,
-                    color=ft.Colors.WHITE if self.current_filter is False else ft.Colors.BLACK87
+                    bgcolor=active_bg if self.current_filter is False else inactive_bg,
+                    color=text_color
                 ),
                 ft.ElevatedButton(
                     text="Completadas",
                     on_click=lambda e: self._filter_tasks(True),
-                    bgcolor=ft.Colors.GREEN if self.current_filter is True else ft.Colors.GREY_300,
-                    color=ft.Colors.WHITE if self.current_filter is True else ft.Colors.BLACK87
+                    bgcolor=active_bg if self.current_filter is True else inactive_bg,
+                    color=text_color
                 )
             ],
             spacing=8,
@@ -245,7 +253,7 @@ class HomeView:
                 self._load_tasks()
                 self.page.snack_bar = ft.SnackBar(
                     content=ft.Text("Tarea eliminada correctamente"),
-                    bgcolor=ft.Colors.GREEN
+                    bgcolor=ft.Colors.RED_700
                 )
                 self.page.snack_bar.open = True
             else:
@@ -267,14 +275,21 @@ class HomeView:
         """Cambia entre tema claro y oscuro."""
         if self.page.theme_mode == ft.ThemeMode.LIGHT:
             self.page.theme_mode = ft.ThemeMode.DARK
+            self.page.bgcolor = ft.Colors.BLACK
             self.theme_button.icon = ft.Icons.LIGHT_MODE
             self.theme_button.tooltip = "Cambiar a tema claro"
+            # Actualizar FAB
+            self.fab.bgcolor = ft.Colors.RED_700
         else:
             self.page.theme_mode = ft.ThemeMode.LIGHT
+            self.page.bgcolor = ft.Colors.GREY_50
             self.theme_button.icon = ft.Icons.DARK_MODE
             self.theme_button.tooltip = "Cambiar a tema oscuro"
+            # Actualizar FAB
+            self.fab.bgcolor = ft.Colors.RED_600
         
-        # Recargar las tareas para actualizar los colores
+        # Solo recargar las tareas para actualizar los colores adaptativos
+        # No reconstruir toda la UI para evitar duplicados
         self._load_tasks()
         self.page.update()
 

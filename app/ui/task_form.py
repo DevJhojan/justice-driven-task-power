@@ -58,7 +58,7 @@ class TaskForm:
             icon=ft.Icons.SAVE,
             on_click=self._handle_save,
             color=ft.Colors.WHITE,
-            bgcolor=ft.Colors.BLUE
+            bgcolor=ft.Colors.RED_700
         )
         
         self.cancel_button = ft.OutlinedButton(
@@ -83,7 +83,7 @@ class TaskForm:
                         title,
                         size=24,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.BLUE
+                        color=ft.Colors.RED_400
                     ),
                     ft.Divider(),
                     self.title_field,
