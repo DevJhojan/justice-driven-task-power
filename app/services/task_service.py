@@ -1,0 +1,134 @@
+"""
+Servicio de lógica de negocio para tareas.
+"""
+from typing import List, Optional
+from app.data.database import Database
+from app.data.task_repository import TaskRepository
+from app.data.models import Task
+
+
+class TaskService:
+    """Servicio para gestionar la lógica de negocio de tareas."""
+    
+    def __init__(self):
+        """Inicializa el servicio con la base de datos y repositorio."""
+        self.db = Database()
+        self.repository = TaskRepository(self.db)
+    
+    def create_task(self, title: str, description: str = "", priority: str = "medium") -> Task:
+        """
+        Crea una nueva tarea.
+        
+        Args:
+            title: Título de la tarea.
+            description: Descripción de la tarea.
+            priority: Prioridad ('low', 'medium', 'high').
+            
+        Returns:
+            Tarea creada.
+        """
+        if not title or not title.strip():
+            raise ValueError("El título de la tarea no puede estar vacío")
+        
+        if priority not in ['low', 'medium', 'high']:
+            priority = 'medium'
+        
+        task = Task(
+            id=None,
+            title=title.strip(),
+            description=description.strip(),
+            completed=False,
+            created_at=None,
+            updated_at=None,
+            priority=priority
+        )
+        
+        return self.repository.create(task)
+    
+    def get_all_tasks(self, filter_completed: Optional[bool] = None) -> List[Task]:
+        """
+        Obtiene todas las tareas, opcionalmente filtradas por estado.
+        
+        Args:
+            filter_completed: Si se proporciona, filtra por estado de completado.
+            
+        Returns:
+            Lista de tareas.
+        """
+        return self.repository.get_all(filter_completed)
+    
+    def get_task(self, task_id: int) -> Optional[Task]:
+        """
+        Obtiene una tarea por su ID.
+        
+        Args:
+            task_id: ID de la tarea.
+            
+        Returns:
+            Tarea encontrada o None.
+        """
+        return self.repository.get_by_id(task_id)
+    
+    def update_task(self, task: Task) -> Task:
+        """
+        Actualiza una tarea existente.
+        
+        Args:
+            task: Tarea con los datos actualizados.
+            
+        Returns:
+            Tarea actualizada.
+        """
+        if not task.title or not task.title.strip():
+            raise ValueError("El título de la tarea no puede estar vacío")
+        
+        task.title = task.title.strip()
+        task.description = task.description.strip()
+        
+        if task.priority not in ['low', 'medium', 'high']:
+            task.priority = 'medium'
+        
+        return self.repository.update(task)
+    
+    def delete_task(self, task_id: int) -> bool:
+        """
+        Elimina una tarea.
+        
+        Args:
+            task_id: ID de la tarea a eliminar.
+            
+        Returns:
+            True si se eliminó, False si no existía.
+        """
+        return self.repository.delete(task_id)
+    
+    def toggle_task_complete(self, task_id: int) -> Optional[Task]:
+        """
+        Cambia el estado de completado de una tarea.
+        
+        Args:
+            task_id: ID de la tarea.
+            
+        Returns:
+            Tarea actualizada o None si no existe.
+        """
+        return self.repository.toggle_complete(task_id)
+    
+    def get_statistics(self) -> dict:
+        """
+        Obtiene estadísticas de las tareas.
+        
+        Returns:
+            Diccionario con estadísticas.
+        """
+        all_tasks = self.repository.get_all()
+        total = len(all_tasks)
+        completed = sum(1 for task in all_tasks if task.completed)
+        pending = total - completed
+        
+        return {
+            'total': total,
+            'completed': completed,
+            'pending': pending
+        }
+
