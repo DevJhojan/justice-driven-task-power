@@ -14,6 +14,46 @@ echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}Construyendo APK y AAB para Android${NC}"
 echo -e "${BLUE}========================================${NC}"
 
+# Leer información del proyecto desde pyproject.toml
+if [ -f "pyproject.toml" ]; then
+    # Extraer nombre del proyecto
+    PROJECT_NAME_RAW=$(grep -E "^name\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1)
+    
+    # Convertir nombre de formato "todo-app" a "Todo App" (capitalizar palabras)
+    PROJECT_NAME=$(echo "$PROJECT_NAME_RAW" | sed 's/-/ /g' | sed 's/\b\(.\)/\u\1/g')
+    
+    # Extraer descripción
+    PROJECT_DESCRIPTION=$(grep -E "^description\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1)
+    
+    # Extraer versión
+    PROJECT_VERSION=$(grep -E "^version\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1)
+    
+    # Si no se encontraron valores, usar valores por defecto
+    if [ -z "$PROJECT_NAME" ] || [ -z "$PROJECT_NAME_RAW" ]; then
+        PROJECT_NAME="TodoApp"
+        PROJECT_NAME_RAW="todo-app"
+    fi
+    
+    if [ -z "$PROJECT_DESCRIPTION" ]; then
+        PROJECT_DESCRIPTION="Aplicación de gestión de tareas"
+    fi
+    
+    if [ -z "$PROJECT_VERSION" ]; then
+        PROJECT_VERSION="1.0.0"
+    fi
+    
+    echo -e "${BLUE}Información del proyecto:${NC}"
+    echo -e "${BLUE}  Nombre: $PROJECT_NAME${NC}"
+    echo -e "${BLUE}  Versión: $PROJECT_VERSION${NC}"
+    echo -e "${BLUE}  Descripción: $PROJECT_DESCRIPTION${NC}"
+else
+    # Valores por defecto si no existe pyproject.toml
+    PROJECT_NAME="TodoApp"
+    PROJECT_DESCRIPTION="Aplicación de gestión de tareas"
+    PROJECT_VERSION="1.0.0"
+    echo -e "${YELLOW}Advertencia: pyproject.toml no encontrado, usando valores por defecto${NC}"
+fi
+
 # Activar entorno virtual
 if [ -d "venv" ]; then
     echo -e "${BLUE}Activando entorno virtual...${NC}"
@@ -83,9 +123,9 @@ echo -e "${BLUE}========================================${NC}"
 
 # Construir APK inicial para generar la estructura
 flet build apk \
-    --project "TodoApp" \
-    --description "Aplicación de gestión de tareas" \
-    --product "Todo App"
+    --project "$PROJECT_NAME" \
+    --description "$PROJECT_DESCRIPTION" \
+    --product "$PROJECT_NAME"
 
 # Esperar a que se cree la estructura de build
 if [ -d "build/flutter" ]; then
@@ -97,9 +137,9 @@ if [ -d "build/flutter" ]; then
     # Reconstruir el APK con los iconos personalizados
     echo -e "${BLUE}Reconstruyendo APK con iconos personalizados...${NC}"
     flet build apk \
-        --project "TodoApp" \
-        --description "Aplicación de gestión de tareas" \
-        --product "Todo App"
+        --project "$PROJECT_NAME" \
+        --description "$PROJECT_DESCRIPTION" \
+        --product "$PROJECT_NAME"
     
     # Verificar que el APK se generó
     if [ -f "build/apk/app-release.apk" ]; then
@@ -131,9 +171,9 @@ replace_icons
 
 # Construir el AAB usando el comando de Flet
 flet build aab \
-    --project "TodoApp" \
-    --description "Aplicación de gestión de tareas" \
-    --product "Todo App"
+    --project "$PROJECT_NAME" \
+    --description "$PROJECT_DESCRIPTION" \
+    --product "$PROJECT_NAME"
 
 # Reemplazar iconos nuevamente después del build (por si Flet regeneró la estructura)
 replace_icons
@@ -142,9 +182,9 @@ replace_icons
 if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
     echo -e "${BLUE}Reconstruyendo AAB con iconos personalizados...${NC}"
     flet build aab \
-        --project "TodoApp" \
-        --description "Aplicación de gestión de tareas" \
-        --product "Todo App"
+        --project "$PROJECT_NAME" \
+        --description "$PROJECT_DESCRIPTION" \
+        --product "$PROJECT_NAME"
 fi
 
 # Verificar que el AAB se generó
@@ -196,6 +236,7 @@ if [ "$APK_SUCCESS" = true ] && [ "$AAB_SUCCESS" = true ]; then
     echo -e "${GREEN}✓ Build completado exitosamente!${NC}"
     echo -e "${GREEN}  APK listo para instalación directa${NC}"
     echo -e "${GREEN}  AAB listo para subir a Google Play Store${NC}"
+    echo -e "${BLUE}  Versión: $PROJECT_VERSION${NC}"
     exit 0
 elif [ "$APK_SUCCESS" = true ]; then
     echo -e "${YELLOW}⚠ APK construido, pero AAB falló${NC}"
@@ -207,4 +248,3 @@ else
     echo -e "${RED}✗ Build falló - ningún archivo generado${NC}"
     exit 1
 fi
-
