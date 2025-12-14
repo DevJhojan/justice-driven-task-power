@@ -45,28 +45,8 @@ else
     fi
 fi
 
-# Limpiar builds anteriores si existen
-if [ -d "build" ]; then
-    echo -e "${BLUE}Limpiando builds anteriores...${NC}"
-    rm -rf build/flutter
-fi
-
-# Construir el APK
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}Construyendo APK...${NC}"
-echo -e "${BLUE}========================================${NC}"
-
-flet build apk \
-    --project "TodoApp" \
-    --description "Aplicación de gestión de tareas" \
-    --product "Todo App" \
-    --module-name main
-
-# Esperar a que se cree la estructura de build
-if [ -d "build/flutter" ]; then
-    echo -e "${BLUE}Estructura de build generada${NC}"
-    
-    # Reemplazar iconos si existe app_icon.png
+# Función para reemplazar iconos personalizados
+replace_icons() {
     if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
         echo -e "${BLUE}Reemplazando iconos personalizados...${NC}"
         
@@ -94,14 +74,48 @@ if [ -d "build/flutter" ]; then
             fi
         done
     fi
+}
+
+# Construir el APK
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}Construyendo APK...${NC}"
+echo -e "${BLUE}========================================${NC}"
+
+# Construir APK inicial para generar la estructura
+flet build apk \
+    --project "TodoApp" \
+    --description "Aplicación de gestión de tareas" \
+    --product "Todo App"
+
+# Esperar a que se cree la estructura de build
+if [ -d "build/flutter" ]; then
+    echo -e "${BLUE}Estructura de build generada${NC}"
+    
+    # Reemplazar iconos personalizados
+    replace_icons
     
     # Reconstruir el APK con los iconos personalizados
     echo -e "${BLUE}Reconstruyendo APK con iconos personalizados...${NC}"
     flet build apk \
         --project "TodoApp" \
         --description "Aplicación de gestión de tareas" \
-        --product "Todo App" \
-        --module-name main
+        --product "Todo App"
+    
+    # Verificar que el APK se generó
+    if [ -f "build/apk/app-release.apk" ]; then
+        APK_SIZE=$(du -h build/apk/app-release.apk | cut -f1)
+        echo -e "${GREEN}✓ APK construido exitosamente! (${APK_SIZE})${NC}"
+        echo -e "${GREEN}  Ubicación: build/apk/app-release.apk${NC}"
+    else
+        echo -e "${YELLOW}Advertencia: APK no encontrado en la ubicación esperada${NC}"
+        # Buscar el APK en otras ubicaciones posibles
+        APK_FILE=$(find build -name "*.apk" -type f 2>/dev/null | head -1)
+        if [ -n "$APK_FILE" ]; then
+            mkdir -p build/apk
+            cp "$APK_FILE" build/apk/app-release.apk
+            echo -e "${GREEN}✓ APK encontrado y copiado a build/apk/app-release.apk${NC}"
+        fi
+    fi
 else
     echo -e "${RED}Error: No se generó la estructura de build${NC}"
     exit 1
@@ -112,55 +126,85 @@ echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}Construyendo AAB para Google Play...${NC}"
 echo -e "${BLUE}========================================${NC}"
 
-# Navegar al directorio de Flutter y construir el AAB
-cd build/flutter
+# Asegurar que los iconos estén actualizados antes de construir el AAB
+replace_icons
 
-# Construir el AAB
-if [ -f "android/gradlew" ]; then
-    cd android
-    ./gradlew bundleRelease
-    cd ..
-    
-    # Buscar el AAB generado
-    AAB_FILE=$(find android/app/build/outputs/bundle/release -name "*.aab" 2>/dev/null | head -1)
-    
-    if [ -n "$AAB_FILE" ]; then
-        # Copiar el AAB al directorio build
-        mkdir -p ../../build/aab
-        cp "$AAB_FILE" ../../build/aab/app-release.aab
-        echo -e "${GREEN}✓ AAB construido exitosamente!${NC}"
-        echo -e "${GREEN}  Ubicación: build/aab/app-release.aab${NC}"
-    else
-        echo -e "${RED}Error: No se encontró el archivo AAB generado${NC}"
-        exit 1
-    fi
-else
-    echo -e "${RED}Error: No se encontró gradlew en build/flutter/android${NC}"
-    exit 1
+# Construir el AAB usando el comando de Flet
+flet build aab \
+    --project "TodoApp" \
+    --description "Aplicación de gestión de tareas" \
+    --product "Todo App"
+
+# Reemplazar iconos nuevamente después del build (por si Flet regeneró la estructura)
+replace_icons
+
+# Si los iconos fueron reemplazados, reconstruir el AAB
+if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
+    echo -e "${BLUE}Reconstruyendo AAB con iconos personalizados...${NC}"
+    flet build aab \
+        --project "TodoApp" \
+        --description "Aplicación de gestión de tareas" \
+        --product "Todo App"
 fi
 
-cd ../..
+# Verificar que el AAB se generó
+if [ -f "build/aab/app-release.aab" ]; then
+    AAB_SIZE=$(du -h build/aab/app-release.aab | cut -f1)
+    echo -e "${GREEN}✓ AAB construido exitosamente! (${AAB_SIZE})${NC}"
+    echo -e "${GREEN}  Ubicación: build/aab/app-release.aab${NC}"
+else
+    echo -e "${YELLOW}Advertencia: AAB no encontrado en la ubicación esperada${NC}"
+    # Buscar el AAB en otras ubicaciones posibles
+    AAB_FILE=$(find build -name "*.aab" -type f 2>/dev/null | head -1)
+    if [ -n "$AAB_FILE" ]; then
+        mkdir -p build/aab
+        cp "$AAB_FILE" build/aab/app-release.aab
+        echo -e "${GREEN}✓ AAB encontrado y copiado a build/aab/app-release.aab${NC}"
+    else
+        echo -e "${RED}Error: No se pudo encontrar el archivo AAB generado${NC}"
+        exit 1
+    fi
+fi
 
 # Verificar que los archivos se generaron correctamente
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}Resumen de builds:${NC}"
 echo -e "${BLUE}========================================${NC}"
 
+APK_SUCCESS=false
+AAB_SUCCESS=false
+
 if [ -f "build/apk/app-release.apk" ]; then
     APK_SIZE=$(du -h build/apk/app-release.apk | cut -f1)
     echo -e "${GREEN}✓ APK: build/apk/app-release.apk (${APK_SIZE})${NC}"
+    APK_SUCCESS=true
 else
-    echo -e "${RED}✗ APK no encontrado${NC}"
+    echo -e "${RED}✗ APK no encontrado en build/apk/app-release.apk${NC}"
 fi
 
 if [ -f "build/aab/app-release.aab" ]; then
     AAB_SIZE=$(du -h build/aab/app-release.aab | cut -f1)
     echo -e "${GREEN}✓ AAB: build/aab/app-release.aab (${AAB_SIZE})${NC}"
+    AAB_SUCCESS=true
 else
-    echo -e "${RED}✗ AAB no encontrado${NC}"
+    echo -e "${RED}✗ AAB no encontrado en build/aab/app-release.aab${NC}"
 fi
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${GREEN}Build completado!${NC}"
-echo -e "${BLUE}========================================${NC}"
+
+if [ "$APK_SUCCESS" = true ] && [ "$AAB_SUCCESS" = true ]; then
+    echo -e "${GREEN}✓ Build completado exitosamente!${NC}"
+    echo -e "${GREEN}  APK listo para instalación directa${NC}"
+    echo -e "${GREEN}  AAB listo para subir a Google Play Store${NC}"
+    exit 0
+elif [ "$APK_SUCCESS" = true ]; then
+    echo -e "${YELLOW}⚠ APK construido, pero AAB falló${NC}"
+    exit 1
+elif [ "$AAB_SUCCESS" = true ]; then
+    echo -e "${YELLOW}⚠ AAB construido, pero APK falló${NC}"
+    exit 1
+else
+    echo -e "${RED}✗ Build falló - ningún archivo generado${NC}"
+    exit 1
+fi
 
