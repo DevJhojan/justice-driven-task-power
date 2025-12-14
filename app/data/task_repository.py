@@ -4,7 +4,7 @@ Repositorio para operaciones CRUD de tareas en la base de datos.
 from datetime import datetime
 from typing import List, Optional
 from app.data.database import Database
-from app.data.models import Task
+from app.data.models import Task, SubTask
 
 
 class TaskRepository:
@@ -73,7 +73,10 @@ class TaskRepository:
         conn.close()
         
         if row:
-            return self._row_to_task(row)
+            task = self._row_to_task(row)
+            # Cargar subtareas
+            task.subtasks = self.get_subtasks(task_id)
+            return task
         return None
     
     def get_all(self, filter_completed: Optional[bool] = None) -> List[Task]:
@@ -101,7 +104,11 @@ class TaskRepository:
         rows = cursor.fetchall()
         conn.close()
         
-        return [self._row_to_task(row) for row in rows]
+        tasks = [self._row_to_task(row) for row in rows]
+        # Cargar subtareas para cada tarea
+        for task in tasks:
+            task.subtasks = self.get_subtasks(task.id)
+        return tasks
     
     def update(self, task: Task) -> Task:
         """
@@ -175,6 +182,150 @@ class TaskRepository:
             return self.update(task)
         return None
     
+    def get_subtasks(self, task_id: int) -> List[SubTask]:
+        """
+        Obtiene todas las subtareas de una tarea.
+        
+        Args:
+            task_id: ID de la tarea padre.
+            
+        Returns:
+            Lista de subtareas.
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT * FROM subtasks 
+            WHERE task_id = ? 
+            ORDER BY created_at ASC
+        ''', (task_id,))
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [self._row_to_subtask(row) for row in rows]
+    
+    def create_subtask(self, subtask: SubTask) -> SubTask:
+        """
+        Crea una nueva subtarea.
+        
+        Args:
+            subtask: Subtarea a crear.
+            
+        Returns:
+            Subtarea creada con ID asignado.
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now().isoformat()
+        
+        deadline_str = subtask.deadline.isoformat() if subtask.deadline else None
+        
+        cursor.execute('''
+            INSERT INTO subtasks (task_id, title, description, deadline, completed, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            subtask.task_id,
+            subtask.title,
+            subtask.description or "",
+            deadline_str,
+            1 if subtask.completed else 0,
+            now,
+            now
+        ))
+        
+        subtask.id = cursor.lastrowid
+        subtask.created_at = datetime.now()
+        subtask.updated_at = datetime.now()
+        
+        conn.commit()
+        conn.close()
+        
+        return subtask
+    
+    def update_subtask(self, subtask: SubTask) -> SubTask:
+        """
+        Actualiza una subtarea existente.
+        
+        Args:
+            subtask: Subtarea con los datos actualizados.
+            
+        Returns:
+            Subtarea actualizada.
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now().isoformat()
+        
+        deadline_str = subtask.deadline.isoformat() if subtask.deadline else None
+        
+        cursor.execute('''
+            UPDATE subtasks 
+            SET title = ?, description = ?, deadline = ?, completed = ?, updated_at = ?
+            WHERE id = ?
+        ''', (
+            subtask.title,
+            subtask.description or "",
+            deadline_str,
+            1 if subtask.completed else 0,
+            now,
+            subtask.id
+        ))
+        
+        subtask.updated_at = datetime.now()
+        
+        conn.commit()
+        conn.close()
+        
+        return subtask
+    
+    def delete_subtask(self, subtask_id: int) -> bool:
+        """
+        Elimina una subtarea por su ID.
+        
+        Args:
+            subtask_id: ID de la subtarea a eliminar.
+            
+        Returns:
+            True si se eliminó, False si no existía.
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM subtasks WHERE id = ?', (subtask_id,))
+        deleted = cursor.rowcount > 0
+        
+        conn.commit()
+        conn.close()
+        
+        return deleted
+    
+    def toggle_subtask_complete(self, subtask_id: int) -> Optional[SubTask]:
+        """
+        Cambia el estado de completado de una subtarea.
+        
+        Args:
+            subtask_id: ID de la subtarea.
+            
+        Returns:
+            Subtarea actualizada o None si no existe.
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM subtasks WHERE id = ?', (subtask_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            subtask = self._row_to_subtask(row)
+            subtask.completed = not subtask.completed
+            return self.update_subtask(subtask)
+        return None
+    
     def _row_to_task(self, row) -> Task:
         """
         Convierte una fila de la base de datos a un objeto Task.
@@ -200,6 +351,52 @@ class TaskRepository:
             completed=bool(row['completed']),
             created_at=created_at,
             updated_at=updated_at,
-            priority=row['priority']
+            priority=row['priority'],
+            subtasks=[]  # Se cargarán después
+        )
+    
+    def _row_to_subtask(self, row) -> SubTask:
+        """
+        Convierte una fila de la base de datos a un objeto SubTask.
+        
+        Args:
+            row: Fila de SQLite.
+            
+        Returns:
+            Objeto SubTask.
+        """
+        created_at = None
+        updated_at = None
+        deadline = None
+        
+        if row['created_at']:
+            created_at = datetime.fromisoformat(row['created_at'])
+        if row['updated_at']:
+            updated_at = datetime.fromisoformat(row['updated_at'])
+        
+        # Acceder a deadline de forma segura (puede no existir en bases de datos antiguas)
+        try:
+            if 'deadline' in row.keys() and row['deadline']:
+                deadline = datetime.fromisoformat(row['deadline'])
+        except (KeyError, TypeError, ValueError):
+            deadline = None
+        
+        # Acceder a description de forma segura
+        description = ''
+        try:
+            if 'description' in row.keys():
+                description = row['description'] or ''
+        except (KeyError, TypeError):
+            description = ''
+        
+        return SubTask(
+            id=row['id'],
+            task_id=row['task_id'],
+            title=row['title'],
+            description=description,
+            deadline=deadline,
+            completed=bool(row['completed']),
+            created_at=created_at,
+            updated_at=updated_at
         )
 

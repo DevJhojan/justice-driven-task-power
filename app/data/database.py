@@ -37,6 +37,7 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         
+        # Tabla de tareas principales
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -47,6 +48,37 @@ class Database:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
+        ''')
+        
+        # Tabla de subtareas
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS subtasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                deadline TEXT,
+                completed INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+            )
+        ''')
+        
+        # Migración: agregar columnas description y deadline si no existen
+        try:
+            cursor.execute('ALTER TABLE subtasks ADD COLUMN description TEXT')
+        except sqlite3.OperationalError:
+            pass  # La columna ya existe
+        
+        try:
+            cursor.execute('ALTER TABLE subtasks ADD COLUMN deadline TEXT')
+        except sqlite3.OperationalError:
+            pass  # La columna ya existe
+        
+        # Crear índice para mejorar las consultas
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id)
         ''')
         
         conn.commit()

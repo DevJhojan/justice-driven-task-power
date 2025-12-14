@@ -2,10 +2,10 @@
 Widgets reutilizables para la interfaz de usuario.
 """
 import flet as ft
-from app.data.models import Task
+from app.data.models import Task, SubTask
 
 
-def create_task_card(task: Task, on_toggle, on_edit, on_delete, page: ft.Page = None) -> ft.Card:
+def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtask=None, on_add_subtask=None, on_delete_subtask=None, on_edit_subtask=None, page: ft.Page = None) -> ft.Card:
     """
     Crea una tarjeta de tarea.
     
@@ -55,77 +55,251 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, page: ft.Page = 
     # Color de fondo de la tarjeta según el tema
     card_bgcolor = ft.Colors.BLACK87 if is_dark else None
     
+    # Construir lista de controles de la tarjeta
+    card_controls = [
+        ft.Row(
+            [
+                ft.IconButton(
+                    icon=status_icon,
+                    icon_color=status_color,
+                    on_click=lambda e, task_obj=task: on_toggle(task_obj.id),
+                    tooltip="Marcar como completada" if not task.completed else "Marcar como pendiente"
+                ),
+                ft.Column(
+                    [
+                        ft.Text(
+                            task.title,
+                            size=16,
+                            weight=ft.FontWeight.BOLD,
+                            style=title_style,
+                            expand=True
+                        ),
+                        ft.Text(
+                            task.description if task.description else "Sin descripción",
+                            size=12,
+                            color=description_color,
+                            style=title_style if task.completed else None
+                        ),
+                    ],
+                    expand=True,
+                    spacing=4
+                ),
+            ],
+            spacing=8,
+            expand=True
+        )
+    ]
+    
+    # Agregar subtareas si existen
+    if task.subtasks and len(task.subtasks) > 0:
+        subtasks_list = []
+        for subtask in task.subtasks:
+            from datetime import datetime
+            
+            subtask_icon = ft.Icons.CHECK_CIRCLE if subtask.completed else ft.Icons.RADIO_BUTTON_UNCHECKED
+            subtask_color = ft.Colors.RED_400 if subtask.completed else ft.Colors.GREY_600
+            subtask_text_color = ft.Colors.GREY_400 if subtask.completed else (ft.Colors.WHITE if is_dark else ft.Colors.BLACK87)
+            subtask_desc_color = ft.Colors.GREY_500 if is_dark else ft.Colors.GREY_600
+            
+            # Formatear fecha límite si existe
+            deadline_text = ""
+            if subtask.deadline:
+                try:
+                    deadline_text = subtask.deadline.strftime("%d/%m/%Y %H:%M")
+                    # Verificar si está vencida
+                    if subtask.deadline < datetime.now() and not subtask.completed:
+                        deadline_text = f"⚠️ {deadline_text} (Vencida)"
+                except:
+                    deadline_text = "Fecha inválida"
+            
+            # Construir controles de la subtarea
+            subtask_text_controls = [
+                ft.Text(
+                    subtask.title,
+                    size=12,
+                    weight=ft.FontWeight.BOLD,
+                    color=subtask_text_color,
+                    expand=True,
+                    style=ft.TextStyle(
+                        decoration=ft.TextDecoration.LINE_THROUGH if subtask.completed else None
+                    )
+                )
+            ]
+            
+            # Agregar descripción si existe
+            if subtask.description:
+                subtask_text_controls.append(
+                    ft.Text(
+                        subtask.description,
+                        size=10,
+                        color=subtask_desc_color,
+                        style=ft.TextStyle(
+                            decoration=ft.TextDecoration.LINE_THROUGH if subtask.completed else None
+                        )
+                    )
+                )
+            
+            # Agregar fecha límite si existe
+            if deadline_text:
+                subtask_text_controls.append(
+                    ft.Text(
+                        deadline_text,
+                        size=9,
+                        color=ft.Colors.RED_400 if "Vencida" in deadline_text else ft.Colors.GREY_500,
+                        weight=ft.FontWeight.BOLD if "Vencida" in deadline_text else None
+                    )
+                )
+            
+            # Construir controles de la fila
+            subtask_row_controls = [
+                ft.IconButton(
+                    icon=subtask_icon,
+                    icon_color=subtask_color,
+                    icon_size=16,
+                    on_click=lambda e, st=subtask: on_toggle_subtask(st.id) if on_toggle_subtask else None,
+                    tooltip="Marcar subtarea",
+                    width=32,
+                    height=32
+                ),
+                ft.Column(
+                    subtask_text_controls,
+                    spacing=2,
+                    expand=True,
+                    tight=True
+                )
+            ]
+            
+            # Agregar botones de acción si existen
+            if on_edit_subtask or on_delete_subtask:
+                action_buttons = []
+                
+                if on_edit_subtask:
+                    action_buttons.append(
+                        ft.IconButton(
+                            icon=ft.Icons.EDIT,
+                            icon_color=ft.Colors.RED_400,
+                            icon_size=16,
+                            on_click=lambda e, st=subtask: on_edit_subtask(st),
+                            tooltip="Editar subtarea",
+                            width=32,
+                            height=32
+                        )
+                    )
+                
+                if on_delete_subtask:
+                    action_buttons.append(
+                        ft.IconButton(
+                            icon=ft.Icons.DELETE,
+                            icon_color=ft.Colors.RED_400,
+                            icon_size=16,
+                            on_click=lambda e, st_id=subtask.id: on_delete_subtask(st_id),
+                            tooltip="Eliminar subtarea",
+                            width=32,
+                            height=32
+                        )
+                    )
+                
+                subtask_row_controls.append(
+                    ft.Row(action_buttons, spacing=0)
+                )
+            
+            # Contenedor principal de la subtarea
+            subtask_content = ft.Column(
+                [
+                    ft.Row(
+                        subtask_row_controls,
+                        spacing=4,
+                        expand=True
+                    )
+                ],
+                spacing=2,
+                tight=True
+            )
+            
+            subtask_row = ft.Container(
+                content=subtask_content,
+                padding=ft.padding.symmetric(vertical=4, horizontal=8),
+                border=ft.border.all(1, ft.Colors.GREY_800 if is_dark else ft.Colors.GREY_300),
+                border_radius=4,
+                margin=ft.margin.only(bottom=4)
+            )
+            subtasks_list.append(subtask_row)
+        
+        if subtasks_list:
+            card_controls.append(
+                ft.Container(
+                    content=ft.Column(
+                        subtasks_list,
+                        spacing=4,
+                        tight=True
+                    ),
+                    padding=ft.padding.only(left=40, top=4, bottom=4),
+                )
+            )
+    
+    # Botón para agregar subtarea
+    if on_add_subtask:
+        def make_add_handler(task_id):
+            def handler(e):
+                on_add_subtask(task_id)
+            return handler
+        
+        card_controls.append(
+            ft.Container(
+                content=ft.TextButton(
+                    icon=ft.Icons.ADD,
+                    text="Agregar subtarea",
+                    icon_color=ft.Colors.RED_400,
+                    on_click=make_add_handler(task.id),
+                    tooltip="Agregar subtarea"
+                ),
+                padding=ft.padding.only(left=40, top=4, bottom=4),
+            )
+        )
+    
+    # Fila de acciones
+    card_controls.append(
+        ft.Row(
+            [
+                ft.Container(
+                    content=ft.Text(
+                        priority_label,
+                        size=10,
+                        color=ft.Colors.WHITE,
+                        weight=ft.FontWeight.BOLD
+                    ),
+                    bgcolor=priority_color,
+                    padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                    border_radius=12,
+                ),
+                ft.Row(
+                    [
+                        ft.IconButton(
+                            icon=ft.Icons.EDIT,
+                            icon_color=ft.Colors.RED_400,
+                            icon_size=20,
+                            on_click=lambda e, t=task: on_edit(t),
+                            tooltip="Editar"
+                        ),
+                        ft.IconButton(
+                            icon=ft.Icons.DELETE,
+                            icon_color=ft.Colors.RED,
+                            icon_size=20,
+                            on_click=lambda e, task_id=task.id: on_delete(task_id),
+                            tooltip="Eliminar"
+                        ),
+                    ],
+                    spacing=0
+                )
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+        )
+    )
+    
     return ft.Card(
         content=ft.Container(
             content=ft.Column(
-                [
-                    ft.Row(
-                        [
-                            ft.IconButton(
-                                icon=status_icon,
-                                icon_color=status_color,
-                                on_click=lambda e, task_obj=task: on_toggle(task_obj.id),
-                                tooltip="Marcar como completada" if not task.completed else "Marcar como pendiente"
-                            ),
-                            ft.Column(
-                                [
-                                    ft.Text(
-                                        task.title,
-                                        size=16,
-                                        weight=ft.FontWeight.BOLD,
-                                        style=title_style,
-                                        expand=True
-                                    ),
-                                    ft.Text(
-                                        task.description if task.description else "Sin descripción",
-                                        size=12,
-                                        color=description_color,
-                                        style=title_style if task.completed else None
-                                    ),
-                                ],
-                                expand=True,
-                                spacing=4
-                            ),
-                        ],
-                        spacing=8,
-                        expand=True
-                    ),
-                    ft.Row(
-                        [
-                            ft.Container(
-                                content=ft.Text(
-                                    priority_label,
-                                    size=10,
-                                    color=ft.Colors.WHITE,
-                                    weight=ft.FontWeight.BOLD
-                                ),
-                                bgcolor=priority_color,
-                                padding=ft.padding.symmetric(horizontal=8, vertical=4),
-                                border_radius=12,
-                            ),
-                            ft.Row(
-                                [
-                                    ft.IconButton(
-                                        icon=ft.Icons.EDIT,
-                                        icon_color=ft.Colors.RED_400,
-                                        icon_size=20,
-                                        on_click=lambda e, t=task: on_edit(t),
-                                        tooltip="Editar"
-                                    ),
-                                    ft.IconButton(
-                                        icon=ft.Icons.DELETE,
-                                        icon_color=ft.Colors.RED,
-                                        icon_size=20,
-                                        on_click=lambda e, task_id=task.id: on_delete(task_id),
-                                        tooltip="Eliminar"
-                                    ),
-                                ],
-                                spacing=0
-                            )
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
-                    )
-                ],
+                card_controls,
                 spacing=8,
                 tight=True
             ),

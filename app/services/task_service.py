@@ -2,9 +2,10 @@
 Servicio de lógica de negocio para tareas.
 """
 from typing import List, Optional
+from datetime import datetime
 from app.data.database import Database
 from app.data.task_repository import TaskRepository
-from app.data.models import Task
+from app.data.models import Task, SubTask
 
 
 class TaskService:
@@ -131,4 +132,73 @@ class TaskService:
             'completed': completed,
             'pending': pending
         }
+    
+    def create_subtask(self, task_id: int, title: str, description: str = "", deadline: Optional[datetime] = None) -> SubTask:
+        """
+        Crea una nueva subtarea para una tarea.
+        
+        Args:
+            task_id: ID de la tarea padre.
+            title: Título de la subtarea.
+            description: Descripción de la subtarea (opcional).
+            deadline: Fecha límite de la subtarea (opcional).
+            
+        Returns:
+            Subtarea creada.
+        """
+        if not title or not title.strip():
+            raise ValueError("El título de la subtarea no puede estar vacío")
+        
+        subtask = SubTask(
+            id=None,
+            task_id=task_id,
+            title=title.strip(),
+            description=description.strip() if description else "",
+            deadline=deadline,
+            completed=False,
+            created_at=None,
+            updated_at=None
+        )
+        
+        return self.repository.create_subtask(subtask)
+    
+    def update_subtask(self, subtask: SubTask) -> SubTask:
+        """
+        Actualiza una subtarea existente.
+        
+        Args:
+            subtask: Subtarea con los datos actualizados.
+            
+        Returns:
+            Subtarea actualizada.
+        """
+        if not subtask.title or not subtask.title.strip():
+            raise ValueError("El título de la subtarea no puede estar vacío")
+        
+        subtask.title = subtask.title.strip()
+        return self.repository.update_subtask(subtask)
+    
+    def delete_subtask(self, subtask_id: int) -> bool:
+        """
+        Elimina una subtarea.
+        
+        Args:
+            subtask_id: ID de la subtarea a eliminar.
+            
+        Returns:
+            True si se eliminó, False si no existía.
+        """
+        return self.repository.delete_subtask(subtask_id)
+    
+    def toggle_subtask_complete(self, subtask_id: int) -> Optional[SubTask]:
+        """
+        Cambia el estado de completado de una subtarea.
+        
+        Args:
+            subtask_id: ID de la subtarea.
+            
+        Returns:
+            Subtarea actualizada o None si no existe.
+        """
+        return self.repository.toggle_subtask_complete(subtask_id)
 
