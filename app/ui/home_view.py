@@ -27,11 +27,7 @@ class HomeView:
         # Contenedores principales
         self.tasks_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
         self.stats_card = None
-        self.form_container = ft.Container(visible=False, expand=True)
         self.title_bar = None  # Guardar referencia a la barra de título
-        
-        # Limpiar la página antes de construir la UI
-        self.page.clean()
         
         self._build_ui()
         self._load_tasks()
@@ -135,26 +131,28 @@ class HomeView:
             expand=True
         )
         
-        # Layout principal
-        self.page.add(
-            ft.Column(
-                [
-                    self.title_bar,
-                    ft.Row(
-                        [
-                            main_view,
-                            self.form_container
-                        ],
-                        expand=True,
-                        spacing=0
-                    )
-                ],
-                spacing=0,
-                expand=True
-            )
+        # Crear la vista principal
+        home_view = ft.View(
+            route="/",
+            controls=[
+                ft.Column(
+                    [
+                        self.title_bar,
+                        main_view
+                    ],
+                    spacing=0,
+                    expand=True
+                )
+            ],
+            floating_action_button=self.fab,
+            bgcolor=ft.Colors.BLACK if self.page.theme_mode == ft.ThemeMode.DARK else ft.Colors.GREY_50
         )
         
-        self.page.floating_action_button = self.fab
+        # Configurar las vistas de la página
+        self.page.views.clear()
+        self.page.views.append(home_view)
+        self.page.go("/")
+        self.page.update()
     
     def _load_tasks(self):
         """Carga las tareas desde la base de datos."""
@@ -194,35 +192,82 @@ class HomeView:
         self._load_tasks()
     
     def _show_new_task_form(self, e):
-        """Muestra el formulario para crear una nueva tarea."""
+        """Navega a la vista del formulario para crear una nueva tarea."""
         self.editing_task = None
-        form = TaskForm(
-            on_save=self._save_task,
-            on_cancel=self._hide_form
-        )
-        self.form_container.content = form.build()
-        self.form_container.visible = True
-        self.fab.visible = False
-        self.page.update()
+        self._navigate_to_form_view()
     
     def _edit_task(self, task: Task):
-        """Muestra el formulario para editar una tarea."""
+        """Navega a la vista del formulario para editar una tarea."""
         self.editing_task = task
+        self._navigate_to_form_view()
+    
+    def _navigate_to_form_view(self):
+        """Navega a la vista del formulario."""
+        title = "Editar Tarea" if self.editing_task else "Nueva Tarea"
+        
+        # Crear el formulario
         form = TaskForm(
             on_save=self._save_task,
-            on_cancel=self._hide_form,
-            task=task
+            on_cancel=self._go_back,
+            task=self.editing_task
         )
-        self.form_container.content = form.build()
-        self.form_container.visible = True
-        self.fab.visible = False
-        self.page.update()
+        
+        # Detectar el tema actual
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        bgcolor = ft.Colors.BLACK if is_dark else ft.Colors.GREY_50
+        
+        # Crear la barra de título con botón de volver
+        back_button = ft.IconButton(
+            icon=ft.Icons.ARROW_BACK,
+            on_click=lambda e: self._go_back(),
+            icon_color=ft.Colors.RED_400,
+            tooltip="Volver"
+        )
+        
+        title_bar = ft.Container(
+            content=ft.Row(
+                [
+                    back_button,
+                    ft.Text(
+                        title,
+                        size=24,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.RED_400,
+                        expand=True
+                    )
+                ],
+                alignment=ft.MainAxisAlignment.START,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER
+            ),
+            padding=ft.padding.symmetric(vertical=16, horizontal=20),
+            bgcolor=ft.Colors.BLACK87 if is_dark else ft.Colors.RED_50
+        )
+        
+        # Construir la vista del formulario
+        form_view = ft.View(
+            route="/form",
+            controls=[
+                title_bar,
+                ft.Container(
+                    content=form.build(),
+                    expand=True,
+                    padding=20
+                )
+            ],
+            bgcolor=bgcolor
+        )
+        
+        # Agregar la vista y navegar a ella
+        self.page.views.append(form_view)
+        self.page.go("/form")
     
-    def _hide_form(self):
-        """Oculta el formulario."""
-        self.form_container.visible = False
-        self.fab.visible = True
+    def _go_back(self):
+        """Vuelve a la vista principal."""
         self.editing_task = None
+        # Remover la última vista (el formulario)
+        if len(self.page.views) > 1:
+            self.page.views.pop()
+        self.page.go(self.page.views[-1].route if self.page.views else "/")
         self.page.update()
     
     def _save_task(self, *args):
@@ -237,7 +282,7 @@ class HomeView:
             title, description, priority = args
             self.task_service.create_task(title, description, priority)
         
-        self._hide_form()
+        self._go_back()
         self._load_tasks()
     
     def _toggle_task(self, task_id: int):
