@@ -131,8 +131,8 @@ class HomeView:
             expand=True
         )
         
-        # Crear la vista principal
-        home_view = ft.View(
+        # Guardar referencia a la vista principal
+        self.home_view = ft.View(
             route="/",
             controls=[
                 ft.Column(
@@ -150,7 +150,7 @@ class HomeView:
         
         # Configurar las vistas de la página
         self.page.views.clear()
-        self.page.views.append(home_view)
+        self.page.views.append(self.home_view)
         self.page.go("/")
         self.page.update()
     
@@ -328,23 +328,42 @@ class HomeView:
             self.theme_button.icon = ft.Icons.LIGHT_MODE
             self.theme_button.tooltip = "Cambiar a tema claro"
             # Actualizar FAB
-            self.fab.bgcolor = ft.Colors.RED_700
+            if self.fab:
+                self.fab.bgcolor = ft.Colors.RED_700
             # Actualizar barra de título
             if self.title_bar:
                 self.title_bar.bgcolor = ft.Colors.BLACK87
+            # Colores para vistas
+            view_bgcolor = ft.Colors.BLACK
+            title_bar_bgcolor = ft.Colors.BLACK87
         else:
             self.page.theme_mode = ft.ThemeMode.LIGHT
             self.page.bgcolor = ft.Colors.GREY_50
             self.theme_button.icon = ft.Icons.DARK_MODE
             self.theme_button.tooltip = "Cambiar a tema oscuro"
             # Actualizar FAB
-            self.fab.bgcolor = ft.Colors.RED_600
+            if self.fab:
+                self.fab.bgcolor = ft.Colors.RED_600
             # Actualizar barra de título
             if self.title_bar:
                 self.title_bar.bgcolor = ft.Colors.RED_50
+            # Colores para vistas
+            view_bgcolor = ft.Colors.GREY_50
+            title_bar_bgcolor = ft.Colors.RED_50
         
-        # Solo recargar las tareas para actualizar los colores adaptativos
-        # No reconstruir toda la UI para evitar duplicados
+        # Reconstruir la vista principal para aplicar todos los cambios
+        self._build_ui()
+        
+        # Actualizar todas las vistas abiertas (incluyendo el formulario si está abierto)
+        for view in self.page.views:
+            view.bgcolor = view_bgcolor
+            # Actualizar la barra de título de cada vista si existe
+            if view.controls and len(view.controls) > 0:
+                first_control = view.controls[0]
+                if isinstance(first_control, ft.Container):
+                    first_control.bgcolor = title_bar_bgcolor
+        
+        # Recargar las tareas para actualizar los colores adaptativos
         self._load_tasks()
         self.page.update()
 
