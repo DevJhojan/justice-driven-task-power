@@ -113,7 +113,7 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, page: ft.Page = 
                                         icon=ft.Icons.DELETE,
                                         icon_color=ft.Colors.RED,
                                         icon_size=20,
-                                        on_click=lambda e: on_delete(task.id),
+                                        on_click=lambda e, task_id=task.id: on_delete(task_id),
                                         tooltip="Eliminar"
                                     ),
                                 ],

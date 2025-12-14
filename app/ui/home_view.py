@@ -238,51 +238,29 @@ class HomeView:
         if task_id is None:
             return
         
-        delete_id = int(task_id)
-        
-        def confirm_delete(e):
-            self.page.dialog.open = False
-            self.page.update()
-            
-            try:
-                deleted = self.task_service.delete_task(delete_id)
-                if deleted:
-                    self._load_tasks()
-                    self.page.snack_bar = ft.SnackBar(
-                        content=ft.Text("Tarea eliminada correctamente"),
-                        bgcolor=ft.Colors.GREEN
-                    )
-                    self.page.snack_bar.open = True
-                else:
-                    self.page.snack_bar = ft.SnackBar(
-                        content=ft.Text("No se pudo eliminar la tarea"),
-                        bgcolor=ft.Colors.RED
-                    )
-                    self.page.snack_bar.open = True
-            except Exception as ex:
+        # Eliminar directamente primero para verificar que funciona
+        try:
+            deleted = self.task_service.delete_task(int(task_id))
+            if deleted:
+                self._load_tasks()
                 self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Error: {str(ex)}"),
+                    content=ft.Text("Tarea eliminada correctamente"),
+                    bgcolor=ft.Colors.GREEN
+                )
+                self.page.snack_bar.open = True
+            else:
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text("No se pudo eliminar la tarea"),
                     bgcolor=ft.Colors.RED
                 )
                 self.page.snack_bar.open = True
-            
-            self.page.update()
+        except Exception as ex:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error: {str(ex)}"),
+                bgcolor=ft.Colors.RED
+            )
+            self.page.snack_bar.open = True
         
-        def cancel_delete(e):
-            self.page.dialog.open = False
-            self.page.update()
-        
-        self.page.dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Confirmar eliminación"),
-            content=ft.Text("¿Estás seguro de que deseas eliminar esta tarea?"),
-            actions=[
-                ft.TextButton("Cancelar", on_click=cancel_delete),
-                ft.TextButton("Eliminar", on_click=confirm_delete, style=ft.ButtonStyle(color=ft.Colors.RED))
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
-        )
-        self.page.dialog.open = True
         self.page.update()
     
     def _toggle_theme(self, e):
