@@ -28,6 +28,10 @@ class HomeView:
         self.tasks_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
         self.stats_card = None
         self.form_container = ft.Container(visible=False, expand=True)
+        self.title_bar = None  # Guardar referencia a la barra de título
+        
+        # Limpiar la página antes de construir la UI
+        self.page.clean()
         
         self._build_ui()
         self._load_tasks()
@@ -47,7 +51,7 @@ class HomeView:
         )
         
         # Barra de título
-        title_bar = ft.Container(
+        self.title_bar = ft.Container(
             content=ft.Row(
                 [
                     ft.Text(
@@ -135,7 +139,7 @@ class HomeView:
         self.page.add(
             ft.Column(
                 [
-                    title_bar,
+                    self.title_bar,
                     ft.Row(
                         [
                             main_view,
@@ -280,6 +284,9 @@ class HomeView:
             self.theme_button.tooltip = "Cambiar a tema claro"
             # Actualizar FAB
             self.fab.bgcolor = ft.Colors.RED_700
+            # Actualizar barra de título
+            if self.title_bar:
+                self.title_bar.bgcolor = ft.Colors.BLACK87
         else:
             self.page.theme_mode = ft.ThemeMode.LIGHT
             self.page.bgcolor = ft.Colors.GREY_50
@@ -287,6 +294,9 @@ class HomeView:
             self.theme_button.tooltip = "Cambiar a tema oscuro"
             # Actualizar FAB
             self.fab.bgcolor = ft.Colors.RED_600
+            # Actualizar barra de título
+            if self.title_bar:
+                self.title_bar.bgcolor = ft.Colors.RED_50
         
         # Solo recargar las tareas para actualizar los colores adaptativos
         # No reconstruir toda la UI para evitar duplicados
