@@ -2,6 +2,7 @@
 Punto de entrada principal de la aplicación de tareas.
 """
 import sys
+import os
 from pathlib import Path
 
 # Agregar el directorio raíz al PYTHONPATH para que las importaciones funcionen
@@ -9,6 +10,9 @@ from pathlib import Path
 root_dir = Path(__file__).parent.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
+
+# Configurar flags del WebView para evitar el warning de WebGL por software
+os.environ["FLET_WEBVIEW_FLAGS"] = "--enable-unsafe-swiftshader"
 
 import flet as ft
 from app.ui.home_view import HomeView
