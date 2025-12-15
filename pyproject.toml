@@ -1,7 +1,7 @@
 [project]
-name = "todo-app"
+name = "justice-driven-task-power"
 version = "0.1.1"
-description = "Aplicación de tareas móvil con Flet y base de datos local"
+description = "conviértete en el héroe de tu propio progreso con tareas y hábitos organizados"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
