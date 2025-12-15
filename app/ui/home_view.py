@@ -70,6 +70,9 @@ class HomeView:
 
         # Diálogo de permisos de almacenamiento (solo móvil)
         self.storage_permission_dialog = None
+        
+        # Variable para almacenar bytes del ZIP durante la exportación
+        self._export_zip_bytes = None
 
         self.page.update()
 
@@ -708,23 +711,37 @@ class HomeView:
 
     def _start_export(self, e):
         """Inicia el diálogo para elegir dónde guardar el backup CSV (ZIP)."""
+        # Detectar si estamos en Android/iOS
+        is_mobile = (
+            self.page.platform == ft.PagePlatform.ANDROID 
+            or self.page.platform == ft.PagePlatform.IOS
+        )
+        
         try:
             # Generar el archivo ZIP en memoria primero
             zip_bytes = self.csv_backup_service.export_to_csv_bytes()
             
+            if not zip_bytes or len(zip_bytes) == 0:
+                raise ValueError("No se pudo generar el archivo ZIP. La base de datos podría estar vacía.")
+            
+            # Guardar los bytes para usarlos cuando el usuario seleccione la ubicación
+            self._export_zip_bytes = zip_bytes
+            
             # Nombre sugerido con timestamp para evitar sobrescribir
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_name = f"tasks_backup_{ts}.zip"
             
-            # Usar src_bytes para compatibilidad con Android moderno (API 30+)
-            # Esto usa el Storage Access Framework sin necesidad de permisos manuales
-            self.export_file_picker.save_file(
-                file_name=f"tasks_backup_{ts}.zip",
-                src_bytes=zip_bytes
-            )
+            # Abrir el diálogo de guardar archivo
+            # En Android/iOS, Flet manejará automáticamente el Storage Access Framework
+            # Si src_bytes está disponible, lo usaremos en _handle_export_result
+            self.export_file_picker.save_file(file_name=file_name)
+                
         except Exception as ex:
+            error_msg = f"Error al iniciar la exportación: {str(ex)}"
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error al iniciar la exportación: {str(ex)}"),
+                content=ft.Text(error_msg),
                 bgcolor=ft.Colors.RED,
+                duration=8000 if is_mobile else 5000,
             )
             self.page.snack_bar.open = True
             self.page.update()
@@ -739,6 +756,7 @@ class HomeView:
 
         if not e.path:
             # Usuario canceló la exportación
+            self._export_zip_bytes = None  # Limpiar bytes guardados
             return
 
         # Si es una prueba de permisos (archivo test_permission.zip), solo verificar que funciona
@@ -755,31 +773,41 @@ class HomeView:
             self.page.update()
             return  # No exportar realmente, solo verificar permisos
 
-        # Cuando se usa src_bytes, Flet maneja la escritura automáticamente
-        # Solo necesitamos confirmar que se guardó correctamente
+        # Asegurar extensión .zip
+        target_path = e.path
+        if not target_path.lower().endswith(".zip"):
+            target_path = target_path + ".zip"
+
         try:
-            # Verificar que el archivo existe y tiene contenido
-            if os.path.exists(e.path):
-                file_size = os.path.getsize(e.path)
-                if file_size > 0:
-                    size_mb = file_size / (1024 * 1024)
-                    success_msg = (
-                        f"Datos exportados correctamente a CSV.\n"
-                        f"Ubicación: {os.path.basename(e.path)}\n"
-                        f"Tamaño: {size_mb:.2f} MB\n"
-                        f"Contiene: tasks.csv, subtasks.csv, habits.csv, habit_completions.csv"
-                    )
-                    
-                    self.page.snack_bar = ft.SnackBar(
-                        content=ft.Text(success_msg),
-                        bgcolor=ft.Colors.GREEN,
-                        duration=6000 if is_mobile else 4000,
-                    )
-                    self.page.snack_bar.open = True
+            # Escribir los bytes del ZIP al archivo seleccionado
+            if self._export_zip_bytes:
+                with open(target_path, 'wb') as f:
+                    f.write(self._export_zip_bytes)
+                
+                # Verificar que el archivo se escribió correctamente
+                if os.path.exists(target_path):
+                    file_size = os.path.getsize(target_path)
+                    if file_size > 0:
+                        size_mb = file_size / (1024 * 1024)
+                        success_msg = (
+                            f"Datos exportados correctamente a CSV.\n"
+                            f"Ubicación: {os.path.basename(target_path)}\n"
+                            f"Tamaño: {size_mb:.2f} MB\n"
+                            f"Contiene: tasks.csv, subtasks.csv, habits.csv, habit_completions.csv"
+                        )
+                        
+                        self.page.snack_bar = ft.SnackBar(
+                            content=ft.Text(success_msg),
+                            bgcolor=ft.Colors.GREEN,
+                            duration=6000 if is_mobile else 4000,
+                        )
+                        self.page.snack_bar.open = True
+                    else:
+                        raise OSError("El archivo exportado está vacío")
                 else:
-                    raise OSError("El archivo exportado está vacío")
+                    raise OSError("No se pudo crear el archivo en la ubicación seleccionada")
             else:
-                raise OSError("No se pudo verificar que el archivo se guardó correctamente")
+                raise ValueError("No se encontraron datos para exportar. Intenta exportar nuevamente.")
                 
         except OSError as ex:
             # Errores específicos de permisos/almacenamiento
@@ -804,6 +832,8 @@ class HomeView:
             )
             self.page.snack_bar.open = True
         finally:
+            # Limpiar bytes guardados
+            self._export_zip_bytes = None
             self.page.update()
 
     def _show_storage_permission_dialog(self):
