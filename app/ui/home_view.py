@@ -1,9 +1,10 @@
 """
 Vista principal de la aplicación de tareas.
 """
+import os
 import flet as ft
 from typing import Optional
-from datetime import date
+from datetime import date, datetime
 from app.data.models import Task, SubTask, Habit
 from app.services.task_service import TaskService
 from app.services.habit_service import HabitService
@@ -551,15 +552,16 @@ class HomeView:
 
                     ft.Divider(),
 
-                    # Sección Copia de seguridad
+                    # ==================== Sección 2: Importación de datos ====================
                     ft.Text(
-                        "Copia de seguridad y migración de datos",
+                        "Importación de datos",
                         size=18,
                         weight=ft.FontWeight.BOLD,
                         color=preview_color
                     ),
                     ft.Text(
-                        "Puedes importar datos desde otro archivo .db de la aplicación o exportar la base de datos actual para copia de seguridad.",
+                        "Importa registros desde otro archivo tasks.db sin reemplazar tu base actual, "
+                        "evitando duplicados y manteniendo la integridad de tareas, subtareas y hábitos.",
                         size=14,
                         color=ft.Colors.GREY_600
                     ),
@@ -567,13 +569,30 @@ class HomeView:
                         [import_button],
                         alignment=ft.MainAxisAlignment.START
                     ),
+
+                    ft.Divider(),
+
+                    # ==================== Sección 3: Exportación de datos ====================
+                    ft.Text(
+                        "Exportación de datos",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                        color=preview_color
+                    ),
+                    ft.Text(
+                        "Exporta el archivo tasks.db completo (todas las tablas y registros) para "
+                        "copias de seguridad, migración entre dispositivos o restauración futura.",
+                        size=14,
+                        color=ft.Colors.GREY_600
+                    ),
                     ft.Row(
                         [export_button],
                         alignment=ft.MainAxisAlignment.START
                     )
                 ],
                 spacing=16,
-                expand=True
+                expand=True,
+                scroll=ft.ScrollMode.AUTO,
             ),
             padding=20,
             expand=True
@@ -659,11 +678,12 @@ class HomeView:
             self.page.update()
 
     def _start_export(self, e):
-        """Inicia el proceso de exportación de la base de datos."""
+        """Inicia el diálogo para elegir dónde guardar el backup .db."""
         try:
-            # En Flet, save_file permite elegir ubicación y nombre del archivo
+            # Nombre sugerido con timestamp para evitar sobrescribir
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.export_file_picker.save_file(
-                file_name="tasks_backup.db"
+                file_name=f"tasks_backup_{ts}.db"
             )
         except Exception as ex:
             self.page.snack_bar = ft.SnackBar(
@@ -674,14 +694,19 @@ class HomeView:
             self.page.update()
 
     def _handle_export_result(self, e: ft.FilePickerResultEvent):
-        """Maneja el resultado de la selección de destino para exportación."""
+        """Maneja la ruta elegida por el usuario y realiza el backup."""
         if not e.path:
             return  # Usuario canceló
 
+        # Asegurar extensión .db
+        target_path = e.path
+        if not target_path.lower().endswith(".db"):
+            target_path = target_path + ".db"
+
         try:
-            self.backup_service.export_database(e.path)
+            self.backup_service.export_database(target_path)
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Base de datos exportada correctamente a: {e.path}"),
+                content=ft.Text(f"Base de datos exportada correctamente en:\n{target_path}"),
                 bgcolor=ft.Colors.GREEN,
             )
             self.page.snack_bar.open = True
