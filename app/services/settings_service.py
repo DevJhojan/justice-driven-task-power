@@ -20,20 +20,67 @@ from app.data.database import Database
 
 
 ThemeModeLiteral = Literal["light", "dark"]
-# Paletas disponibles: fácil de extender añadiendo nuevos valores aquí
+# Paletas disponibles: fácil de extender añadiendo nuevos valores aquí.
+# Usamos claves legibles y cada una mapea a un color HEX concreto.
 AccentColorLiteral = Literal[
-    "red",
-    "pink",
-    "purple",
-    "deep_purple",
-    "indigo",
-    "blue",
-    "cyan",
-    "teal",
-    "green",
-    "lime",
-    "orange",
+    # Azules
+    "dodger_blue",
+    "primary_blue",
+    "bootstrap_blue",
+    "deep_blue",
+    "deepsky_blue",
+    "steel_blue",
+    "navy_dark",
+    # Verdes
+    "success_green",
+    "emerald",
+    "bright_green",
+    "material_green",
+    "turquoise",
+    "green_sea",
+    "dark_teal",
+    # Rojos
+    "danger_red",
+    "alizarin",
+    "dark_red",
+    "soft_red",
+    "deep_red",
+    "vivid_red",
+    # Amarillos / Naranjas
     "amber",
+    "soft_yellow",
+    "orange",
+    "deep_orange",
+    "sun_orange",
+    "golden",
+    # Morados / Rosas
+    "ui_purple",
+    "amethyst",
+    "dark_purple",
+    "vibrant_purple",
+    "ui_pink",
+    "hot_pink",
+    # Grises / Neutros
+    "dark_gray",
+    "charcoal",
+    "medium_gray",
+    "secondary_gray",
+    "light_gray",
+    "soft_gray",
+    "almost_white",
+    # Blancos / Negros útiles
+    "black",
+    "white",
+    "soft_white",
+    "true_dark",
+    # Modernos / gamer / UI
+    "neon_cyan",
+    "neon_green",
+    "neon_pink",
+    "electric_purple",
+    "tech_blue",
+    "mint_neon",
+    "orange_neon",
 ]
 
 
@@ -102,20 +149,66 @@ class SettingsService:
 
         theme_mode = row["theme_mode"] if row["theme_mode"] in ("light", "dark") else "dark"
         valid_accents = {
-            "red",
-            "pink",
-            "purple",
-            "deep_purple",
-            "indigo",
-            "blue",
-            "cyan",
-            "teal",
-            "green",
-            "lime",
-            "orange",
+            # Azules
+            "dodger_blue",
+            "primary_blue",
+            "bootstrap_blue",
+            "deep_blue",
+            "deepsky_blue",
+            "steel_blue",
+            "navy_dark",
+            # Verdes
+            "success_green",
+            "emerald",
+            "bright_green",
+            "material_green",
+            "turquoise",
+            "green_sea",
+            "dark_teal",
+            # Rojos
+            "danger_red",
+            "alizarin",
+            "dark_red",
+            "soft_red",
+            "deep_red",
+            "vivid_red",
+            # Amarillos / Naranjas
             "amber",
+            "soft_yellow",
+            "orange",
+            "deep_orange",
+            "sun_orange",
+            "golden",
+            # Morados / Rosas
+            "ui_purple",
+            "amethyst",
+            "dark_purple",
+            "vibrant_purple",
+            "ui_pink",
+            "hot_pink",
+            # Grises / Neutros
+            "dark_gray",
+            "charcoal",
+            "medium_gray",
+            "secondary_gray",
+            "light_gray",
+            "soft_gray",
+            "almost_white",
+            # Blancos / Negros útiles
+            "black",
+            "white",
+            "soft_white",
+            "true_dark",
+            # Modernos / gamer / UI
+            "neon_cyan",
+            "neon_green",
+            "neon_pink",
+            "electric_purple",
+            "tech_blue",
+            "mint_neon",
+            "orange_neon",
         }
-        accent = row["accent_color"] if row["accent_color"] in valid_accents else "red"
+        accent = row["accent_color"] if row["accent_color"] in valid_accents else "dodger_blue"
         return AppSettings(theme_mode=theme_mode, accent_color=accent)
 
     def update_settings(
@@ -148,101 +241,134 @@ class SettingsService:
 
 def _accent_palette(accent: AccentColorLiteral) -> dict[str, str]:
     """Devuelve un conjunto de colores base según el acento elegido."""
-    if accent == "pink":
-        return {
-            "primary": ft.Colors.PINK_600,
-            "primary_dark": ft.Colors.PINK_800,
-            "secondary": ft.Colors.PINK_400,
-            "secondary_dark": ft.Colors.PINK_500,
-            "error": ft.Colors.RED_400,
-        }
-    if accent == "purple":
-        return {
-            "primary": ft.Colors.PURPLE_700,
-            "primary_dark": ft.Colors.PURPLE_800,
-            "secondary": ft.Colors.PURPLE_400,
-            "secondary_dark": ft.Colors.PURPLE_500,
-            "error": ft.Colors.RED_400,
-        }
-    if accent == "deep_purple":
-        return {
-            "primary": ft.Colors.DEEP_PURPLE_700,
-            "primary_dark": ft.Colors.DEEP_PURPLE_800,
-            "secondary": ft.Colors.DEEP_PURPLE_400,
-            "secondary_dark": ft.Colors.DEEP_PURPLE_500,
-            "error": ft.Colors.RED_400,
-        }
-    if accent == "indigo":
-        return {
-            "primary": ft.Colors.INDIGO_700,
-            "primary_dark": ft.Colors.INDIGO_800,
-            "secondary": ft.Colors.INDIGO_400,
-            "secondary_dark": ft.Colors.INDIGO_500,
-            "error": ft.Colors.RED_400,
-        }
-    if accent == "blue":
-        return {
-            "primary": ft.Colors.BLUE_700,
-            "primary_dark": ft.Colors.BLUE_800,
-            "secondary": ft.Colors.BLUE_500,
-            "secondary_dark": ft.Colors.BLUE_600,
-            "error": ft.Colors.RED_400,
-        }
-    if accent == "cyan":
-        return {
-            "primary": ft.Colors.CYAN_700,
-            "primary_dark": ft.Colors.CYAN_800,
-            "secondary": ft.Colors.CYAN_400,
-            "secondary_dark": ft.Colors.CYAN_500,
-            "error": ft.Colors.RED_400,
-        }
-    if accent == "teal":
-        return {
-            "primary": ft.Colors.TEAL_700,
-            "primary_dark": ft.Colors.TEAL_800,
-            "secondary": ft.Colors.TEAL_400,
-            "secondary_dark": ft.Colors.TEAL_500,
-            "error": ft.Colors.RED_400,
-        }
-    if accent == "green":
-        return {
-            "primary": ft.Colors.GREEN_700,
-            "primary_dark": ft.Colors.GREEN_800,
-            "secondary": ft.Colors.GREEN_500,
-            "secondary_dark": ft.Colors.GREEN_600,
-            "error": ft.Colors.RED_400,
-        }
-    if accent == "lime":
-        return {
-            "primary": ft.Colors.LIME_700,
-            "primary_dark": ft.Colors.LIME_800,
-            "secondary": ft.Colors.LIME_500,
-            "secondary_dark": ft.Colors.LIME_600,
-            "error": ft.Colors.RED_400,
-        }
-    if accent == "orange":
-        return {
-            "primary": ft.Colors.ORANGE_700,
-            "primary_dark": ft.Colors.ORANGE_800,
-            "secondary": ft.Colors.ORANGE_500,
-            "secondary_dark": ft.Colors.ORANGE_600,
-            "error": ft.Colors.RED_400,
-        }
-    if accent == "amber":
-        return {
-            "primary": ft.Colors.AMBER_700,
-            "primary_dark": ft.Colors.AMBER_800,
-            "secondary": ft.Colors.AMBER_500,
-            "secondary_dark": ft.Colors.AMBER_600,
-            "error": ft.Colors.RED_400,
-        }
-    # Por defecto rojo (como diseño original)
+    # AZULES
+    if accent == "dodger_blue":       # #1E90FF
+        base = "#1E90FF"
+    elif accent == "primary_blue":    # #007BFF
+        base = "#007BFF"
+    elif accent == "bootstrap_blue":  # #0D6EFD
+        base = "#0D6EFD"
+    elif accent == "deep_blue":       # #0056B3
+        base = "#0056B3"
+    elif accent == "deepsky_blue":    # #00BFFF
+        base = "#00BFFF"
+    elif accent == "steel_blue":      # #4682B4
+        base = "#4682B4"
+    elif accent == "navy_dark":       # #003366
+        base = "#003366"
+
+    # VERDES
+    elif accent == "success_green":   # #28A745
+        base = "#28A745"
+    elif accent == "emerald":         # #2ECC71
+        base = "#2ECC71"
+    elif accent == "bright_green":    # #00C853
+        base = "#00C853"
+    elif accent == "material_green":  # #4CAF50
+        base = "#4CAF50"
+    elif accent == "turquoise":       # #1ABC9C
+        base = "#1ABC9C"
+    elif accent == "green_sea":       # #16A085
+        base = "#16A085"
+    elif accent == "dark_teal":       # #00695C
+        base = "#00695C"
+
+    # ROJOS
+    elif accent == "danger_red":      # #DC3545
+        base = "#DC3545"
+    elif accent == "alizarin":        # #E74C3C
+        base = "#E74C3C"
+    elif accent == "dark_red":        # #C0392B
+        base = "#C0392B"
+    elif accent == "soft_red":        # #FF5252
+        base = "#FF5252"
+    elif accent == "deep_red":        # #B71C1C
+        base = "#B71C1C"
+    elif accent == "vivid_red":       # #FF1744
+        base = "#FF1744"
+
+    # AMARILLOS / NARANJAS
+    elif accent == "amber":           # #FFC107
+        base = "#FFC107"
+    elif accent == "soft_yellow":     # #FFD54F
+        base = "#FFD54F"
+    elif accent == "orange":          # #FF9800
+        base = "#FF9800"
+    elif accent == "deep_orange":     # #FF5722
+        base = "#FF5722"
+    elif accent == "sun_orange":      # #F39C12
+        base = "#F39C12"
+    elif accent == "golden":          # #FFB300
+        base = "#FFB300"
+
+    # MORADOS / ROSAS
+    elif accent == "ui_purple":       # #6F42C1
+        base = "#6F42C1"
+    elif accent == "amethyst":        # #9B59B6
+        base = "#9B59B6"
+    elif accent == "dark_purple":     # #8E44AD
+        base = "#8E44AD"
+    elif accent == "vibrant_purple":  # #E056FD
+        base = "#E056FD"
+    elif accent == "ui_pink":         # #D63384
+        base = "#D63384"
+    elif accent == "hot_pink":        # #FF69B4
+        base = "#FF69B4"
+
+    # GRISES / NEUTROS
+    elif accent == "dark_gray":       # #212529
+        base = "#212529"
+    elif accent == "charcoal":        # #343A40
+        base = "#343A40"
+    elif accent == "medium_gray":     # #495057
+        base = "#495057"
+    elif accent == "secondary_gray":  # #6C757D
+        base = "#6C757D"
+    elif accent == "light_gray":      # #ADB5BD
+        base = "#ADB5BD"
+    elif accent == "soft_gray":       # #DEE2E6
+        base = "#DEE2E6"
+    elif accent == "almost_white":    # #F8F9FA
+        base = "#F8F9FA"
+
+    # BLANCOS / NEGROS ÚTILES
+    elif accent == "black":           # #000000
+        base = "#000000"
+    elif accent == "white":           # #FFFFFF
+        base = "#FFFFFF"
+    elif accent == "soft_white":      # #FAFAFA
+        base = "#FAFAFA"
+    elif accent == "true_dark":       # #121212
+        base = "#121212"
+
+    # MODERNOS / GAMER / UI
+    elif accent == "neon_cyan":       # #00E5FF
+        base = "#00E5FF"
+    elif accent == "neon_green":      # #76FF03
+        base = "#76FF03"
+    elif accent == "neon_pink":       # #FF4081
+        base = "#FF4081"
+    elif accent == "electric_purple": # #651FFF
+        base = "#651FFF"
+    elif accent == "tech_blue":       # #00B0FF
+        base = "#00B0FF"
+    elif accent == "mint_neon":       # #1DE9B6
+        base = "#1DE9B6"
+    elif accent == "orange_neon":     # #FF9100
+        base = "#FF9100"
+
+    else:
+        # Fallback razonable: DodgerBlue
+        base = "#1E90FF"
+
+    # Usamos el mismo color para primary/secondary, y una variante
+    # ligeramente más oscura para dark_theme usando la misma base.
     return {
-        "primary": ft.Colors.RED_700,
-        "primary_dark": ft.Colors.RED_900,
-        "secondary": ft.Colors.RED_600,
-        "secondary_dark": ft.Colors.RED_800,
-        "error": ft.Colors.RED_400,
+        "primary": base,
+        "primary_dark": base,
+        "secondary": base,
+        "secondary_dark": base,
+        "error": "#DC3545",  # Danger red común
     }
 
 
