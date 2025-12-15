@@ -709,10 +709,17 @@ class HomeView:
     def _start_export(self, e):
         """Inicia el diálogo para elegir dónde guardar el backup CSV (ZIP)."""
         try:
+            # Generar el archivo ZIP en memoria primero
+            zip_bytes = self.csv_backup_service.export_to_csv_bytes()
+            
             # Nombre sugerido con timestamp para evitar sobrescribir
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Usar src_bytes para compatibilidad con Android moderno (API 30+)
+            # Esto usa el Storage Access Framework sin necesidad de permisos manuales
             self.export_file_picker.save_file(
-                file_name=f"tasks_backup_{ts}.zip"
+                file_name=f"tasks_backup_{ts}.zip",
+                src_bytes=zip_bytes
             )
         except Exception as ex:
             self.page.snack_bar = ft.SnackBar(
@@ -723,17 +730,19 @@ class HomeView:
             self.page.update()
 
     def _handle_export_result(self, e: ft.FilePickerResultEvent):
-        """Maneja la ruta elegida por el usuario y realiza el backup CSV."""
-        if not e.path:
-            return  # Usuario canceló
+        """Maneja el resultado de la exportación CSV."""
+        # Detectar si estamos en Android/iOS para mostrar mensajes más específicos
+        is_mobile = (
+            self.page.platform == ft.PagePlatform.ANDROID 
+            or self.page.platform == ft.PagePlatform.IOS
+        )
 
-        # Asegurar extensión .zip
-        target_path = e.path
-        if not target_path.lower().endswith(".zip"):
-            target_path = target_path + ".zip"
+        if not e.path:
+            # Usuario canceló la exportación
+            return
 
         # Si es una prueba de permisos (archivo test_permission.zip), solo verificar que funciona
-        if "test_permission" in target_path.lower():
+        if "test_permission" in e.path.lower():
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(
                     "✓ Permisos de almacenamiento activados correctamente.\n"
@@ -746,36 +755,36 @@ class HomeView:
             self.page.update()
             return  # No exportar realmente, solo verificar permisos
 
-        # Detectar si estamos en Android/iOS para mostrar mensajes más específicos
-        is_mobile = (
-            self.page.platform == ft.PagePlatform.ANDROID 
-            or self.page.platform == ft.PagePlatform.IOS
-        )
-
+        # Cuando se usa src_bytes, Flet maneja la escritura automáticamente
+        # Solo necesitamos confirmar que se guardó correctamente
         try:
-            self.csv_backup_service.export_to_csv(target_path)
-            
-            # Verificar tamaño del archivo exportado
-            file_size = os.path.getsize(target_path)
-            size_mb = file_size / (1024 * 1024)
-            
-            success_msg = (
-                f"Datos exportados correctamente a CSV.\n"
-                f"Ubicación: {target_path}\n"
-                f"Tamaño: {size_mb:.2f} MB\n"
-                f"Contiene: tasks.csv, subtasks.csv, habits.csv, habit_completions.csv"
-            )
-            
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(success_msg),
-                bgcolor=ft.Colors.GREEN,
-                duration=6000 if is_mobile else 4000,
-            )
-            self.page.snack_bar.open = True
+            # Verificar que el archivo existe y tiene contenido
+            if os.path.exists(e.path):
+                file_size = os.path.getsize(e.path)
+                if file_size > 0:
+                    size_mb = file_size / (1024 * 1024)
+                    success_msg = (
+                        f"Datos exportados correctamente a CSV.\n"
+                        f"Ubicación: {os.path.basename(e.path)}\n"
+                        f"Tamaño: {size_mb:.2f} MB\n"
+                        f"Contiene: tasks.csv, subtasks.csv, habits.csv, habit_completions.csv"
+                    )
+                    
+                    self.page.snack_bar = ft.SnackBar(
+                        content=ft.Text(success_msg),
+                        bgcolor=ft.Colors.GREEN,
+                        duration=6000 if is_mobile else 4000,
+                    )
+                    self.page.snack_bar.open = True
+                else:
+                    raise OSError("El archivo exportado está vacío")
+            else:
+                raise OSError("No se pudo verificar que el archivo se guardó correctamente")
+                
         except OSError as ex:
             # Errores específicos de permisos/almacenamiento
             error_msg = str(ex)
-            if is_mobile and "permisos" in error_msg.lower():
+            if is_mobile:
                 error_msg += (
                     "\n\nSugerencia: Intenta guardar en la carpeta 'Descargas' "
                     "o selecciona otra ubicación accesible."

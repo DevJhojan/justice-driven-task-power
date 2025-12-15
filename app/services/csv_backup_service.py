@@ -16,6 +16,7 @@ import sqlite3
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
@@ -53,6 +54,58 @@ class CSVBackupService:
     # ------------------------------------------------------------------
     # Exportación CSV
     # ------------------------------------------------------------------
+
+    def export_to_csv_bytes(self) -> bytes:
+        """Exporta todas las tablas a un archivo ZIP en memoria como bytes.
+
+        Estructura del ZIP:
+        - tasks.csv
+        - subtasks.csv
+        - habits.csv
+        - habit_completions.csv
+
+        Returns:
+            Bytes del archivo ZIP conteniendo los CSVs.
+
+        Raises:
+            OSError: Errores al generar el ZIP.
+        """
+        import tempfile
+        import shutil
+
+        # Crear directorio temporal para los CSV
+        temp_dir = Path(tempfile.gettempdir()) / f"_temp_csv_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        temp_dir.mkdir(exist_ok=True)
+
+        try:
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+
+            # Exportar cada tabla a su CSV
+            self._export_table_to_csv(cursor, "tasks", temp_dir / "tasks.csv")
+            self._export_table_to_csv(cursor, "subtasks", temp_dir / "subtasks.csv")
+            self._export_table_to_csv(cursor, "habits", temp_dir / "habits.csv")
+            self._export_table_to_csv(cursor, "habit_completions", temp_dir / "habit_completions.csv")
+
+            conn.close()
+
+            # Crear ZIP en memoria usando BytesIO
+            zip_buffer = BytesIO()
+            
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for csv_file in temp_dir.glob("*.csv"):
+                    zipf.write(csv_file, csv_file.name)
+            
+            # Obtener los bytes antes de cerrar
+            zip_bytes = zip_buffer.getvalue()
+            zip_buffer.close()
+
+            return zip_bytes
+
+        finally:
+            # Limpiar directorio temporal
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir)
 
     def export_to_csv(self, target_path: str) -> None:
         """Exporta todas las tablas a un archivo ZIP conteniendo CSVs.
