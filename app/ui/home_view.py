@@ -34,7 +34,8 @@ class HomeView:
         self.editing_subtask_task_id: Optional[int] = None
         self.editing_subtask = None
         self.editing_habit: Optional[Habit] = None
-        self.current_section = "tasks"  # "tasks" o "habits"
+        # Secciones: "tasks", "habits", "settings"
+        self.current_section = "tasks"
         
         # Contenedores principales
         self.tasks_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
@@ -65,7 +66,9 @@ class HomeView:
             content=ft.Row(
                 [
                     ft.Text(
-                        "Mis Tareas" if self.current_section == "tasks" else "Mis Hábitos",
+                        "Mis Tareas" if self.current_section == "tasks"
+                        else "Mis Hábitos" if self.current_section == "habits"
+                        else "Configuración",
                         size=28,
                         weight=ft.FontWeight.BOLD,
                         color=ft.Colors.RED_400,
@@ -252,11 +255,40 @@ class HomeView:
             )
         )
         
+        # Botón de Configuración
+        settings_button = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Icon(
+                        ft.Icons.SETTINGS,
+                        color=selected_color if self.current_section == "settings" else unselected_color,
+                        size=24
+                    ),
+                    ft.Text(
+                        "Configuración",
+                        size=12,
+                        color=selected_color if self.current_section == "settings" else unselected_color,
+                        weight=ft.FontWeight.BOLD if self.current_section == "settings" else None
+                    )
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=4,
+                tight=True
+            ),
+            on_click=lambda e: self._navigate_to_section("settings"),
+            padding=12,
+            expand=True,
+            border=ft.border.only(
+                top=ft.BorderSide(3, selected_color if self.current_section == "settings" else ft.Colors.TRANSPARENT)
+            )
+        )
+
         self.bottom_bar = ft.Container(
             content=ft.Row(
                 [
                     tasks_button,
-                    habits_button
+                    habits_button,
+                    settings_button
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_AROUND,
                 spacing=0
@@ -280,12 +312,20 @@ class HomeView:
             # Mostrar la vista de hábitos
             self._build_habits_view()
             self._load_habits()
+        elif section == "settings":
+            # Mostrar la vista de configuración
+            self._build_settings_view()
         
         # Actualizar el título
         if self.title_bar:
             title_text = self.title_bar.content.controls[0]  # El texto está en el índice 0 ahora
             if isinstance(title_text, ft.Text):
-                title_text.value = "Mis Tareas" if section == "tasks" else "Mis Hábitos"
+                if section == "tasks":
+                    title_text.value = "Mis Tareas"
+                elif section == "habits":
+                    title_text.value = "Mis Hábitos"
+                else:
+                    title_text.value = "Configuración"
         
         # Actualizar la barra inferior
         self._build_bottom_bar()
@@ -390,6 +430,71 @@ class HomeView:
         
         # Cargar hábitos
         self._load_habits()
+
+    def _build_settings_view(self):
+        """Construye la vista de configuración (placeholder)."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        bgcolor = ft.Colors.BLACK if is_dark else ft.Colors.GREY_50
+
+        settings_content = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Text(
+                        "Configuración",
+                        size=24,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.RED_400
+                    ),
+                    ft.Divider(),
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Icon(
+                                    ft.Icons.SETTINGS,
+                                    size=64,
+                                    color=ft.Colors.GREY_500
+                                ),
+                                ft.Text(
+                                    "Próximamente",
+                                    size=18,
+                                    color=ft.Colors.GREY_500,
+                                    weight=ft.FontWeight.BOLD
+                                ),
+                                ft.Text(
+                                    "La configuración estará disponible en una próxima versión.",
+                                    size=14,
+                                    color=ft.Colors.GREY_600,
+                                    text_align=ft.TextAlign.CENTER
+                                )
+                            ],
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=16
+                        ),
+                        padding=40,
+                        alignment=ft.alignment.center
+                    )
+                ],
+                spacing=16,
+                expand=True
+            ),
+            padding=20,
+            expand=True
+        )
+
+        # Actualizar la vista principal
+        self.home_view.controls = [
+            ft.Column(
+                [
+                    self.title_bar,
+                    settings_content,
+                    self.bottom_bar
+                ],
+                spacing=0,
+                expand=True
+            )
+        ]
+        self.home_view.bgcolor = bgcolor
+        self.page.update()
     
     def _load_tasks(self):
         """Carga las tareas desde la base de datos."""
