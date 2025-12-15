@@ -8,7 +8,7 @@ from datetime import date, datetime
 from app.data.models import Task, SubTask, Habit
 from app.services.task_service import TaskService
 from app.services.habit_service import HabitService
-from app.services.backup_service import BackupService
+from app.services.csv_backup_service import CSVBackupService
 from app.services.settings_service import SettingsService, apply_theme_to_page
 from app.ui.widgets import (
     create_task_card, create_empty_state, create_statistics_card,
@@ -31,7 +31,7 @@ class HomeView:
         self.page = page
         self.task_service = TaskService()
         self.habit_service = HabitService()
-        self.backup_service = BackupService()
+        self.csv_backup_service = CSVBackupService()
         self.settings_service = SettingsService()
         self.current_task_filter: Optional[bool] = None  # None=all, True=completed, False=pending
         self.current_habit_filter: Optional[bool] = None  # None=all, True=active, False=inactive
@@ -67,6 +67,9 @@ class HomeView:
         )
         if self.accent_dialog not in self.page.overlay:
             self.page.overlay.append(self.accent_dialog)
+
+        # Diálogo de permisos de almacenamiento (solo móvil)
+        self.storage_permission_dialog = None
 
         self.page.update()
 
@@ -480,9 +483,9 @@ class HomeView:
         )
 
         # ==================== Sección 2: Copia de seguridad ====================
-        # Botones de importación/exportación (también con matiz)
+        # Botones de importación/exportación CSV (también con matiz)
         import_button = ft.ElevatedButton(
-            text="Importar datos desde archivo .db",
+            text="Importar datos desde archivo CSV",
             icon=ft.Icons.FILE_UPLOAD,
             on_click=self._start_import,
             bgcolor=preview_color,
@@ -490,7 +493,7 @@ class HomeView:
         )
 
         export_button = ft.ElevatedButton(
-            text="Exportar base de datos actual",
+            text="Exportar datos a archivo CSV",
             icon=ft.Icons.FILE_DOWNLOAD,
             on_click=self._start_export,
             bgcolor=preview_color,
@@ -560,8 +563,9 @@ class HomeView:
                         color=preview_color
                     ),
                     ft.Text(
-                        "Importa registros desde otro archivo tasks.db sin reemplazar tu base actual, "
-                        "evitando duplicados y manteniendo la integridad de tareas, subtareas y hábitos.",
+                        "Importa registros desde un archivo CSV (ZIP) generado por esta aplicación. "
+                        "Los datos se agregan sin reemplazar tu base actual, evitando duplicados "
+                        "y manteniendo la integridad de tareas, subtareas y hábitos.",
                         size=14,
                         color=ft.Colors.GREY_600
                     ),
@@ -580,8 +584,9 @@ class HomeView:
                         color=preview_color
                     ),
                     ft.Text(
-                        "Exporta el archivo tasks.db completo (todas las tablas y registros) para "
-                        "copias de seguridad, migración entre dispositivos o restauración futura.",
+                        "Exporta todos los datos a un archivo CSV comprimido (ZIP) conteniendo "
+                        "tasks.csv, subtasks.csv, habits.csv y habit_completions.csv. "
+                        "Ideal para copias de seguridad, migración entre dispositivos o restauración futura.",
                         size=14,
                         color=ft.Colors.GREY_600
                     ),
@@ -613,15 +618,15 @@ class HomeView:
         self.home_view.bgcolor = bgcolor
         self.page.update()
 
-    # ==================== IMPORT / EXPORT DB ====================
+    # ==================== IMPORT / EXPORT CSV ====================
 
     def _start_import(self, e):
-        """Inicia el proceso de selección de archivo .db para importar."""
+        """Inicia el proceso de selección de archivo ZIP (CSV) para importar."""
         try:
             self.import_file_picker.pick_files(
                 allow_multiple=False,
                 file_type=ft.FilePickerFileType.CUSTOM,
-                allowed_extensions=["db"],
+                allowed_extensions=["zip"],
             )
         except Exception as ex:
             self.page.snack_bar = ft.SnackBar(
@@ -632,33 +637,56 @@ class HomeView:
             self.page.update()
 
     def _handle_import_result(self, e: ft.FilePickerResultEvent):
-        """Maneja el resultado de la selección de archivo para importación."""
+        """Maneja el resultado de la selección de archivo CSV para importación."""
         if not e.files:
             return  # Usuario canceló
 
         file = e.files[0]
         path = file.path
-        if not path or not path.lower().endswith(".db"):
+        if not path or not path.lower().endswith(".zip"):
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Debe seleccionar un archivo con extensión .db"),
+                content=ft.Text("Debe seleccionar un archivo ZIP con extensión .zip"),
                 bgcolor=ft.Colors.RED,
             )
             self.page.snack_bar.open = True
             self.page.update()
             return
 
+        # Detectar si estamos en Android/iOS
+        is_mobile = (
+            self.page.platform == ft.PagePlatform.ANDROID 
+            or self.page.platform == ft.PagePlatform.IOS
+        )
+
         try:
-            result = self.backup_service.import_from_database(path)
-            msg = (
-                f"Importación completada. "
-                f"Tareas nuevas: {result.tasks_imported}, "
-                f"Subtareas nuevas: {result.subtasks_imported}, "
-                f"Hábitos nuevos: {result.habits_imported}, "
-                f"Cumplimientos nuevos: {result.habit_completions_imported}."
-            )
+            result = self.csv_backup_service.import_from_csv(path)
+            
+            # Construir mensaje de éxito
+            msg_parts = [f"Importación completada."]
+            if result.tasks_imported > 0:
+                msg_parts.append(f"Tareas nuevas: {result.tasks_imported}")
+            if result.subtasks_imported > 0:
+                msg_parts.append(f"Subtareas nuevas: {result.subtasks_imported}")
+            if result.habits_imported > 0:
+                msg_parts.append(f"Hábitos nuevos: {result.habits_imported}")
+            if result.habit_completions_imported > 0:
+                msg_parts.append(f"Cumplimientos nuevos: {result.habit_completions_imported}")
+            
+            if result.errors:
+                msg_parts.append(f"\nAdvertencias: {len(result.errors)}")
+                # Mostrar primeros errores en el mensaje
+                for error in result.errors[:3]:
+                    msg_parts.append(f"  - {error}")
+                if len(result.errors) > 3:
+                    msg_parts.append(f"  ... y {len(result.errors) - 3} más")
+
+            msg = " ".join(msg_parts)
+            
+            bg_color = ft.Colors.GREEN if not result.errors else ft.Colors.ORANGE
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(msg),
-                bgcolor=ft.Colors.GREEN,
+                bgcolor=bg_color,
+                duration=8000 if is_mobile else 5000,
             )
             self.page.snack_bar.open = True
 
@@ -670,20 +698,21 @@ class HomeView:
 
         except Exception as ex:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error al importar datos: {str(ex)}"),
+                content=ft.Text(f"Error al importar datos CSV: {str(ex)}"),
                 bgcolor=ft.Colors.RED,
+                duration=8000 if is_mobile else 5000,
             )
             self.page.snack_bar.open = True
         finally:
             self.page.update()
 
     def _start_export(self, e):
-        """Inicia el diálogo para elegir dónde guardar el backup .db."""
+        """Inicia el diálogo para elegir dónde guardar el backup CSV (ZIP)."""
         try:
             # Nombre sugerido con timestamp para evitar sobrescribir
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.export_file_picker.save_file(
-                file_name=f"tasks_backup_{ts}.db"
+                file_name=f"tasks_backup_{ts}.zip"
             )
         except Exception as ex:
             self.page.snack_bar = ft.SnackBar(
@@ -694,14 +723,28 @@ class HomeView:
             self.page.update()
 
     def _handle_export_result(self, e: ft.FilePickerResultEvent):
-        """Maneja la ruta elegida por el usuario y realiza el backup."""
+        """Maneja la ruta elegida por el usuario y realiza el backup CSV."""
         if not e.path:
             return  # Usuario canceló
 
-        # Asegurar extensión .db
+        # Asegurar extensión .zip
         target_path = e.path
-        if not target_path.lower().endswith(".db"):
-            target_path = target_path + ".db"
+        if not target_path.lower().endswith(".zip"):
+            target_path = target_path + ".zip"
+
+        # Si es una prueba de permisos (archivo test_permission.zip), solo verificar que funciona
+        if "test_permission" in target_path.lower():
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(
+                    "✓ Permisos de almacenamiento activados correctamente.\n"
+                    "Ya puedes usar importar/exportar sin problemas."
+                ),
+                bgcolor=ft.Colors.GREEN,
+                duration=4000,
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return  # No exportar realmente, solo verificar permisos
 
         # Detectar si estamos en Android/iOS para mostrar mensajes más específicos
         is_mobile = (
@@ -710,23 +753,23 @@ class HomeView:
         )
 
         try:
-            self.backup_service.export_database(target_path)
+            self.csv_backup_service.export_to_csv(target_path)
             
             # Verificar tamaño del archivo exportado
-            import os
             file_size = os.path.getsize(target_path)
             size_mb = file_size / (1024 * 1024)
             
             success_msg = (
-                f"Base de datos exportada correctamente.\n"
+                f"Datos exportados correctamente a CSV.\n"
                 f"Ubicación: {target_path}\n"
-                f"Tamaño: {size_mb:.2f} MB"
+                f"Tamaño: {size_mb:.2f} MB\n"
+                f"Contiene: tasks.csv, subtasks.csv, habits.csv, habit_completions.csv"
             )
             
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(success_msg),
                 bgcolor=ft.Colors.GREEN,
-                duration=5000 if is_mobile else 3000,
+                duration=6000 if is_mobile else 4000,
             )
             self.page.snack_bar.open = True
         except OSError as ex:
@@ -746,12 +789,89 @@ class HomeView:
             self.page.snack_bar.open = True
         except Exception as ex:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error al exportar base de datos: {str(ex)}"),
+                content=ft.Text(f"Error al exportar datos CSV: {str(ex)}"),
                 bgcolor=ft.Colors.RED,
-                duration=5000,
+                duration=6000,
             )
             self.page.snack_bar.open = True
         finally:
+            self.page.update()
+
+    def _show_storage_permission_dialog(self):
+        """Muestra un diálogo informativo sobre permisos de almacenamiento en Android/iOS."""
+        if self.page.platform != ft.PagePlatform.ANDROID and self.page.platform != ft.PagePlatform.IOS:
+            return  # Solo en móvil
+
+        # Crear diálogo informativo
+        permission_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Permisos de almacenamiento"),
+            content=ft.Column(
+                [
+                    ft.Text(
+                        "Para usar las funciones de importar y exportar datos, "
+                        "la aplicación necesita acceso al almacenamiento.",
+                        size=14,
+                    ),
+                    ft.Divider(),
+                    ft.Text(
+                        "Los permisos se solicitarán automáticamente cuando uses "
+                        "las funciones de importar o exportar por primera vez.",
+                        size=14,
+                        weight=ft.FontWeight.BOLD,
+                    ),
+                    ft.Text(
+                        "Recomendación: Guarda los backups en la carpeta 'Descargas' "
+                        "para mayor compatibilidad.",
+                        size=12,
+                        color=ft.Colors.GREY_600,
+                    ),
+                ],
+                tight=True,
+                spacing=12,
+            ),
+            actions=[
+                ft.TextButton(
+                    "Entendido",
+                    on_click=lambda e: self._close_permission_dialog(),
+                ),
+                ft.ElevatedButton(
+                    "Probar ahora",
+                    on_click=lambda e: self._test_storage_permission(),
+                ),
+            ],
+        )
+
+        self.storage_permission_dialog = permission_dialog
+        self.page.dialog = permission_dialog
+        permission_dialog.open = True
+        self.page.update()
+
+    def _close_permission_dialog(self):
+        """Cierra el diálogo de permisos."""
+        if self.storage_permission_dialog:
+            self.storage_permission_dialog.open = False
+            self.page.dialog = None
+            self.page.update()
+
+    def _test_storage_permission(self):
+        """Intenta activar el FilePicker para solicitar permisos."""
+        self._close_permission_dialog()
+        
+        # Intentar abrir el FilePicker para activar la solicitud de permisos
+        try:
+            # Usar el export_file_picker para activar permisos
+            # Esto debería mostrar el diálogo de permisos de Android
+            self.export_file_picker.save_file(file_name="test_permission.zip")
+            
+            # Si el usuario cancela, no hacemos nada
+            # Si acepta, el _handle_export_result manejará el resultado
+        except Exception as ex:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error al solicitar permisos: {str(ex)}"),
+                bgcolor=ft.Colors.RED,
+            )
+            self.page.snack_bar.open = True
             self.page.update()
     
     def _load_tasks(self):

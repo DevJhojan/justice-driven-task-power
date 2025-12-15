@@ -31,20 +31,6 @@ def main(page: ft.Page):
     page.padding = 0
     page.spacing = 0
 
-    # Solicitar permisos de almacenamiento en Android al iniciar
-    if page.platform == ft.PagePlatform.ANDROID or page.platform == ft.PagePlatform.IOS:
-        # En Android/iOS, intentar acceder al almacenamiento para solicitar permisos
-        # Esto se hace automáticamente cuando usamos FilePicker, pero podemos
-        # forzar la solicitud creando un FilePicker temporal
-        try:
-            temp_picker = ft.FilePicker()
-            page.overlay.append(temp_picker)
-            # Intentar acceder al almacenamiento para activar la solicitud de permisos
-            # (El permiso real se solicitará cuando el usuario use importar/exportar)
-            page.update()
-        except Exception:
-            pass  # Si falla, no es crítico, los permisos se pedirán al usar FilePicker
-
     # Cargar ajustes de apariencia desde SQLite y aplicarlos
     settings_service = SettingsService()
     app_settings = settings_service.get_settings()
@@ -55,7 +41,12 @@ def main(page: ft.Page):
     page.vertical_alignment = ft.MainAxisAlignment.START
     
     # Inicializar la vista principal
-    HomeView(page)
+    home_view = HomeView(page)
+    
+    # Solicitar permisos de almacenamiento en Android/iOS después de inicializar la UI
+    if page.platform == ft.PagePlatform.ANDROID or page.platform == ft.PagePlatform.IOS:
+        # Mostrar diálogo informativo sobre permisos
+        home_view._show_storage_permission_dialog()
 
 
 if __name__ == "__main__":
