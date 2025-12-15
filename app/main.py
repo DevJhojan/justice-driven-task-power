@@ -46,14 +46,9 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     # Ejecutar la aplicación
-    # Para móvil: usar ft.app(target=main, view=ft.AppView.FLET_APP)
-    # Para web: usar ft.app(target=main, view=ft.AppView.WEB_BROWSER)
-    # Para desktop: usar ft.app(target=main)
-    
-    # Modo aplicación móvil
-    ft.app(
-        target=main,
-        view=ft.AppView.WEB_BROWSER,  # Modo aplicación móvil
-        assets_dir="assets"  # Directorio de assets
-    )
+    # Recomendado para desarrollo en escritorio: ventana nativa Flet
+    # (evita problemas del navegador / portal de archivos).
+    #
+    # Para móvil (APK/AAB) el build de Flet gestionará internamente el WebView.
+    ft.app(target=main, view=ft.AppView.FLET_APP, assets_dir="assets")
 
