@@ -81,6 +81,50 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id)
         ''')
         
+        # Tabla de hábitos
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS habits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT,
+                frequency TEXT NOT NULL DEFAULT 'daily',
+                target_days INTEGER NOT NULL DEFAULT 1,
+                active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                CHECK(frequency IN ('daily', 'weekly', 'custom')),
+                CHECK(target_days >= 1 AND target_days <= 7)
+            )
+        ''')
+        
+        # Tabla de cumplimientos de hábitos
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS habit_completions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                habit_id INTEGER NOT NULL,
+                completion_date TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (habit_id) REFERENCES habits(id) ON DELETE CASCADE,
+                UNIQUE(habit_id, completion_date)
+            )
+        ''')
+        
+        # Índices para mejorar el rendimiento de consultas
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_habit_completions_habit_id 
+            ON habit_completions(habit_id)
+        ''')
+        
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_habit_completions_date 
+            ON habit_completions(completion_date)
+        ''')
+        
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_habits_active 
+            ON habits(active)
+        ''')
+        
         conn.commit()
         conn.close()
     
