@@ -22,16 +22,21 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
     """
     # Detectar el tema actual
     is_dark = page.theme_mode == ft.ThemeMode.DARK if page else False
+    scheme = page.theme.color_scheme if page and page.theme else None
+    primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_600
+    secondary = scheme.secondary if scheme and scheme.secondary else ft.Colors.RED_400
     
-    # Colores adaptativos según el tema
-    title_color = ft.Colors.GREY_400 if task.completed else (ft.Colors.WHITE if is_dark else ft.Colors.BLACK87)
+    # Colores adaptativos según el tema y matiz
+    title_color = ft.Colors.GREY_400 if task.completed else (
+        ft.Colors.WHITE if is_dark else primary
+    )
     description_color = ft.Colors.GREY_500 if is_dark else ft.Colors.GREY_600
     
-    # Color según prioridad (esquema rojo/negro)
+    # Color según prioridad (usa el matiz principal)
     priority_colors = {
-        'high': ft.Colors.RED_600,
-        'medium': ft.Colors.RED_800,
-        'low': ft.Colors.RED_900
+        'high': primary,
+        'medium': secondary,
+        'low': ft.Colors.GREY_500
     }
     
     priority_labels = {
@@ -45,7 +50,7 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
     
     # Icono de estado
     status_icon = ft.Icons.CHECK_CIRCLE if task.completed else ft.Icons.RADIO_BUTTON_UNCHECKED
-    status_color = ft.Colors.RED_400 if task.completed else ft.Colors.GREY_600
+    status_color = secondary if task.completed else ft.Colors.GREY_600
     
     # Estilo del texto según estado
     title_style = ft.TextStyle(
@@ -98,7 +103,7 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
             from datetime import datetime
             
             subtask_icon = ft.Icons.CHECK_CIRCLE if subtask.completed else ft.Icons.RADIO_BUTTON_UNCHECKED
-            subtask_color = ft.Colors.RED_400 if subtask.completed else ft.Colors.GREY_600
+            subtask_color = secondary if subtask.completed else ft.Colors.GREY_600
             subtask_text_color = ft.Colors.GREY_400 if subtask.completed else (ft.Colors.WHITE if is_dark else ft.Colors.BLACK87)
             subtask_desc_color = ft.Colors.GREY_500 if is_dark else ft.Colors.GREY_600
             
@@ -146,7 +151,7 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
                     ft.Text(
                         deadline_text,
                         size=9,
-                        color=ft.Colors.RED_400 if "Vencida" in deadline_text else ft.Colors.GREY_500,
+                        color=secondary if "Vencida" in deadline_text else ft.Colors.GREY_500,
                         weight=ft.FontWeight.BOLD if "Vencida" in deadline_text else None
                     )
                 )
@@ -178,7 +183,7 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
                     action_buttons.append(
                         ft.IconButton(
                             icon=ft.Icons.EDIT,
-                            icon_color=ft.Colors.RED_400,
+                            icon_color=secondary,
                             icon_size=16,
                             on_click=lambda e, st=subtask: on_edit_subtask(st),
                             tooltip="Editar subtarea",
@@ -191,7 +196,7 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
                     action_buttons.append(
                         ft.IconButton(
                             icon=ft.Icons.DELETE,
-                            icon_color=ft.Colors.RED_400,
+                            icon_color=secondary,
                             icon_size=16,
                             on_click=lambda e, st_id=subtask.id: on_delete_subtask(st_id),
                             tooltip="Eliminar subtarea",
@@ -250,7 +255,7 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
                 content=ft.TextButton(
                     icon=ft.Icons.ADD,
                     text="Agregar subtarea",
-                    icon_color=ft.Colors.RED_400,
+                    icon_color=secondary,
                     on_click=make_add_handler(task.id),
                     tooltip="Agregar subtarea"
                 ),
@@ -262,29 +267,29 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
     card_controls.append(
         ft.Row(
             [
-                ft.Container(
-                    content=ft.Text(
-                        priority_label,
-                        size=10,
-                        color=ft.Colors.WHITE,
-                        weight=ft.FontWeight.BOLD
+                    ft.Container(
+                        content=ft.Text(
+                            priority_label,
+                            size=10,
+                            color=ft.Colors.WHITE,
+                            weight=ft.FontWeight.BOLD
+                        ),
+                        bgcolor=priority_color,
+                        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                        border_radius=12,
                     ),
-                    bgcolor=priority_color,
-                    padding=ft.padding.symmetric(horizontal=8, vertical=4),
-                    border_radius=12,
-                ),
                 ft.Row(
                     [
                         ft.IconButton(
                             icon=ft.Icons.EDIT,
-                            icon_color=ft.Colors.RED_400,
+                            icon_color=secondary,
                             icon_size=20,
                             on_click=lambda e, t=task: on_edit(t),
                             tooltip="Editar"
                         ),
                         ft.IconButton(
                             icon=ft.Icons.DELETE,
-                            icon_color=ft.Colors.RED,
+                            icon_color=primary,
                             icon_size=20,
                             on_click=lambda e, task_id=task.id: on_delete(task_id),
                             tooltip="Eliminar"
@@ -325,11 +330,14 @@ def create_empty_state(page: ft.Page = None) -> ft.Container:
     """
     # Detectar el tema actual
     is_dark = page.theme_mode == ft.ThemeMode.DARK if page else False
+    scheme = page.theme.color_scheme if page and page.theme else None
+    primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_600
+    secondary = scheme.secondary if scheme and scheme.secondary else ft.Colors.RED_400
     
-    # Colores adaptativos con matices rojos
-    icon_color = ft.Colors.RED_600 if is_dark else ft.Colors.RED_500
-    text_color = ft.Colors.RED_400 if is_dark else ft.Colors.RED_700
-    subtitle_color = ft.Colors.RED_700 if is_dark else ft.Colors.RED_600
+    # Colores adaptativos con matiz
+    icon_color = primary
+    text_color = secondary if is_dark else primary
+    subtitle_color = primary
     
     return ft.Container(
         content=ft.Column(
@@ -372,6 +380,9 @@ def create_statistics_card(stats: dict, page: ft.Page = None) -> ft.Card:
     """
     # Detectar el tema actual
     is_dark = page.theme_mode == ft.ThemeMode.DARK if page else False
+    scheme = page.theme.color_scheme if page and page.theme else None
+    primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_600
+    secondary = scheme.secondary if scheme and scheme.secondary else ft.Colors.RED_400
     
     # Color adaptativo para las etiquetas
     label_color = ft.Colors.GREY_400 if is_dark else ft.Colors.GREY_600
@@ -389,7 +400,7 @@ def create_statistics_card(stats: dict, page: ft.Page = None) -> ft.Card:
                                 str(stats.get('total', 0)),
                                 size=24,
                                 weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.RED_400
+                                color=primary
                             ),
                             ft.Text("Total", size=12, color=label_color)
                         ],
@@ -403,7 +414,7 @@ def create_statistics_card(stats: dict, page: ft.Page = None) -> ft.Card:
                                 str(stats.get('completed', 0)),
                                 size=24,
                                 weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.RED_500
+                                color=secondary
                             ),
                             ft.Text("Completadas", size=12, color=label_color)
                         ],
@@ -417,7 +428,7 @@ def create_statistics_card(stats: dict, page: ft.Page = None) -> ft.Card:
                                 str(stats.get('pending', 0)),
                                 size=24,
                                 weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.RED_600
+                                color=primary
                             ),
                             ft.Text("Pendientes", size=12, color=label_color)
                         ],
@@ -453,16 +464,19 @@ def create_habit_card(habit, metrics: dict, on_toggle_completion, on_edit, on_de
     """
     # Detectar el tema actual
     is_dark = page.theme_mode == ft.ThemeMode.DARK if page else False
+    scheme = page.theme.color_scheme if page and page.theme else None
+    primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_600
+    secondary = scheme.secondary if scheme and scheme.secondary else ft.Colors.RED_400
     
     # Colores adaptativos según el tema
-    title_color = ft.Colors.WHITE if is_dark else ft.Colors.BLACK87
+    title_color = ft.Colors.WHITE if is_dark else primary
     description_color = ft.Colors.GREY_500 if is_dark else ft.Colors.GREY_600
     
     # Color de fondo de la tarjeta según el tema
     card_bgcolor = ft.Colors.BLACK87 if is_dark else None
     
     # Color según el estado activo
-    status_color = ft.Colors.RED_400 if habit.active else ft.Colors.GREY_500
+    status_color = secondary if habit.active else ft.Colors.GREY_500
     status_text = "Activo" if habit.active else "Inactivo"
     
     # Información de métricas
@@ -471,7 +485,7 @@ def create_habit_card(habit, metrics: dict, on_toggle_completion, on_edit, on_de
     total_completions = metrics.get('total_completions', 0)
     
     # Color del streak según su valor
-    streak_color = ft.Colors.RED_400 if streak > 0 else ft.Colors.GREY_500
+    streak_color = secondary if streak > 0 else ft.Colors.GREY_500
     
     # Construir controles de la tarjeta
     card_controls = [
@@ -500,7 +514,7 @@ def create_habit_card(habit, metrics: dict, on_toggle_completion, on_edit, on_de
                 # Botón para marcar/desmarcar cumplimiento de hoy
                 ft.IconButton(
                     icon=ft.Icons.CHECK_CIRCLE if metrics.get('last_completion_date') == date.today() else ft.Icons.RADIO_BUTTON_UNCHECKED,
-                    icon_color=ft.Colors.RED_400 if metrics.get('last_completion_date') == date.today() else ft.Colors.GREY_600,
+                    icon_color=secondary if metrics.get('last_completion_date') == date.today() else ft.Colors.GREY_600,
                     on_click=lambda e, h=habit: on_toggle_completion(h.id),
                     tooltip="Marcar cumplimiento de hoy"
                 )
@@ -543,7 +557,7 @@ def create_habit_card(habit, metrics: dict, on_toggle_completion, on_edit, on_de
                                 f"{completion_percentage:.0f}%",
                                 size=20,
                                 weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.RED_400
+                                color=secondary
                             ),
                             ft.Text(
                                 "Cumplimiento",
@@ -566,7 +580,7 @@ def create_habit_card(habit, metrics: dict, on_toggle_completion, on_edit, on_de
                                 str(total_completions),
                                 size=20,
                                 weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.RED_500
+                                color=primary
                             ),
                             ft.Text(
                                 "Total",
@@ -617,21 +631,21 @@ def create_habit_card(habit, metrics: dict, on_toggle_completion, on_edit, on_de
                     [
                         ft.IconButton(
                             icon=ft.Icons.INFO_OUTLINE,
-                            icon_color=ft.Colors.RED_400,
+                            icon_color=secondary,
                             icon_size=20,
                             on_click=lambda e, h=habit: on_view_details(h),
                             tooltip="Ver detalles"
                         ),
                         ft.IconButton(
                             icon=ft.Icons.EDIT,
-                            icon_color=ft.Colors.RED_400,
+                            icon_color=secondary,
                             icon_size=20,
                             on_click=lambda e, h=habit: on_edit(h),
                             tooltip="Editar"
                         ),
                         ft.IconButton(
                             icon=ft.Icons.DELETE,
-                            icon_color=ft.Colors.RED,
+                            icon_color=primary,
                             icon_size=20,
                             on_click=lambda e, h_id=habit.id: on_delete(h_id),
                             tooltip="Eliminar"
@@ -672,11 +686,14 @@ def create_habit_empty_state(page: ft.Page = None) -> ft.Container:
     """
     # Detectar el tema actual
     is_dark = page.theme_mode == ft.ThemeMode.DARK if page else False
+    scheme = page.theme.color_scheme if page and page.theme else None
+    primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_600
+    secondary = scheme.secondary if scheme and scheme.secondary else ft.Colors.RED_400
     
-    # Colores adaptativos con matices rojos
-    icon_color = ft.Colors.RED_600 if is_dark else ft.Colors.RED_500
-    text_color = ft.Colors.RED_400 if is_dark else ft.Colors.RED_700
-    subtitle_color = ft.Colors.RED_700 if is_dark else ft.Colors.RED_600
+    # Colores adaptativos con matiz
+    icon_color = primary
+    text_color = secondary if is_dark else primary
+    subtitle_color = primary
     
     return ft.Container(
         content=ft.Column(
@@ -719,6 +736,9 @@ def create_habit_statistics_card(stats: dict, page: ft.Page = None) -> ft.Card:
     """
     # Detectar el tema actual
     is_dark = page.theme_mode == ft.ThemeMode.DARK if page else False
+    scheme = page.theme.color_scheme if page and page.theme else None
+    primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_600
+    secondary = scheme.secondary if scheme and scheme.secondary else ft.Colors.RED_400
     
     # Color adaptativo para las etiquetas
     label_color = ft.Colors.GREY_400 if is_dark else ft.Colors.GREY_600
@@ -736,7 +756,7 @@ def create_habit_statistics_card(stats: dict, page: ft.Page = None) -> ft.Card:
                                 str(stats.get('total', 0)),
                                 size=24,
                                 weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.RED_400
+                                color=primary
                             ),
                             ft.Text("Total", size=12, color=label_color)
                         ],
@@ -750,7 +770,7 @@ def create_habit_statistics_card(stats: dict, page: ft.Page = None) -> ft.Card:
                                 str(stats.get('active', 0)),
                                 size=24,
                                 weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.RED_500
+                                color=secondary
                             ),
                             ft.Text("Activos", size=12, color=label_color)
                         ],
@@ -764,7 +784,7 @@ def create_habit_statistics_card(stats: dict, page: ft.Page = None) -> ft.Card:
                                 str(stats.get('habits_with_streak', 0)),
                                 size=24,
                                 weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.RED_600
+                                color=primary
                             ),
                             ft.Text("Con racha", size=12, color=label_color)
                         ],

@@ -7,6 +7,8 @@ from datetime import date
 from app.data.models import Task, SubTask, Habit
 from app.services.task_service import TaskService
 from app.services.habit_service import HabitService
+from app.services.backup_service import BackupService
+from app.services.settings_service import SettingsService, apply_theme_to_page
 from app.ui.widgets import (
     create_task_card, create_empty_state, create_statistics_card,
     create_habit_card, create_habit_empty_state, create_habit_statistics_card
@@ -28,6 +30,8 @@ class HomeView:
         self.page = page
         self.task_service = TaskService()
         self.habit_service = HabitService()
+        self.backup_service = BackupService()
+        self.settings_service = SettingsService()
         self.current_task_filter: Optional[bool] = None  # None=all, True=completed, False=pending
         self.current_habit_filter: Optional[bool] = None  # None=all, True=active, False=inactive
         self.editing_task: Optional[Task] = None
@@ -44,24 +48,36 @@ class HomeView:
         self.habit_stats_card = None
         self.title_bar = None  # Guardar referencia a la barra de título
         
+        # File pickers para importación/exportación de base de datos
+        self.import_file_picker = ft.FilePicker(on_result=self._handle_import_result)
+        self.export_file_picker = ft.FilePicker(on_result=self._handle_export_result)
+        if self.import_file_picker not in self.page.overlay:
+            self.page.overlay.append(self.import_file_picker)
+        if self.export_file_picker not in self.page.overlay:
+            self.page.overlay.append(self.export_file_picker)
+
+        # Diálogo para seleccionar matiz (paleta de colores)
+        # Debe tener al menos title, content o actions para que Flet no lance AssertionError.
+        self.accent_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(""),
+            content=ft.Container(),
+            actions=[],
+        )
+        if self.accent_dialog not in self.page.overlay:
+            self.page.overlay.append(self.accent_dialog)
+
+        self.page.update()
+
         self._build_ui()
         self._load_tasks()
     
     def _build_ui(self):
         """Construye la interfaz de usuario."""
-        # Botón para cambiar tema
-        # Determinar el icono inicial según el tema actual
-        initial_icon = ft.Icons.DARK_MODE if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.Icons.LIGHT_MODE
-        initial_tooltip = "Cambiar a tema oscuro" if self.page.theme_mode == ft.ThemeMode.LIGHT else "Cambiar a tema claro"
-        
-        self.theme_button = ft.IconButton(
-            icon=initial_icon,
-            tooltip=initial_tooltip,
-            on_click=self._toggle_theme,
-            icon_color=ft.Colors.RED_400
-        )
-        
         # Barra de título
+        scheme = self.page.theme.color_scheme if self.page.theme else None
+        title_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_400
+
         self.title_bar = ft.Container(
             content=ft.Row(
                 [
@@ -71,10 +87,9 @@ class HomeView:
                         else "Configuración",
                         size=28,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.RED_400,
+                        color=title_color,
                         expand=True
-                    ),
-                    self.theme_button
+                    )
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER
@@ -86,14 +101,18 @@ class HomeView:
         # Crear la barra inferior de navegación
         self._build_bottom_bar()
         
-        # Filtros - colores adaptativos según el tema
+        # Filtros - colores adaptativos según el tema/acento
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        active_bg = ft.Colors.RED_700 if is_dark else ft.Colors.RED_600
-        inactive_bg = ft.Colors.GREY_800 if is_dark else ft.Colors.RED_100
+        scheme = self.page.theme.color_scheme if self.page.theme else None
+        primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_700
+        secondary = scheme.secondary if scheme and scheme.secondary else ft.Colors.RED_600
+
+        active_bg = primary
+        inactive_bg = ft.Colors.GREY_800 if is_dark else ft.Colors.GREY_100
         text_color = ft.Colors.WHITE
         
         # Botón para agregar nueva tarea - color adaptativo
-        new_task_button_bg = ft.Colors.RED_700 if is_dark else ft.Colors.RED_600
+        new_task_button_bg = primary
         
         # Botones de filtro
         filter_buttons = [
@@ -196,7 +215,9 @@ class HomeView:
         """Construye la barra inferior de navegación."""
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         bgcolor = ft.Colors.BLACK87 if is_dark else ft.Colors.WHITE
-        selected_color = ft.Colors.RED_400
+
+        scheme = self.page.theme.color_scheme if self.page.theme else None
+        selected_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_400
         unselected_color = ft.Colors.GREY_500 if is_dark else ft.Colors.GREY_600
         
         # Botón de Mis Tareas
@@ -341,9 +362,13 @@ class HomeView:
         """Construye la vista de hábitos."""
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         bgcolor = ft.Colors.BLACK if is_dark else ft.Colors.GREY_50
+
+        scheme = self.page.theme.color_scheme if self.page.theme else None
+        primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_700
+        secondary = scheme.secondary if scheme and scheme.secondary else ft.Colors.RED_600
         
         # Botón para agregar nuevo hábito - color adaptativo
-        new_habit_button_bg = ft.Colors.RED_700 if is_dark else ft.Colors.RED_600
+        new_habit_button_bg = primary
         
         # Botón "+" para agregar hábito
         self.new_habit_button = ft.IconButton(
@@ -357,8 +382,8 @@ class HomeView:
         )
         
         # Filtros para hábitos (Activos/Inactivos/Todos)
-        active_bg = ft.Colors.RED_700 if is_dark else ft.Colors.RED_600
-        inactive_bg = ft.Colors.GREY_800 if is_dark else ft.Colors.RED_100
+        active_bg = primary
+        inactive_bg = ft.Colors.GREY_800 if is_dark else ft.Colors.GREY_100
         text_color = ft.Colors.WHITE
         
         # Contenedor de estadísticas de hábitos
@@ -436,6 +461,41 @@ class HomeView:
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         bgcolor = ft.Colors.BLACK if is_dark else ft.Colors.GREY_50
 
+        scheme = self.page.theme.color_scheme if self.page.theme else None
+        preview_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_600
+
+        # ==================== Sección 1: Apariencia ====================
+        # Controles de apariencia (tema y color principal)
+        current_settings = self.settings_service.get_settings()
+
+        # Botón de luna/sol para alternar tema
+        theme_icon = (
+            ft.Icons.DARK_MODE if current_settings.theme_mode == "dark" else ft.Icons.LIGHT_MODE
+        )
+        theme_icon_button = ft.IconButton(
+            icon=theme_icon,
+            tooltip="Cambiar modo de tema",
+            on_click=self._toggle_theme,
+        )
+
+        # ==================== Sección 2: Copia de seguridad ====================
+        # Botones de importación/exportación (también con matiz)
+        import_button = ft.ElevatedButton(
+            text="Importar datos desde archivo .db",
+            icon=ft.Icons.FILE_UPLOAD,
+            on_click=self._start_import,
+            bgcolor=preview_color,
+            color=ft.Colors.WHITE,
+        )
+
+        export_button = ft.ElevatedButton(
+            text="Exportar base de datos actual",
+            icon=ft.Icons.FILE_DOWNLOAD,
+            on_click=self._start_export,
+            bgcolor=preview_color,
+            color=ft.Colors.WHITE,
+        )
+
         settings_content = ft.Container(
             content=ft.Column(
                 [
@@ -443,35 +503,73 @@ class HomeView:
                         "Configuración",
                         size=24,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.RED_400
+                        color=preview_color
                     ),
                     ft.Divider(),
-                    ft.Container(
-                        content=ft.Column(
-                            [
-                                ft.Icon(
-                                    ft.Icons.SETTINGS,
-                                    size=64,
-                                    color=ft.Colors.GREY_500
-                                ),
-                                ft.Text(
-                                    "Próximamente",
-                                    size=18,
-                                    color=ft.Colors.GREY_500,
-                                    weight=ft.FontWeight.BOLD
-                                ),
-                                ft.Text(
-                                    "La configuración estará disponible en una próxima versión.",
-                                    size=14,
-                                    color=ft.Colors.GREY_600,
-                                    text_align=ft.TextAlign.CENTER
-                                )
-                            ],
-                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                            spacing=16
-                        ),
-                        padding=40,
-                        alignment=ft.alignment.center
+
+                    # Sección Apariencia
+                    ft.Text(
+                        "Apariencia",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                        color=preview_color
+                    ),
+                    ft.Text(
+                        "Ajusta el modo de tema y el color principal de la aplicación.",
+                        size=14,
+                        color=ft.Colors.GREY_600
+                    ),
+                    ft.Row(
+                        [
+                            ft.Text("Modo de tema", size=14),
+                            theme_icon_button,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Text(
+                        "Color principal",
+                        size=14,
+                        weight=ft.FontWeight.BOLD
+                    ),
+                    ft.Row(
+                        [
+                            ft.Container(
+                                content=ft.Icon(ft.Icons.CIRCLE, color=preview_color, size=20),
+                                border=ft.border.all(1, ft.Colors.GREY_400),
+                                border_radius=20,
+                                padding=6,
+                            ),
+                            ft.ElevatedButton(
+                                text="Elegir matiz",
+                                icon=ft.Icons.COLOR_LENS,
+                                on_click=self._open_accent_dialog,
+                            )
+                        ],
+                        spacing=12,
+                        alignment=ft.MainAxisAlignment.START,
+                    ),
+
+                    ft.Divider(),
+
+                    # Sección Copia de seguridad
+                    ft.Text(
+                        "Copia de seguridad y migración de datos",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                        color=preview_color
+                    ),
+                    ft.Text(
+                        "Puedes importar datos desde otro archivo .db de la aplicación o exportar la base de datos actual para copia de seguridad.",
+                        size=14,
+                        color=ft.Colors.GREY_600
+                    ),
+                    ft.Row(
+                        [import_button],
+                        alignment=ft.MainAxisAlignment.START
+                    ),
+                    ft.Row(
+                        [export_button],
+                        alignment=ft.MainAxisAlignment.START
                     )
                 ],
                 spacing=16,
@@ -495,6 +593,106 @@ class HomeView:
         ]
         self.home_view.bgcolor = bgcolor
         self.page.update()
+
+    # ==================== IMPORT / EXPORT DB ====================
+
+    def _start_import(self, e):
+        """Inicia el proceso de selección de archivo .db para importar."""
+        try:
+            self.import_file_picker.pick_files(
+                allow_multiple=False,
+                file_type=ft.FilePickerFileType.CUSTOM,
+                allowed_extensions=["db"],
+            )
+        except Exception as ex:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error al iniciar la importación: {str(ex)}"),
+                bgcolor=ft.Colors.RED,
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+
+    def _handle_import_result(self, e: ft.FilePickerResultEvent):
+        """Maneja el resultado de la selección de archivo para importación."""
+        if not e.files:
+            return  # Usuario canceló
+
+        file = e.files[0]
+        path = file.path
+        if not path or not path.lower().endswith(".db"):
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Debe seleccionar un archivo con extensión .db"),
+                bgcolor=ft.Colors.RED,
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+
+        try:
+            result = self.backup_service.import_from_database(path)
+            msg = (
+                f"Importación completada. "
+                f"Tareas nuevas: {result.tasks_imported}, "
+                f"Subtareas nuevas: {result.subtasks_imported}, "
+                f"Hábitos nuevos: {result.habits_imported}, "
+                f"Cumplimientos nuevos: {result.habit_completions_imported}."
+            )
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(msg),
+                bgcolor=ft.Colors.GREEN,
+            )
+            self.page.snack_bar.open = True
+
+            # Refrescar vistas si estamos en tareas/hábitos
+            if self.current_section == "tasks":
+                self._load_tasks()
+            elif self.current_section == "habits":
+                self._load_habits()
+
+        except Exception as ex:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error al importar datos: {str(ex)}"),
+                bgcolor=ft.Colors.RED,
+            )
+            self.page.snack_bar.open = True
+        finally:
+            self.page.update()
+
+    def _start_export(self, e):
+        """Inicia el proceso de exportación de la base de datos."""
+        try:
+            # En Flet, save_file permite elegir ubicación y nombre del archivo
+            self.export_file_picker.save_file(
+                file_name="tasks_backup.db"
+            )
+        except Exception as ex:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error al iniciar la exportación: {str(ex)}"),
+                bgcolor=ft.Colors.RED,
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+
+    def _handle_export_result(self, e: ft.FilePickerResultEvent):
+        """Maneja el resultado de la selección de destino para exportación."""
+        if not e.path:
+            return  # Usuario canceló
+
+        try:
+            self.backup_service.export_database(e.path)
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Base de datos exportada correctamente a: {e.path}"),
+                bgcolor=ft.Colors.GREEN,
+            )
+            self.page.snack_bar.open = True
+        except Exception as ex:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error al exportar base de datos: {str(ex)}"),
+                bgcolor=ft.Colors.RED,
+            )
+            self.page.snack_bar.open = True
+        finally:
+            self.page.update()
     
     def _load_tasks(self):
         """Carga las tareas desde la base de datos."""
@@ -692,60 +890,122 @@ class HomeView:
     
     def _toggle_theme(self, e):
         """Cambia entre tema claro y oscuro."""
-        if self.page.theme_mode == ft.ThemeMode.LIGHT:
-            self.page.theme_mode = ft.ThemeMode.DARK
-            self.page.bgcolor = ft.Colors.BLACK
-            self.theme_button.icon = ft.Icons.LIGHT_MODE
-            self.theme_button.tooltip = "Cambiar a tema claro"
-            # Actualizar botón de nueva tarea
-            if hasattr(self, 'new_task_button') and self.new_task_button:
-                self.new_task_button.bgcolor = ft.Colors.RED_700
-            # Actualizar barra de título
-            if self.title_bar:
-                self.title_bar.bgcolor = ft.Colors.BLACK87
-            # Colores para vistas
-            view_bgcolor = ft.Colors.BLACK
-            title_bar_bgcolor = ft.Colors.BLACK87
-        else:
-            self.page.theme_mode = ft.ThemeMode.LIGHT
-            self.page.bgcolor = ft.Colors.GREY_50
-            self.theme_button.icon = ft.Icons.DARK_MODE
-            self.theme_button.tooltip = "Cambiar a tema oscuro"
-            # Actualizar botón de nueva tarea
-            if hasattr(self, 'new_task_button') and self.new_task_button:
-                self.new_task_button.bgcolor = ft.Colors.RED_600
-            # Actualizar barra de título
-            if self.title_bar:
-                self.title_bar.bgcolor = ft.Colors.RED_50
-            # Colores para vistas
-            view_bgcolor = ft.Colors.GREY_50
-            title_bar_bgcolor = ft.Colors.RED_50
-        
-        # Reconstruir la vista principal para aplicar todos los cambios
-        self._build_ui()
-        
-        # Actualizar todas las vistas abiertas (incluyendo el formulario si está abierto)
-        for view in self.page.views:
-            view.bgcolor = view_bgcolor
-            # Actualizar la barra de título de cada vista si existe
-            if view.controls and len(view.controls) > 0:
-                first_control = view.controls[0]
-                if isinstance(first_control, ft.Container):
-                    first_control.bgcolor = title_bar_bgcolor
-        
-        # Actualizar la barra inferior con los nuevos colores
-        self._build_bottom_bar()
-        # Actualizar la barra en la vista
-        if self.home_view and len(self.home_view.controls) > 0:
-            column = self.home_view.controls[0]
-            if isinstance(column, ft.Column) and len(column.controls) > 2:
-                column.controls[2] = self.bottom_bar
-        
-        # Recargar las tareas para actualizar los colores adaptativos
-        # Solo si el contenedor está en la página
-        if hasattr(self, 'tasks_container') and self.tasks_container and hasattr(self.tasks_container, '_page') and self.tasks_container._page is not None:
+        # Alternar modo y persistir a través del servicio de ajustes
+        current = self.settings_service.get_settings()
+        new_mode = "light" if current.theme_mode == "dark" else "dark"
+        updated = self.settings_service.update_settings(theme_mode=new_mode)
+        apply_theme_to_page(self.page, updated)
+
+        # Reconstruir vista según sección actual
+        if self.current_section == "tasks":
+            self._build_ui()
             self._load_tasks()
+        elif self.current_section == "habits":
+            self._build_habits_view()
+        elif self.current_section == "settings":
+            self._build_settings_view()
+
         self.page.update()
+
+    def _open_accent_dialog(self, e):
+        """Abre el diálogo con la paleta de matices disponibles."""
+        current_settings = self.settings_service.get_settings()
+
+        accent_options = [
+            ("red", ft.Colors.RED_600, "Rojo"),
+            ("pink", ft.Colors.PINK_500, "Rosa"),
+            ("purple", ft.Colors.PURPLE_500, "Púrpura"),
+            ("deep_purple", ft.Colors.DEEP_PURPLE_400, "Morado profundo"),
+            ("indigo", ft.Colors.INDIGO_500, "Índigo"),
+            ("blue", ft.Colors.BLUE_600, "Azul"),
+            ("cyan", ft.Colors.CYAN_500, "Cian"),
+            ("teal", ft.Colors.TEAL_500, "Turquesa"),
+            ("green", ft.Colors.GREEN_600, "Verde"),
+            ("lime", ft.Colors.LIME_600, "Lima"),
+            ("orange", ft.Colors.ORANGE_600, "Naranja"),
+            ("amber", ft.Colors.AMBER_600, "Ámbar"),
+        ]
+
+        accent_buttons = []
+        for value, color, label in accent_options:
+            selected = value == current_settings.accent_color
+            accent_buttons.append(
+                ft.Container(
+                    content=ft.IconButton(
+                        icon=ft.Icons.CIRCLE,
+                        icon_color=color,
+                        tooltip=label,
+                        data=value,
+                        on_click=self._on_accent_button_click,
+                    ),
+                    border=ft.border.all(
+                        2,
+                        color if selected else ft.Colors.TRANSPARENT,
+                    ),
+                    border_radius=20,
+                    padding=4,
+                )
+            )
+
+        rows: list[ft.Row] = []
+        for i in range(0, len(accent_buttons), 3):
+            rows.append(
+                ft.Row(
+                    controls=accent_buttons[i : i + 3],
+                    spacing=8,
+                    alignment=ft.MainAxisAlignment.START,
+                )
+            )
+
+        self.accent_dialog.title = ft.Text("Selecciona un matiz")
+        self.accent_dialog.content = ft.Column(controls=rows, spacing=8)
+        self.accent_dialog.actions = [
+            ft.TextButton("Cerrar", on_click=lambda ev: self._close_accent_dialog())
+        ]
+        self.accent_dialog.open = True
+        self.page.dialog = self.accent_dialog
+        self.page.update()
+
+    def _on_accent_button_click(self, e: ft.ControlEvent):
+        """Cambio de color principal desde la grid de matices."""
+        value = e.control.data
+        if value not in {
+            "red",
+            "pink",
+            "purple",
+            "deep_purple",
+            "indigo",
+            "blue",
+            "cyan",
+            "teal",
+            "green",
+            "lime",
+            "orange",
+            "amber",
+        }:
+            return
+
+        updated = self.settings_service.update_settings(accent_color=value)
+        apply_theme_to_page(self.page, updated)
+
+        # Reconstruir la vista actual respetando la sección activa
+        if self.current_section == "tasks":
+            self._build_ui()
+            self._load_tasks()
+        elif self.current_section == "habits":
+            self._build_habits_view()
+        elif self.current_section == "settings":
+            self._build_settings_view()
+
+        # Cerrar el diálogo de selección si está abierto
+        self._close_accent_dialog()
+        self.page.update()
+
+    def _close_accent_dialog(self):
+        """Cierra el diálogo de selección de matiz si está abierto."""
+        if hasattr(self, "accent_dialog"):
+            self.accent_dialog.open = False
+            self.page.update()
     
     def _toggle_subtask(self, subtask_id: int):
         """Cambia el estado de completado de una subtarea."""
