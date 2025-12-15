@@ -106,15 +106,15 @@ class HomeView:
             )
         ]
         
-        # Botón "+ Nueva Tarea" para la parte superior derecha
-        self.new_task_button = ft.ElevatedButton(
+        # Botón "+" para la parte superior derecha
+        self.new_task_button = ft.IconButton(
             icon=ft.Icons.ADD,
-            text="Nueva Tarea",
             on_click=self._show_new_task_form,
             bgcolor=new_task_button_bg,
-            color=ft.Colors.WHITE,
-            height=40,
-            tooltip="Crear nueva tarea"
+            icon_color=ft.Colors.WHITE,
+            tooltip="Nueva Tarea",
+            width=40,
+            height=40
         )
         
         # Fila de filtros con botón de nueva tarea a la derecha
