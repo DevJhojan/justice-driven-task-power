@@ -72,47 +72,65 @@ class HomeView:
         # Crear la barra inferior de navegación
         self._build_bottom_bar()
         
-        # Botón flotante para agregar tarea - color adaptativo
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        fab_bgcolor = ft.Colors.RED_700 if is_dark else ft.Colors.RED_600
-        
-        self.fab = ft.FloatingActionButton(
-            icon=ft.Icons.ADD,
-            text="Nueva Tarea",
-            on_click=self._show_new_task_form,
-            bgcolor=fab_bgcolor,
-            foreground_color=ft.Colors.WHITE
-        )
-        
         # Filtros - colores adaptativos según el tema
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         active_bg = ft.Colors.RED_700 if is_dark else ft.Colors.RED_600
         inactive_bg = ft.Colors.GREY_800 if is_dark else ft.Colors.RED_100
         text_color = ft.Colors.WHITE
         
+        # Botón para agregar nueva tarea - color adaptativo
+        new_task_button_bg = ft.Colors.RED_700 if is_dark else ft.Colors.RED_600
+        
+        # Botones de filtro
+        filter_buttons = [
+            ft.ElevatedButton(
+                text="Todas",
+                on_click=lambda e: self._filter_tasks(None),
+                bgcolor=active_bg if self.current_filter is None else inactive_bg,
+                color=text_color,
+                height=40
+            ),
+            ft.ElevatedButton(
+                text="Pendientes",
+                on_click=lambda e: self._filter_tasks(False),
+                bgcolor=active_bg if self.current_filter is False else inactive_bg,
+                color=text_color,
+                height=40
+            ),
+            ft.ElevatedButton(
+                text="Completadas",
+                on_click=lambda e: self._filter_tasks(True),
+                bgcolor=active_bg if self.current_filter is True else inactive_bg,
+                color=text_color,
+                height=40
+            )
+        ]
+        
+        # Botón "+ Nueva Tarea" para la parte superior derecha
+        self.new_task_button = ft.ElevatedButton(
+            icon=ft.Icons.ADD,
+            text="Nueva Tarea",
+            on_click=self._show_new_task_form,
+            bgcolor=new_task_button_bg,
+            color=ft.Colors.WHITE,
+            height=40,
+            tooltip="Crear nueva tarea"
+        )
+        
+        # Fila de filtros con botón de nueva tarea a la derecha
         filter_row = ft.Row(
             [
-                ft.ElevatedButton(
-                    text="Todas",
-                    on_click=lambda e: self._filter_tasks(None),
-                    bgcolor=active_bg if self.current_filter is None else inactive_bg,
-                    color=text_color
+                ft.Row(
+                    filter_buttons,
+                    spacing=8,
+                    scroll=ft.ScrollMode.AUTO,
+                    expand=True
                 ),
-                ft.ElevatedButton(
-                    text="Pendientes",
-                    on_click=lambda e: self._filter_tasks(False),
-                    bgcolor=active_bg if self.current_filter is False else inactive_bg,
-                    color=text_color
-                ),
-                ft.ElevatedButton(
-                    text="Completadas",
-                    on_click=lambda e: self._filter_tasks(True),
-                    bgcolor=active_bg if self.current_filter is True else inactive_bg,
-                    color=text_color
-                )
+                self.new_task_button
             ],
             spacing=8,
-            scroll=ft.ScrollMode.AUTO
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER
         )
         
         # Contenedor de estadísticas
@@ -151,7 +169,6 @@ class HomeView:
                     expand=True
                 )
             ],
-            floating_action_button=self.fab,
             bgcolor=ft.Colors.BLACK if self.page.theme_mode == ft.ThemeMode.DARK else ft.Colors.GREY_50
         )
         
@@ -331,7 +348,7 @@ class HomeView:
                 expand=True
             )
         ]
-        self.home_view.floating_action_button = None  # Sin FAB en hábitos por ahora
+        # Sin botón de nueva tarea en hábitos por ahora (ya no hay FAB)
         self.home_view.bgcolor = bgcolor
     
     def _load_tasks(self):
@@ -534,9 +551,9 @@ class HomeView:
             self.page.bgcolor = ft.Colors.BLACK
             self.theme_button.icon = ft.Icons.LIGHT_MODE
             self.theme_button.tooltip = "Cambiar a tema claro"
-            # Actualizar FAB
-            if self.fab:
-                self.fab.bgcolor = ft.Colors.RED_700
+            # Actualizar botón de nueva tarea
+            if hasattr(self, 'new_task_button') and self.new_task_button:
+                self.new_task_button.bgcolor = ft.Colors.RED_700
             # Actualizar barra de título
             if self.title_bar:
                 self.title_bar.bgcolor = ft.Colors.BLACK87
@@ -548,9 +565,9 @@ class HomeView:
             self.page.bgcolor = ft.Colors.GREY_50
             self.theme_button.icon = ft.Icons.DARK_MODE
             self.theme_button.tooltip = "Cambiar a tema oscuro"
-            # Actualizar FAB
-            if self.fab:
-                self.fab.bgcolor = ft.Colors.RED_600
+            # Actualizar botón de nueva tarea
+            if hasattr(self, 'new_task_button') and self.new_task_button:
+                self.new_task_button.bgcolor = ft.Colors.RED_600
             # Actualizar barra de título
             if self.title_bar:
                 self.title_bar.bgcolor = ft.Colors.RED_50
