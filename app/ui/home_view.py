@@ -703,17 +703,52 @@ class HomeView:
         if not target_path.lower().endswith(".db"):
             target_path = target_path + ".db"
 
+        # Detectar si estamos en Android/iOS para mostrar mensajes más específicos
+        is_mobile = (
+            self.page.platform == ft.PagePlatform.ANDROID 
+            or self.page.platform == ft.PagePlatform.IOS
+        )
+
         try:
             self.backup_service.export_database(target_path)
+            
+            # Verificar tamaño del archivo exportado
+            import os
+            file_size = os.path.getsize(target_path)
+            size_mb = file_size / (1024 * 1024)
+            
+            success_msg = (
+                f"Base de datos exportada correctamente.\n"
+                f"Ubicación: {target_path}\n"
+                f"Tamaño: {size_mb:.2f} MB"
+            )
+            
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Base de datos exportada correctamente en:\n{target_path}"),
+                content=ft.Text(success_msg),
                 bgcolor=ft.Colors.GREEN,
+                duration=5000 if is_mobile else 3000,
+            )
+            self.page.snack_bar.open = True
+        except OSError as ex:
+            # Errores específicos de permisos/almacenamiento
+            error_msg = str(ex)
+            if is_mobile and "permisos" in error_msg.lower():
+                error_msg += (
+                    "\n\nSugerencia: Intenta guardar en la carpeta 'Descargas' "
+                    "o selecciona otra ubicación accesible."
+                )
+            
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(error_msg),
+                bgcolor=ft.Colors.RED,
+                duration=8000 if is_mobile else 5000,
             )
             self.page.snack_bar.open = True
         except Exception as ex:
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(f"Error al exportar base de datos: {str(ex)}"),
                 bgcolor=ft.Colors.RED,
+                duration=5000,
             )
             self.page.snack_bar.open = True
         finally:

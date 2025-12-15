@@ -1,10 +1,10 @@
-"""Servicio para importación y exportación segura de la base de datos.
+"""Servicio para importaciรณn y exportaciรณn segura de la base de datos.
 
-Este módulo se encarga de:
+Este mรณdulo se encarga de:
 - Importar datos desde otro archivo .db de la misma app sin sobrescribir tasks.db.
 - Evitar duplicados y conflictos de claves.
-- Mantener la integridad relacional entre tareas/subtareas y hábitos/cumplimientos.
-- Exportar la base de datos completa para copias de seguridad o migración.
+- Mantener la integridad relacional entre tareas/subtareas y hรกbitos/cumplimientos.
+- Exportar la base de datos completa para copias de seguridad o migraciรณn.
 """
 
 from __future__ import annotations
@@ -27,12 +27,12 @@ class ImportResult:
 
 
 class BackupService:
-    """Servicio de importación/exportación basado en SQLite.
+    """Servicio de importaciรณn/exportaciรณn basado en SQLite.
 
-    Decisiones técnicas clave:
+    Decisiones tรฉcnicas clave:
     - Se trabaja siempre sobre la base de datos actual (Database.db_path).
-    - La importación usa dos conexiones (origen y destino) y una transacción en destino.
-    - Se usan "huellas" (fingerprints) lógicas para detectar duplicados y remapear claves.
+    - La importaciรณn usa dos conexiones (origen y destino) y una transacciรณn en destino.
+    - Se usan "huellas" (fingerprints) lรณgicas para detectar duplicados y remapear claves.
     - No se importa estructura, solo datos conocidos (tasks, subtasks, habits, habit_completions).
     """
 
@@ -40,7 +40,7 @@ class BackupService:
         self.db = database or Database()
 
     # ------------------------------------------------------------------
-    # Exportación
+    # Exportaciรณn
     # ------------------------------------------------------------------
     def export_database(self, target_path: str) -> None:
         """Exporta el archivo tasks.db completo a target_path.
@@ -49,26 +49,56 @@ class BackupService:
             target_path: Ruta de destino (debe terminar en .db idealmente).
 
         Raises:
-            ValueError: Si la extensión no es .db.
+            ValueError: Si la extensiรณn no es .db.
             OSError: Errores de copia en el sistema de archivos.
         """
         if not target_path.lower().endswith(".db"):
-            raise ValueError("El archivo de destino debe tener extensión .db")
+            raise ValueError("El archivo de destino debe tener extensiรณn .db")
 
         source_path = self.db.db_path
         if not os.path.exists(source_path):
             raise FileNotFoundError(f"Base de datos origen no encontrada: {source_path}")
 
+        # Obtener tamaño del archivo origen para verificación
+        source_size = os.path.getsize(source_path)
+        if source_size == 0:
+            raise ValueError("El archivo de base de datos origen está vacío")
+
         # Asegurar directorio de destino
         target_dir = os.path.dirname(target_path)
         if target_dir and not os.path.exists(target_dir):
-            os.makedirs(target_dir, exist_ok=True)
+            try:
+                os.makedirs(target_dir, exist_ok=True)
+            except (OSError, PermissionError) as e:
+                raise OSError(f"No se pudo crear el directorio de destino: {e}")
 
         # Copia a nivel de archivo (incluye toda la estructura y datos)
-        shutil.copy2(source_path, target_path)
+        try:
+            shutil.copy2(source_path, target_path)
+        except (OSError, PermissionError, IOError) as e:
+            raise OSError(f"Error al copiar el archivo: {e}. Verifica los permisos de almacenamiento.")
+
+        # Verificar que el archivo se copió correctamente
+        if not os.path.exists(target_path):
+            raise OSError("El archivo de destino no se creó correctamente")
+
+        target_size = os.path.getsize(target_path)
+        if target_size == 0:
+            raise OSError(
+                "El archivo exportado tiene 0 bytes. "
+                "Esto generalmente indica un problema de permisos de almacenamiento en Android. "
+                "Intenta guardar en una ubicación diferente (por ejemplo, Descargas)."
+            )
+
+        if target_size != source_size:
+            raise OSError(
+                f"El archivo exportado tiene un tamaño incorrecto "
+                f"({target_size} bytes vs {source_size} bytes esperados). "
+                "La exportación puede estar incompleta."
+            )
 
     # ------------------------------------------------------------------
-    # Importación
+    # Importaciรณn
     # ------------------------------------------------------------------
     def import_from_database(self, external_db_path: str) -> ImportResult:
         """Importa datos desde otro archivo .db a la base actual.
@@ -88,24 +118,24 @@ class BackupService:
             ImportResult con contadores de registros realmente insertados.
         """
         if not external_db_path.lower().endswith(".db"):
-            raise ValueError("Solo se permiten archivos con extensión .db")
+            raise ValueError("Solo se permiten archivos con extensiรณn .db")
 
         if not os.path.exists(external_db_path):
             raise FileNotFoundError("El archivo .db externo no existe")
 
         result = ImportResult()
 
-        # Conexión origen
+        # Conexiรณn origen
         src_conn = sqlite3.connect(external_db_path)
         src_conn.row_factory = sqlite3.Row
         src_cur = src_conn.cursor()
 
-        # Conexión destino
+        # Conexiรณn destino
         dst_conn = self.db.get_connection()
         dst_cur = dst_conn.cursor()
 
         try:
-            # Iniciar transacción explícita en destino
+            # Iniciar transacciรณn explรญcita en destino
             dst_conn.execute("BEGIN")
 
             # Tablas conocidas y con relaciones
@@ -122,7 +152,7 @@ class BackupService:
                 src_cur.execute("SELECT * FROM tasks")
                 for row in src_cur.fetchall():
                     old_id = row["id"]
-                    # Huella lógica para tarea
+                    # Huella lรณgica para tarea
                     title = row["title"]
                     description = row["description"] or ""
                     created_at = row["created_at"]
@@ -177,7 +207,7 @@ class BackupService:
                     deadline = row["deadline"] or ""
                     created_at = row["created_at"]
 
-                    # Evitar duplicados por huella lógica
+                    # Evitar duplicados por huella lรณgica
                     dst_cur.execute(
                         """
                         SELECT id FROM subtasks
@@ -211,7 +241,7 @@ class BackupService:
                     result.subtasks_imported += 1
 
             # ------------------------------------------------------
-            # Importar hábitos
+            # Importar hรกbitos
             # ------------------------------------------------------
             if "habits" in tables_with_data:
                 src_cur.execute("SELECT * FROM habits")
@@ -222,7 +252,7 @@ class BackupService:
                     frequency = row["frequency"]
                     created_at = row["created_at"]
 
-                    # Huella lógica para hábito
+                    # Huella lรณgica para hรกbito
                     dst_cur.execute(
                         """
                         SELECT id FROM habits
@@ -260,7 +290,7 @@ class BackupService:
                     result.habits_imported += 1
 
             # ------------------------------------------------------
-            # Importar cumplimientos de hábitos
+            # Importar cumplimientos de hรกbitos
             # ------------------------------------------------------
             if "habit_completions" in tables_with_data and habit_id_map:
                 src_cur.execute("SELECT * FROM habit_completions")
