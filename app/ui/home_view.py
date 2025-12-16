@@ -743,12 +743,31 @@ class HomeView:
             # Flet maneja internamente la escritura usando Storage Access Framework
             # cuando se pasa src_bytes, lo que evita problemas con URIs de contenido.
             if is_android:
+                # Guardar bytes también como respaldo (por si necesitamos verificar después)
+                self._export_zip_bytes = zip_bytes
+                
                 # En Android: pasar los bytes directamente a save_file()
                 # Esto activa automáticamente el SAF y solicita permisos
-                self.export_file_picker.save_file(
-                    file_name=file_name,
-                    src_bytes=zip_bytes  # CRÍTICO: pasar bytes directamente en Android
-                )
+                try:
+                    self.export_file_picker.save_file(
+                        file_name=file_name,
+                        src_bytes=zip_bytes  # CRÍTICO: pasar bytes directamente en Android
+                    )
+                except Exception as save_ex:
+                    # Si falla al llamar save_file, mostrar error inmediatamente
+                    error_msg = (
+                        f"❌ Error al abrir diálogo de exportación en Android:\n\n"
+                        f"{str(save_ex)}\n\n"
+                        f"Por favor, verifica los permisos de almacenamiento."
+                    )
+                    self.page.snack_bar = ft.SnackBar(
+                        content=ft.Text(error_msg),
+                        bgcolor=ft.Colors.RED,
+                        duration=10000,
+                    )
+                    self.page.snack_bar.open = True
+                    self.page.update()
+                    return
             else:
                 # En escritorio/iOS: guardar bytes para escribir después
                 # (comportamiento original para compatibilidad)
@@ -756,12 +775,31 @@ class HomeView:
                 self.export_file_picker.save_file(file_name=file_name)
                 
         except Exception as ex:
-            error_msg = f"Error al iniciar la exportación: {str(ex)}"
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(error_msg),
-                bgcolor=ft.Colors.RED,
-                duration=8000 if is_mobile else 5000,
-            )
+            # Capturar errores al iniciar la exportación
+            error_type = type(ex).__name__
+            error_details = str(ex)
+            
+            if is_android:
+                error_msg = (
+                    f"❌ Error al iniciar exportación en Android:\n\n"
+                    f"Tipo: {error_type}\n"
+                    f"Detalle: {error_details}\n\n"
+                    f"Por favor, verifica que la aplicación tenga permisos de almacenamiento."
+                )
+                
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(error_msg),
+                    bgcolor=ft.Colors.RED,
+                    duration=10000,
+                )
+            else:
+                error_msg = f"Error al iniciar la exportación: {error_details}"
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(error_msg),
+                    bgcolor=ft.Colors.RED,
+                    duration=5000,
+                )
+            
             self.page.snack_bar.open = True
             self.page.update()
 
@@ -803,22 +841,94 @@ class HomeView:
 
         try:
             if is_android:
-                # En Android: el archivo ya fue escrito por Flet cuando se pasó src_bytes
-                # Solo mostramos mensaje de éxito
-                # Nota: No podemos verificar el tamaño del archivo fácilmente con URIs de contenido
-                # pero si llegamos aquí sin excepción, significa que se escribió correctamente
-                success_msg = (
-                    f"Datos exportados correctamente a CSV.\n"
-                    f"Ubicación: {os.path.basename(e.path)}\n"
-                    f"El archivo contiene: tasks.csv, subtasks.csv, habits.csv, habit_completions.csv"
-                )
+                # En Android: el archivo debería haber sido escrito por Flet cuando se pasó src_bytes
+                # Intentamos verificar que el archivo existe y tiene contenido
+                target_path = e.path
                 
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(success_msg),
-                    bgcolor=ft.Colors.GREEN,
-                    duration=6000,
-                )
-                self.page.snack_bar.open = True
+                # Intentar verificar que el archivo se escribió correctamente
+                file_written = False
+                file_size = 0
+                
+                try:
+                    # Intentar verificar el archivo (puede fallar con URIs de contenido)
+                    if os.path.exists(target_path):
+                        file_size = os.path.getsize(target_path)
+                        if file_size > 0:
+                            file_written = True
+                    else:
+                        # En Android con URIs de contenido, os.path.exists() puede fallar
+                        # pero el archivo puede haberse escrito. Intentamos leerlo.
+                        try:
+                            with open(target_path, 'rb') as f:
+                                content = f.read()
+                                if len(content) > 0:
+                                    file_size = len(content)
+                                    file_written = True
+                        except Exception:
+                            # Si no podemos leerlo, asumimos que puede estar escrito
+                            # pero no podemos verificarlo (comportamiento de SAF)
+                            file_written = True  # Optimista: Flet debería haberlo escrito
+                except Exception as verify_ex:
+                    # Si falla la verificación, intentamos leer el archivo directamente
+                    try:
+                        with open(target_path, 'rb') as f:
+                            content = f.read()
+                            if len(content) > 0:
+                                file_size = len(content)
+                                file_written = True
+                            else:
+                                # Archivo vacío - esto es el problema
+                                raise OSError(
+                                    "El archivo se creó pero está vacío (0 bytes). "
+                                    "Esto puede ocurrir si los permisos no se otorgaron correctamente."
+                                )
+                    except OSError:
+                        raise  # Re-lanzar el error de archivo vacío
+                    except Exception:
+                        # No podemos verificar, pero asumimos éxito si llegamos aquí
+                        file_written = True
+                
+                if file_written and file_size > 0:
+                    # Éxito: archivo escrito correctamente
+                    size_kb = file_size / 1024
+                    success_msg = (
+                        f"✓ Datos exportados correctamente a CSV.\n"
+                        f"Ubicación: {os.path.basename(target_path)}\n"
+                        f"Tamaño: {size_kb:.1f} KB\n"
+                        f"Contiene: tasks.csv, subtasks.csv, habits.csv, habit_completions.csv"
+                    )
+                    
+                    self.page.snack_bar = ft.SnackBar(
+                        content=ft.Text(success_msg),
+                        bgcolor=ft.Colors.GREEN,
+                        duration=6000,
+                    )
+                    self.page.snack_bar.open = True
+                elif file_written:
+                    # Archivo existe pero está vacío o no pudimos verificar tamaño
+                    # Esto es un problema común en Android 13+
+                    error_msg = (
+                        "⚠ Error al exportar en Android:\n"
+                        "El archivo se creó pero parece estar vacío o no se pudo verificar.\n\n"
+                        "Posibles causas:\n"
+                        "1. Permisos no otorgados correctamente\n"
+                        "2. Ubicación no accesible\n"
+                        "3. Problema con Storage Access Framework\n\n"
+                        "Solución: Intenta guardar en la carpeta 'Descargas' y otorga permisos cuando se soliciten."
+                    )
+                    
+                    self.page.snack_bar = ft.SnackBar(
+                        content=ft.Text(error_msg),
+                        bgcolor=ft.Colors.ORANGE,
+                        duration=10000,
+                    )
+                    self.page.snack_bar.open = True
+                else:
+                    # No se pudo escribir el archivo
+                    raise OSError(
+                        "No se pudo escribir el archivo. "
+                        "Verifica que otorgaste permisos de almacenamiento."
+                    )
             else:
                 # En escritorio/iOS: escribir manualmente (comportamiento original)
                 if not self._export_zip_bytes:
@@ -861,31 +971,70 @@ class HomeView:
         except OSError as ex:
             # Errores específicos de permisos/almacenamiento
             error_msg = str(ex)
+            
             if is_android:
-                error_msg += (
-                    "\n\nEn Android 13+, asegúrate de:"
-                    "\n1. Seleccionar una ubicación accesible (ej: Descargas)"
-                    "\n2. Otorgar permisos cuando se soliciten"
-                    "\n3. No cancelar el diálogo de selección de ubicación"
+                # Mensaje de error específico y detallado para Android
+                detailed_error = (
+                    f"❌ Error al exportar en Android 13+:\n\n"
+                    f"{error_msg}\n\n"
+                    f"🔧 Soluciones a intentar:\n"
+                    f"1. Selecciona la carpeta 'Descargas' como ubicación\n"
+                    f"2. Otorga permisos cuando Android los solicite\n"
+                    f"3. No canceles el diálogo de selección de ubicación\n"
+                    f"4. Verifica que tienes espacio de almacenamiento disponible\n"
+                    f"5. Intenta cerrar y reabrir la aplicación\n\n"
+                    f"Si el problema persiste, el archivo puede haberse creado vacío (0 bytes)."
+                )
+                
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(detailed_error),
+                    bgcolor=ft.Colors.RED,
+                    duration=12000,  # Más tiempo para leer el mensaje
                 )
             elif is_mobile:
                 error_msg += (
                     "\n\nSugerencia: Intenta guardar en la carpeta 'Descargas' "
                     "o selecciona otra ubicación accesible."
                 )
+                
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(error_msg),
+                    bgcolor=ft.Colors.RED,
+                    duration=8000,
+                )
+            else:
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(error_msg),
+                    bgcolor=ft.Colors.RED,
+                    duration=5000,
+                )
             
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(error_msg),
-                bgcolor=ft.Colors.RED,
-                duration=8000 if is_mobile else 5000,
-            )
             self.page.snack_bar.open = True
         except Exception as ex:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error al exportar datos CSV: {str(ex)}"),
-                bgcolor=ft.Colors.RED,
-                duration=6000,
-            )
+            # Capturar cualquier otro error y mostrar mensaje detallado
+            error_type = type(ex).__name__
+            error_details = str(ex)
+            
+            if is_android:
+                error_msg = (
+                    f"❌ Error inesperado al exportar en Android:\n\n"
+                    f"Tipo: {error_type}\n"
+                    f"Detalle: {error_details}\n\n"
+                    f"Por favor, intenta nuevamente o contacta al soporte."
+                )
+                
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(error_msg),
+                    bgcolor=ft.Colors.RED,
+                    duration=10000,
+                )
+            else:
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"Error al exportar datos CSV: {error_details}"),
+                    bgcolor=ft.Colors.RED,
+                    duration=6000,
+                )
+            
             self.page.snack_bar.open = True
         finally:
             # Limpiar bytes guardados
