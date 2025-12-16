@@ -1,6 +1,6 @@
 [project]
 name = "justice-driven-task-power"
-version = "0.1.5"
+version = "0.1.6"
 description = "conviértete en el héroe de tu propio progreso con tareas y hábitos organizados"
 readme = "README.md"
 requires-python = ">=3.8"
