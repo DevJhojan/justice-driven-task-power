@@ -50,12 +50,18 @@ class HomeView:
         self.title_bar = None  # Guardar referencia a la barra de título
         
         # File pickers para importación/exportación de base de datos
+        # IMPORTANTE: Los FilePickers deben estar en el overlay de la página
         self.import_file_picker = ft.FilePicker(on_result=self._handle_import_result)
         self.export_file_picker = ft.FilePicker(on_result=self._handle_export_result)
+        
+        # Asegurar que los FilePickers estén en el overlay
         if self.import_file_picker not in self.page.overlay:
             self.page.overlay.append(self.import_file_picker)
         if self.export_file_picker not in self.page.overlay:
             self.page.overlay.append(self.export_file_picker)
+        
+        # Forzar actualización para asegurar que los FilePickers estén registrados
+        self.page.update()
 
         # Diálogo para seleccionar matiz (paleta de colores)
         # Debe tener al menos title, content o actions para que Flet no lance AssertionError.
@@ -501,6 +507,8 @@ class HomeView:
             on_click=self._start_export,
             bgcolor=preview_color,
             color=ft.Colors.WHITE,
+            # Asegurar que el botón esté habilitado y responda
+            disabled=False,
         )
 
         settings_content = ft.Container(
@@ -719,6 +727,15 @@ class HomeView:
           permisos cuando el usuario selecciona la ubicación
         - Flet maneja internamente la escritura usando SAF cuando se pasa src_bytes
         """
+        # Mostrar mensaje inmediato para confirmar que el botón funciona
+        self.page.snack_bar = ft.SnackBar(
+            content=ft.Text("Iniciando exportación..."),
+            bgcolor=ft.Colors.BLUE,
+            duration=2000,
+        )
+        self.page.snack_bar.open = True
+        self.page.update()
+        
         # Detectar si estamos en Android/iOS
         is_android = self.page.platform == ft.PagePlatform.ANDROID
         is_mobile = (
@@ -726,12 +743,57 @@ class HomeView:
             or self.page.platform == ft.PagePlatform.IOS
         )
         
+        # Verificar que el FilePicker esté inicializado
+        if not hasattr(self, 'export_file_picker') or self.export_file_picker is None:
+            error_msg = (
+                "❌ Error: FilePicker no está inicializado.\n"
+                "Por favor, reinicia la aplicación."
+            )
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(error_msg),
+                bgcolor=ft.Colors.RED,
+                duration=8000,
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+        
         try:
+            # Verificar que el servicio de backup esté disponible
+            if not hasattr(self, 'csv_backup_service') or self.csv_backup_service is None:
+                raise ValueError("Servicio de backup no disponible")
+            
             # Generar el archivo ZIP en memoria primero
-            zip_bytes = self.csv_backup_service.export_to_csv_bytes()
+            try:
+                zip_bytes = self.csv_backup_service.export_to_csv_bytes()
+            except Exception as gen_ex:
+                error_msg = (
+                    f"❌ Error al generar archivo ZIP:\n\n"
+                    f"{str(gen_ex)}\n\n"
+                    f"Por favor, verifica que la base de datos esté accesible."
+                )
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(error_msg),
+                    bgcolor=ft.Colors.RED,
+                    duration=10000,
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+                return
             
             if not zip_bytes or len(zip_bytes) == 0:
-                raise ValueError("No se pudo generar el archivo ZIP. La base de datos podría estar vacía.")
+                error_msg = (
+                    "⚠ Advertencia: No se pudo generar el archivo ZIP.\n"
+                    "La base de datos podría estar vacía o hay un problema con los datos."
+                )
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(error_msg),
+                    bgcolor=ft.Colors.ORANGE,
+                    duration=8000,
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+                return
             
             # Nombre sugerido con timestamp para evitar sobrescribir
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -746,24 +808,77 @@ class HomeView:
                 # Guardar bytes también como respaldo (por si necesitamos verificar después)
                 self._export_zip_bytes = zip_bytes
                 
+                # Mostrar mensaje informativo en Android
+                info_msg = (
+                    f"Preparando exportación...\n"
+                    f"Tamaño: {len(zip_bytes) / 1024:.1f} KB\n"
+                    f"Se abrirá el diálogo para seleccionar ubicación."
+                )
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(info_msg),
+                    bgcolor=ft.Colors.BLUE,
+                    duration=3000,
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+                
                 # En Android: pasar los bytes directamente a save_file()
                 # Esto activa automáticamente el SAF y solicita permisos
                 try:
-                    self.export_file_picker.save_file(
-                        file_name=file_name,
-                        src_bytes=zip_bytes  # CRÍTICO: pasar bytes directamente en Android
+                    # Verificar que el FilePicker esté en el overlay
+                    if self.export_file_picker not in self.page.overlay:
+                        self.page.overlay.append(self.export_file_picker)
+                        self.page.update()
+                    
+                    # Forzar actualización antes de abrir el diálogo
+                    self.page.update()
+                    
+                    # Llamar a save_file con los bytes
+                    # NOTA: En algunas versiones de Flet, puede que necesitemos usar solo file_name
+                    # y luego escribir manualmente. Intentamos primero con src_bytes.
+                    try:
+                        self.export_file_picker.save_file(
+                            file_name=file_name,
+                            src_bytes=zip_bytes  # CRÍTICO: pasar bytes directamente en Android
+                        )
+                    except TypeError:
+                        # Si src_bytes no es un parámetro válido, intentar sin él
+                        # (para versiones antiguas de Flet)
+                        self.export_file_picker.save_file(file_name=file_name)
+                        # En este caso, escribiremos manualmente en _handle_export_result
+                    
+                    # Forzar actualización después de abrir el diálogo
+                    self.page.update()
+                    
+                except AttributeError as attr_ex:
+                    # Error si save_file no acepta src_bytes (versión antigua de Flet)
+                    error_msg = (
+                        f"❌ Error: Tu versión de Flet puede no soportar src_bytes.\n\n"
+                        f"Error: {str(attr_ex)}\n\n"
+                        f"Por favor, actualiza Flet a la versión más reciente:\n"
+                        f"pip install --upgrade flet"
                     )
+                    self.page.snack_bar = ft.SnackBar(
+                        content=ft.Text(error_msg),
+                        bgcolor=ft.Colors.RED,
+                        duration=12000,
+                    )
+                    self.page.snack_bar.open = True
+                    self.page.update()
+                    return
                 except Exception as save_ex:
                     # Si falla al llamar save_file, mostrar error inmediatamente
+                    error_type = type(save_ex).__name__
                     error_msg = (
                         f"❌ Error al abrir diálogo de exportación en Android:\n\n"
-                        f"{str(save_ex)}\n\n"
+                        f"Tipo: {error_type}\n"
+                        f"Detalle: {str(save_ex)}\n\n"
                         f"Por favor, verifica los permisos de almacenamiento."
                     )
                     self.page.snack_bar = ft.SnackBar(
                         content=ft.Text(error_msg),
                         bgcolor=ft.Colors.RED,
-                        duration=10000,
+                        duration=12000,
                     )
                     self.page.snack_bar.open = True
                     self.page.update()
