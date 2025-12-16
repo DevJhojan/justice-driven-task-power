@@ -710,10 +710,19 @@ class HomeView:
             self.page.update()
 
     def _start_export(self, e):
-        """Inicia el diálogo para elegir dónde guardar el backup CSV (ZIP)."""
+        """Inicia el diálogo para elegir dónde guardar el backup CSV (ZIP).
+        
+        IMPORTANTE para Android 13+:
+        - En Android, el método save_file() REQUIERE el parámetro src_bytes
+        - Si no se pasa src_bytes, el archivo se crea vacío (0 bytes)
+        - El Storage Access Framework (SAF) se activa automáticamente y solicita
+          permisos cuando el usuario selecciona la ubicación
+        - Flet maneja internamente la escritura usando SAF cuando se pasa src_bytes
+        """
         # Detectar si estamos en Android/iOS
+        is_android = self.page.platform == ft.PagePlatform.ANDROID
         is_mobile = (
-            self.page.platform == ft.PagePlatform.ANDROID 
+            is_android 
             or self.page.platform == ft.PagePlatform.IOS
         )
         
@@ -724,17 +733,27 @@ class HomeView:
             if not zip_bytes or len(zip_bytes) == 0:
                 raise ValueError("No se pudo generar el archivo ZIP. La base de datos podría estar vacía.")
             
-            # Guardar los bytes para usarlos cuando el usuario seleccione la ubicación
-            self._export_zip_bytes = zip_bytes
-            
             # Nombre sugerido con timestamp para evitar sobrescribir
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             file_name = f"tasks_backup_{ts}.zip"
             
-            # Abrir el diálogo de guardar archivo
-            # En Android/iOS, Flet manejará automáticamente el Storage Access Framework
-            # Si src_bytes está disponible, lo usaremos en _handle_export_result
-            self.export_file_picker.save_file(file_name=file_name)
+            # SOLUCIÓN CRÍTICA PARA ANDROID 13+:
+            # En Android, save_file() DEBE recibir src_bytes directamente.
+            # Si no se pasa, el archivo se crea vacío (0 bytes).
+            # Flet maneja internamente la escritura usando Storage Access Framework
+            # cuando se pasa src_bytes, lo que evita problemas con URIs de contenido.
+            if is_android:
+                # En Android: pasar los bytes directamente a save_file()
+                # Esto activa automáticamente el SAF y solicita permisos
+                self.export_file_picker.save_file(
+                    file_name=file_name,
+                    src_bytes=zip_bytes  # CRÍTICO: pasar bytes directamente en Android
+                )
+            else:
+                # En escritorio/iOS: guardar bytes para escribir después
+                # (comportamiento original para compatibilidad)
+                self._export_zip_bytes = zip_bytes
+                self.export_file_picker.save_file(file_name=file_name)
                 
         except Exception as ex:
             error_msg = f"Error al iniciar la exportación: {str(ex)}"
@@ -747,10 +766,19 @@ class HomeView:
             self.page.update()
 
     def _handle_export_result(self, e: ft.FilePickerResultEvent):
-        """Maneja el resultado de la exportación CSV."""
+        """Maneja el resultado de la exportación CSV.
+        
+        IMPORTANTE para Android 13+:
+        - En Android, cuando se pasa src_bytes a save_file(), Flet maneja
+          automáticamente la escritura usando Storage Access Framework (SAF).
+        - En este caso, el archivo ya está escrito cuando se llama a este callback,
+          por lo que solo verificamos el resultado.
+        - En escritorio/iOS, aún necesitamos escribir manualmente.
+        """
         # Detectar si estamos en Android/iOS para mostrar mensajes más específicos
+        is_android = self.page.platform == ft.PagePlatform.ANDROID
         is_mobile = (
-            self.page.platform == ft.PagePlatform.ANDROID 
+            is_android 
             or self.page.platform == ft.PagePlatform.IOS
         )
 
@@ -773,16 +801,39 @@ class HomeView:
             self.page.update()
             return  # No exportar realmente, solo verificar permisos
 
-        # Asegurar extensión .zip
-        target_path = e.path
-        if not target_path.lower().endswith(".zip"):
-            target_path = target_path + ".zip"
-
         try:
-            # Escribir los bytes del ZIP al archivo seleccionado
-            if self._export_zip_bytes:
+            if is_android:
+                # En Android: el archivo ya fue escrito por Flet cuando se pasó src_bytes
+                # Solo mostramos mensaje de éxito
+                # Nota: No podemos verificar el tamaño del archivo fácilmente con URIs de contenido
+                # pero si llegamos aquí sin excepción, significa que se escribió correctamente
+                success_msg = (
+                    f"Datos exportados correctamente a CSV.\n"
+                    f"Ubicación: {os.path.basename(e.path)}\n"
+                    f"El archivo contiene: tasks.csv, subtasks.csv, habits.csv, habit_completions.csv"
+                )
+                
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(success_msg),
+                    bgcolor=ft.Colors.GREEN,
+                    duration=6000,
+                )
+                self.page.snack_bar.open = True
+            else:
+                # En escritorio/iOS: escribir manualmente (comportamiento original)
+                if not self._export_zip_bytes:
+                    raise ValueError("No se encontraron datos para exportar. Intenta exportar nuevamente.")
+                
+                # Asegurar extensión .zip
+                target_path = e.path
+                if not target_path.lower().endswith(".zip"):
+                    target_path = target_path + ".zip"
+                
+                # Escribir los bytes del ZIP al archivo seleccionado
                 with open(target_path, 'wb') as f:
                     f.write(self._export_zip_bytes)
+                    f.flush()
+                    os.fsync(f.fileno())
                 
                 # Verificar que el archivo se escribió correctamente
                 if os.path.exists(target_path):
@@ -799,20 +850,25 @@ class HomeView:
                         self.page.snack_bar = ft.SnackBar(
                             content=ft.Text(success_msg),
                             bgcolor=ft.Colors.GREEN,
-                            duration=6000 if is_mobile else 4000,
+                            duration=4000,
                         )
                         self.page.snack_bar.open = True
                     else:
                         raise OSError("El archivo exportado está vacío")
                 else:
                     raise OSError("No se pudo crear el archivo en la ubicación seleccionada")
-            else:
-                raise ValueError("No se encontraron datos para exportar. Intenta exportar nuevamente.")
                 
         except OSError as ex:
             # Errores específicos de permisos/almacenamiento
             error_msg = str(ex)
-            if is_mobile:
+            if is_android:
+                error_msg += (
+                    "\n\nEn Android 13+, asegúrate de:"
+                    "\n1. Seleccionar una ubicación accesible (ej: Descargas)"
+                    "\n2. Otorgar permisos cuando se soliciten"
+                    "\n3. No cancelar el diálogo de selección de ubicación"
+                )
+            elif is_mobile:
                 error_msg += (
                     "\n\nSugerencia: Intenta guardar en la carpeta 'Descargas' "
                     "o selecciona otra ubicación accesible."
