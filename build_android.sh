@@ -15,43 +15,48 @@ echo -e "${BLUE}Construyendo APK y AAB para Android${NC}"
 echo -e "${BLUE}========================================${NC}"
 
 # Leer información del proyecto desde pyproject.toml
+# Este script respeta completamente la configuración definida en pyproject.toml
 if [ -f "pyproject.toml" ]; then
-    # Extraer nombre del proyecto
-    PROJECT_NAME_RAW=$(grep -E "^name\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1)
+    # Extraer nombre del proyecto (formato: "justice-driven-task-power")
+    PROJECT_NAME_RAW=$(grep -E "^name\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1 | tr -d ' ')
     
-    # Convertir nombre de formato "todo-app" a "Todo App" (capitalizar palabras)
+    # Convertir nombre de formato "justice-driven-task-power" a "Justice Driven Task Power" (capitalizar palabras)
+    # Esto se usa como nombre de visualización en la app
     PROJECT_NAME=$(echo "$PROJECT_NAME_RAW" | sed 's/-/ /g' | sed 's/\b\(.\)/\u\1/g')
     
     # Extraer descripción
-    PROJECT_DESCRIPTION=$(grep -E "^description\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1)
+    PROJECT_DESCRIPTION=$(grep -E "^description\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1 | tr -d ' ')
     
     # Extraer versión
-    PROJECT_VERSION=$(grep -E "^version\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1)
+    PROJECT_VERSION=$(grep -E "^version\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1 | tr -d ' ')
     
-    # Si no se encontraron valores, usar valores por defecto
-    if [ -z "$PROJECT_NAME" ] || [ -z "$PROJECT_NAME_RAW" ]; then
-        PROJECT_NAME="TodoApp"
-        PROJECT_NAME_RAW="todo-app"
-    fi
-    
-    if [ -z "$PROJECT_DESCRIPTION" ]; then
-        PROJECT_DESCRIPTION="Aplicación de gestión de tareas"
+    # Validar que se encontraron valores críticos
+    if [ -z "$PROJECT_NAME_RAW" ]; then
+        echo -e "${RED}Error: No se pudo leer 'name' desde pyproject.toml${NC}"
+        exit 1
     fi
     
     if [ -z "$PROJECT_VERSION" ]; then
-        PROJECT_VERSION="1.0.0"
+        echo -e "${RED}Error: No se pudo leer 'version' desde pyproject.toml${NC}"
+        exit 1
     fi
     
-    echo -e "${BLUE}Información del proyecto:${NC}"
-    echo -e "${BLUE}  Nombre: $PROJECT_NAME${NC}"
+    # Usar valores por defecto solo si la descripción está vacía
+    if [ -z "$PROJECT_DESCRIPTION" ]; then
+        PROJECT_DESCRIPTION="Aplicación móvil desarrollada con Flet"
+        echo -e "${YELLOW}Advertencia: 'description' no encontrada en pyproject.toml, usando valor por defecto${NC}"
+    fi
+    
+    echo -e "${BLUE}Información del proyecto (desde pyproject.toml):${NC}"
+    echo -e "${BLUE}  Nombre (raw): $PROJECT_NAME_RAW${NC}"
+    echo -e "${BLUE}  Nombre (display): $PROJECT_NAME${NC}"
     echo -e "${BLUE}  Versión: $PROJECT_VERSION${NC}"
     echo -e "${BLUE}  Descripción: $PROJECT_DESCRIPTION${NC}"
 else
     # Valores por defecto si no existe pyproject.toml
-    PROJECT_NAME="TodoApp"
-    PROJECT_DESCRIPTION="Aplicación de gestión de tareas"
-    PROJECT_VERSION="1.0.0"
-    echo -e "${YELLOW}Advertencia: pyproject.toml no encontrado, usando valores por defecto${NC}"
+    echo -e "${RED}Error: pyproject.toml no encontrado${NC}"
+    echo -e "${RED}Este script requiere pyproject.toml para construir la aplicación${NC}"
+    exit 1
 fi
 
 # Activar entorno virtual

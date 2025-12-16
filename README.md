@@ -157,21 +157,28 @@ Los colores se pueden modificar en `widgets.py` y `home_view.py` según sea nece
 
 Este proyecto es de código abierto y está disponible para uso personal y comercial.
 
-## Construir APK con Icono Personalizado
+## Construir APK y AAB para Android
 
-Para construir el APK usando el icono personalizado ubicado en `assets/task_logo.ico`:
+Para construir tanto el APK (instalación directa) como el AAB (Google Play Store) usando la configuración de `pyproject.toml`:
 
 ```bash
-./build_with_icon.sh
+./build_android.sh
 ```
 
 Este script:
-1. Convierte el icono ICO a PNG
-2. Construye el APK inicial
-3. Reemplaza los iconos en todas las resoluciones necesarias
-4. Reconstruye el APK con el icono personalizado
+1. Lee la configuración del proyecto desde `pyproject.toml` (nombre, versión, descripción)
+2. Convierte el icono ICO a PNG si existe (`assets/task_logo.ico`)
+3. Construye el APK inicial
+4. Reemplaza los iconos personalizados en todas las resoluciones necesarias
+5. Reconstruye el APK con los iconos personalizados
+6. Construye el AAB (Android App Bundle) para Google Play Store
+7. Verifica que ambos archivos se generaron correctamente
 
-El APK final se encontrará en `build/apk/app-release.apk`.
+**Archivos generados:**
+- `build/apk/app-release.apk` - Para instalación directa
+- `build/aab/app-release.aab` - Para subir a Google Play Store
+
+**Nota:** El script usa automáticamente el nombre, versión y descripción definidos en `pyproject.toml`.
 
 ## Contribuciones
 
