@@ -126,7 +126,8 @@ class GoogleSheetsService:
         """Obtiene el servicio de Google Sheets API."""
         if self.service is None:
             creds = self._get_credentials()
-            self.service = build('sheets', 'v4', credentials=creds)
+            # Construir servicio con credenciales OAuth2 y API key (opcional pero recomendado)
+            self.service = build('sheets', 'v4', credentials=creds, developerKey=API_KEY)
         return self.service
     
     def authenticate(self) -> bool:
