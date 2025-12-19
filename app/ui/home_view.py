@@ -9,8 +9,15 @@ from app.data.models import Task, SubTask, Habit
 from app.services.task_service import TaskService
 from app.services.habit_service import HabitService
 from app.services.csv_backup_service import CSVBackupService
-from app.services.google_sheets_service import GoogleSheetsService
 from app.services.settings_service import SettingsService, apply_theme_to_page
+
+# Importación condicional de Google Sheets (puede no estar disponible en algunos builds)
+try:
+    from app.services.google_sheets_service import GoogleSheetsService
+    GOOGLE_SHEETS_AVAILABLE = True
+except ImportError:
+    GOOGLE_SHEETS_AVAILABLE = False
+    GoogleSheetsService = None
 from app.ui.widgets import (
     create_task_card, create_empty_state, create_statistics_card,
     create_habit_card, create_habit_empty_state, create_habit_statistics_card
@@ -33,7 +40,7 @@ class HomeView:
         self.task_service = TaskService()
         self.habit_service = HabitService()
         self.csv_backup_service = CSVBackupService()
-        self.google_sheets_service = GoogleSheetsService()
+        self.google_sheets_service = GoogleSheetsService() if GOOGLE_SHEETS_AVAILABLE else None
         self.settings_service = SettingsService()
         self.current_task_filter: Optional[bool] = None  # None=all, True=completed, False=pending
         self.current_habit_filter: Optional[bool] = None  # None=all, True=active, False=inactive
@@ -494,14 +501,15 @@ class HomeView:
         )
 
         # ==================== Sección 2: Copia de seguridad con Google Sheets ====================
-        # Botones de importación/exportación desde/hacia Google Sheets
+        # Botones de importación/exportación desde/hacia Google Sheets (solo si está disponible)
         export_sheets_button = ft.ElevatedButton(
             text="Exportar a Google Sheets",
             icon=ft.Icons.CLOUD_UPLOAD,
             on_click=self._start_export_to_sheets,
             bgcolor=preview_color,
             color=ft.Colors.WHITE,
-        )
+            disabled=not GOOGLE_SHEETS_AVAILABLE,
+        ) if GOOGLE_SHEETS_AVAILABLE else ft.Container()
 
         import_sheets_button = ft.ElevatedButton(
             text="Importar desde Google Sheets",
@@ -509,7 +517,8 @@ class HomeView:
             on_click=self._start_import_from_sheets,
             bgcolor=preview_color,
             color=ft.Colors.WHITE,
-        )
+            disabled=not GOOGLE_SHEETS_AVAILABLE,
+        ) if GOOGLE_SHEETS_AVAILABLE else ft.Container()
 
         settings_content = ft.Container(
             content=ft.Column(
@@ -567,44 +576,57 @@ class HomeView:
                     ft.Divider(),
 
                     # ==================== Sección 2: Exportación a Google Sheets ====================
-                    ft.Text(
-                        "Exportación a Google Sheets",
-                        size=18,
-                        weight=ft.FontWeight.BOLD,
-                        color=preview_color
-                    ),
-                    ft.Text(
-                        "Exporta todos tus datos a Google Sheets. Se creará un nuevo spreadsheet "
-                        "con hojas separadas para tareas, subtareas, hábitos y cumplimientos. "
-                        "Los datos se sincronizan en la nube y puedes acceder desde cualquier dispositivo.",
-                        size=14,
-                        color=ft.Colors.GREY_600
-                    ),
-                    ft.Row(
-                        [export_sheets_button],
-                        alignment=ft.MainAxisAlignment.START
-                    ),
-
-                    ft.Divider(),
-
-                    # ==================== Sección 3: Importación desde Google Sheets ====================
-                    ft.Text(
-                        "Importación desde Google Sheets",
-                        size=18,
-                        weight=ft.FontWeight.BOLD,
-                        color=preview_color
-                    ),
-                    ft.Text(
-                        "Importa datos desde un Google Sheets existente. Necesitarás el ID del spreadsheet "
-                        "(se encuentra en la URL del documento). Los datos se agregan sin reemplazar "
-                        "tu base actual, evitando duplicados y manteniendo la integridad de relaciones.",
-                        size=14,
-                        color=ft.Colors.GREY_600
-                    ),
-                    ft.Row(
-                        [import_sheets_button],
-                        alignment=ft.MainAxisAlignment.START
-                    )
+                    *([
+                        ft.Text(
+                            "Exportación a Google Sheets",
+                            size=18,
+                            weight=ft.FontWeight.BOLD,
+                            color=preview_color
+                        ),
+                        ft.Text(
+                            "Exporta todos tus datos a Google Sheets. Se creará un nuevo spreadsheet "
+                            "con hojas separadas para tareas, subtareas, hábitos y cumplimientos. "
+                            "Los datos se sincronizan en la nube y puedes acceder desde cualquier dispositivo.",
+                            size=14,
+                            color=ft.Colors.GREY_600
+                        ),
+                        ft.Row(
+                            [export_sheets_button],
+                            alignment=ft.MainAxisAlignment.START
+                        ),
+                        ft.Divider(),
+                        # ==================== Sección 3: Importación desde Google Sheets ====================
+                        ft.Text(
+                            "Importación desde Google Sheets",
+                            size=18,
+                            weight=ft.FontWeight.BOLD,
+                            color=preview_color
+                        ),
+                        ft.Text(
+                            "Importa datos desde un Google Sheets existente. Necesitarás el ID del spreadsheet "
+                            "(se encuentra en la URL del documento). Los datos se agregan sin reemplazar "
+                            "tu base actual, evitando duplicados y manteniendo la integridad de relaciones.",
+                            size=14,
+                            color=ft.Colors.GREY_600
+                        ),
+                        ft.Row(
+                            [import_sheets_button],
+                            alignment=ft.MainAxisAlignment.START
+                        )
+                    ] if GOOGLE_SHEETS_AVAILABLE else [
+                        ft.Text(
+                            "Google Sheets no disponible",
+                            size=18,
+                            weight=ft.FontWeight.BOLD,
+                            color=preview_color
+                        ),
+                        ft.Text(
+                            "Las dependencias de Google Sheets no están disponibles en este build. "
+                            "Por favor, reconstruye la aplicación con las dependencias correctas.",
+                            size=14,
+                            color=ft.Colors.GREY_600
+                        ),
+                    ])
                 ],
                 spacing=16,
                 expand=True,
@@ -1241,6 +1263,16 @@ class HomeView:
     
     def _start_import_from_sheets(self, e):
         """Inicia el proceso de importación desde Google Sheets."""
+        if not GOOGLE_SHEETS_AVAILABLE or self.google_sheets_service is None:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Google Sheets no está disponible. Las dependencias no están instaladas."),
+                bgcolor=ft.Colors.RED,
+                duration=5000,
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+        
         is_mobile = (
             self.page.platform == ft.PagePlatform.ANDROID 
             or self.page.platform == ft.PagePlatform.IOS
