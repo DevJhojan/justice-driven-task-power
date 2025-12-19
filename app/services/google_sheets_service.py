@@ -59,10 +59,11 @@ class GoogleSheetsService:
     - Detecta duplicados mediante huellas lógicas.
     """
     
-    def __init__(self, database: Database | None = None) -> None:
+    def __init__(self, database: Database | None = None, page=None) -> None:
         self.db = database or Database()
         self.service = None
         self.credentials = None
+        self.page = page  # Página de Flet para abrir URLs en Android
         
         # Rutas para credenciales y token
         self.root_dir = Path(__file__).parent.parent.parent
@@ -108,10 +109,42 @@ class GoogleSheetsService:
                     str(self.credentials_path), SCOPES
                 )
                 
-                # Usar servidor local para autenticación
-                # En escritorio: abre el navegador automáticamente
-                # En Android: puede requerir abrir manualmente la URL
-                creds = flow.run_local_server(port=0, open_browser=True)
+                # Para Android, necesitamos un enfoque diferente
+                # run_local_server no funciona bien porque requiere localhost
+                # Usaremos authorization_url y luego el usuario ingresará el código
+                if self.page:
+                    # Obtener URL de autorización
+                    auth_url, _ = flow.authorization_url(prompt='consent')
+                    
+                    # Abrir navegador en Android usando Flet
+                    try:
+                        # launch_url abre el navegador externo en Android
+                        self.page.launch_url(auth_url)
+                    except Exception as launch_error:
+                        # Si falla, intentar método alternativo
+                        try:
+                            import webbrowser
+                            webbrowser.open(auth_url)
+                        except Exception:
+                            # Si todo falla, lanzar error con instrucciones
+                            raise Exception(
+                                f"No se pudo abrir el navegador. "
+                                f"Por favor, abre manualmente esta URL:\n{auth_url}\n\n"
+                                f"Error: {str(launch_error)}"
+                            )
+                    
+                    # Después de abrir el navegador, usar run_console para obtener el código
+                    # El usuario copiará el código de la URL de redirección
+                    try:
+                        # run_console pide al usuario que ingrese el código manualmente
+                        creds = flow.run_console()
+                    except AttributeError:
+                        # Si run_console no existe, usar servidor local
+                        # En Android esto puede no funcionar perfectamente
+                        creds = flow.run_local_server(port=0, open_browser=False)
+                else:
+                    # Para escritorio, usar servidor local normal
+                    creds = flow.run_local_server(port=0, open_browser=True)
             
             # Guardar credenciales para próximas veces
             try:

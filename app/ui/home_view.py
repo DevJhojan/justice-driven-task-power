@@ -40,7 +40,7 @@ class HomeView:
         self.csv_backup_service = CSVBackupService()
         # Intentar inicializar Google Sheets Service
         try:
-            self.google_sheets_service = GoogleSheetsService() if GoogleSheetsService else None
+            self.google_sheets_service = GoogleSheetsService(page=self.page) if GoogleSheetsService else None
         except Exception:
             self.google_sheets_service = None
         self.settings_service = SettingsService()
@@ -1252,7 +1252,7 @@ class HomeView:
         """Inicia el proceso de exportación a Google Sheets."""
         # Verificar si Google Sheets está disponible
         if GoogleSheetsService is None:
-            self._show_error_dialog(
+            self._show_error_page(
                 "Error: Dependencias no disponibles",
                 "Las dependencias de Google Sheets API no están instaladas.\n\n"
                 "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
@@ -1267,7 +1267,7 @@ class HomeView:
             try:
                 self.google_sheets_service = GoogleSheetsService()
             except Exception as ex:
-                self._show_error_dialog(
+                self._show_error_page(
                     "Error: No se pudo inicializar Google Sheets",
                     f"No se pudo inicializar el servicio de Google Sheets:\n\n{str(ex)}\n\n"
                     "Verifica que el archivo 'credenciales_android.json' esté en la raíz del proyecto."
@@ -1359,7 +1359,7 @@ class HomeView:
         """Inicia el proceso de importación desde Google Sheets."""
         # Verificar si Google Sheets está disponible
         if GoogleSheetsService is None:
-            self._show_error_dialog(
+            self._show_error_page(
                 "Error: Dependencias no disponibles",
                 "Las dependencias de Google Sheets API no están instaladas.\n\n"
                 "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
@@ -1374,7 +1374,7 @@ class HomeView:
             try:
                 self.google_sheets_service = GoogleSheetsService()
             except Exception as ex:
-                self._show_error_dialog(
+                self._show_error_page(
                     "Error: No se pudo inicializar Google Sheets",
                     f"No se pudo inicializar el servicio de Google Sheets:\n\n{str(ex)}\n\n"
                     "Verifica que el archivo 'credenciales_android.json' esté en la raíz del proyecto."
