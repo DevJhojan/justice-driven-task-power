@@ -68,6 +68,59 @@ else
     exit 1
 fi
 
+# Instalar/actualizar dependencias desde pyproject.toml
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}Instalando dependencias...${NC}"
+echo -e "${BLUE}========================================${NC}"
+
+# Verificar que pip está disponible
+if ! command -v pip &> /dev/null; then
+    echo -e "${RED}Error: pip no está disponible${NC}"
+    exit 1
+fi
+
+# Actualizar pip
+echo -e "${BLUE}Actualizando pip...${NC}"
+pip install --upgrade pip setuptools wheel --quiet
+
+# Instalar dependencias desde requirements.txt (más confiable para Flet)
+if [ -f "requirements.txt" ]; then
+    echo -e "${BLUE}Instalando dependencias desde requirements.txt...${NC}"
+    pip install -r requirements.txt --quiet
+    echo -e "${GREEN}✓ Dependencias instaladas desde requirements.txt${NC}"
+else
+    echo -e "${YELLOW}Advertencia: requirements.txt no encontrado, extrayendo de pyproject.toml...${NC}"
+    # Extraer dependencias de pyproject.toml usando grep/sed (más compatible)
+    if [ -f "pyproject.toml" ]; then
+        # Extraer líneas de dependencias (entre dependencies = [ y ])
+        DEPENDENCIES=$(grep -A 20 "^dependencies = \[" pyproject.toml | grep -E '^\s*"[^"]+",?$' | sed 's/^[[:space:]]*"\([^"]*\)",\?$/\1/' | tr -d ' ')
+        
+        if [ -n "$DEPENDENCIES" ]; then
+            echo -e "${BLUE}Instalando dependencias extraídas de pyproject.toml...${NC}"
+            echo "$DEPENDENCIES" | while read -r dep; do
+                if [ -n "$dep" ]; then
+                    pip install "$dep" --quiet
+                fi
+            done
+            echo -e "${GREEN}✓ Dependencias instaladas desde pyproject.toml${NC}"
+        else
+            echo -e "${YELLOW}No se pudieron extraer dependencias, instalando manualmente...${NC}"
+            pip install google-api-python-client>=2.100.0 google-auth-httplib2>=0.1.1 google-auth-oauthlib>=1.1.0 --quiet
+        fi
+    else
+        echo -e "${RED}Error: No se encontró requirements.txt ni pyproject.toml${NC}"
+        exit 1
+    fi
+fi
+
+# Verificar que las dependencias de Google están instaladas
+echo -e "${BLUE}Verificando dependencias de Google Sheets...${NC}"
+python3 -c "import google.oauth2.credentials; import google_auth_oauthlib.flow; import googleapiclient.discovery; print('✓ Dependencias de Google verificadas')" 2>/dev/null || {
+    echo -e "${YELLOW}Advertencia: Las dependencias de Google no están instaladas, instalándolas manualmente...${NC}"
+    pip install google-api-python-client>=2.100.0 google-auth-httplib2>=0.1.1 google-auth-oauthlib>=1.1.0 --quiet
+    echo -e "${GREEN}✓ Dependencias de Google instaladas${NC}"
+}
+
 # Configurar variables de entorno
 export ANDROID_HOME=${ANDROID_HOME:-$HOME/Android/Sdk}
 export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools
@@ -121,12 +174,34 @@ replace_icons() {
     fi
 }
 
+# Verificar que pyproject.toml existe y tiene las dependencias
+echo -e "${BLUE}Verificando pyproject.toml...${NC}"
+if [ -f "pyproject.toml" ]; then
+    if grep -q "google-api-python-client" pyproject.toml; then
+        echo -e "${GREEN}✓ pyproject.toml contiene dependencias de Google Sheets${NC}"
+    else
+        echo -e "${RED}Error: pyproject.toml no contiene dependencias de Google Sheets${NC}"
+        exit 1
+    fi
+else
+    echo -e "${RED}Error: pyproject.toml no encontrado${NC}"
+    exit 1
+fi
+
 # Construir el APK
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}Construyendo APK...${NC}"
 echo -e "${BLUE}========================================${NC}"
 
+# Limpiar build anterior para forzar reconstrucción completa
+if [ -d "build" ]; then
+    echo -e "${BLUE}Limpiando build anterior...${NC}"
+    rm -rf build
+fi
+
 # Construir APK inicial para generar la estructura
+# Flet debería leer las dependencias de pyproject.toml automáticamente
+echo -e "${BLUE}Construyendo APK (Flet leerá dependencias de pyproject.toml)...${NC}"
 flet build apk \
     --project "$PROJECT_NAME" \
     --description "$PROJECT_DESCRIPTION" \
