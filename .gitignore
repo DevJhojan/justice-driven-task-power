@@ -37,6 +37,10 @@ env/
 *.sqlite
 *.sqlite3
 
+# Google OAuth tokens (no subir credenciales de usuario)
+token.pickle
+*.pickle
+
 # Logs
 *.log
 

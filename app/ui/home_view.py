@@ -9,6 +9,7 @@ from app.data.models import Task, SubTask, Habit
 from app.services.task_service import TaskService
 from app.services.habit_service import HabitService
 from app.services.csv_backup_service import CSVBackupService
+from app.services.google_sheets_service import GoogleSheetsService
 from app.services.settings_service import SettingsService, apply_theme_to_page
 from app.ui.widgets import (
     create_task_card, create_empty_state, create_statistics_card,
@@ -32,6 +33,7 @@ class HomeView:
         self.task_service = TaskService()
         self.habit_service = HabitService()
         self.csv_backup_service = CSVBackupService()
+        self.google_sheets_service = GoogleSheetsService()
         self.settings_service = SettingsService()
         self.current_task_filter: Optional[bool] = None  # None=all, True=completed, False=pending
         self.current_habit_filter: Optional[bool] = None  # None=all, True=active, False=inactive
@@ -491,24 +493,22 @@ class HomeView:
             on_click=self._toggle_theme,
         )
 
-        # ==================== Sección 2: Copia de seguridad ====================
-        # Botones de importación/exportación CSV (también con matiz)
-        import_button = ft.ElevatedButton(
-            text="Importar datos desde archivo CSV",
-            icon=ft.Icons.FILE_UPLOAD,
-            on_click=self._start_import,
+        # ==================== Sección 2: Copia de seguridad con Google Sheets ====================
+        # Botones de importación/exportación desde/hacia Google Sheets
+        export_sheets_button = ft.ElevatedButton(
+            text="Exportar a Google Sheets",
+            icon=ft.Icons.CLOUD_UPLOAD,
+            on_click=self._start_export_to_sheets,
             bgcolor=preview_color,
             color=ft.Colors.WHITE,
         )
 
-        export_button = ft.ElevatedButton(
-            text="Exportar datos a archivo CSV",
-            icon=ft.Icons.FILE_DOWNLOAD,
-            on_click=self._start_export,
+        import_sheets_button = ft.ElevatedButton(
+            text="Importar desde Google Sheets",
+            icon=ft.Icons.CLOUD_DOWNLOAD,
+            on_click=self._start_import_from_sheets,
             bgcolor=preview_color,
             color=ft.Colors.WHITE,
-            # Asegurar que el botón esté habilitado y responda
-            disabled=False,
         )
 
         settings_content = ft.Container(
@@ -566,43 +566,43 @@ class HomeView:
 
                     ft.Divider(),
 
-                    # ==================== Sección 2: Importación de datos ====================
+                    # ==================== Sección 2: Exportación a Google Sheets ====================
                     ft.Text(
-                        "Importación de datos",
+                        "Exportación a Google Sheets",
                         size=18,
                         weight=ft.FontWeight.BOLD,
                         color=preview_color
                     ),
                     ft.Text(
-                        "Importa registros desde un archivo CSV (ZIP) generado por esta aplicación. "
-                        "Los datos se agregan sin reemplazar tu base actual, evitando duplicados "
-                        "y manteniendo la integridad de tareas, subtareas y hábitos.",
+                        "Exporta todos tus datos a Google Sheets. Se creará un nuevo spreadsheet "
+                        "con hojas separadas para tareas, subtareas, hábitos y cumplimientos. "
+                        "Los datos se sincronizan en la nube y puedes acceder desde cualquier dispositivo.",
                         size=14,
                         color=ft.Colors.GREY_600
                     ),
                     ft.Row(
-                        [import_button],
+                        [export_sheets_button],
                         alignment=ft.MainAxisAlignment.START
                     ),
 
                     ft.Divider(),
 
-                    # ==================== Sección 3: Exportación de datos ====================
+                    # ==================== Sección 3: Importación desde Google Sheets ====================
                     ft.Text(
-                        "Exportación de datos",
+                        "Importación desde Google Sheets",
                         size=18,
                         weight=ft.FontWeight.BOLD,
                         color=preview_color
                     ),
                     ft.Text(
-                        "Exporta todos los datos a un archivo CSV comprimido (ZIP) conteniendo "
-                        "tasks.csv, subtasks.csv, habits.csv y habit_completions.csv. "
-                        "Ideal para copias de seguridad, migración entre dispositivos o restauración futura.",
+                        "Importa datos desde un Google Sheets existente. Necesitarás el ID del spreadsheet "
+                        "(se encuentra en la URL del documento). Los datos se agregan sin reemplazar "
+                        "tu base actual, evitando duplicados y manteniendo la integridad de relaciones.",
                         size=14,
                         color=ft.Colors.GREY_600
                     ),
                     ft.Row(
-                        [export_button],
+                        [import_sheets_button],
                         alignment=ft.MainAxisAlignment.START
                     )
                 ],
@@ -1155,6 +1155,236 @@ class HomeView:
             # Limpiar bytes guardados
             self._export_zip_bytes = None
             self.page.update()
+
+    # ==================== IMPORT / EXPORT GOOGLE SHEETS ====================
+
+    def _start_export_to_sheets(self, e):
+        """Inicia el proceso de exportación a Google Sheets."""
+        is_mobile = (
+            self.page.platform == ft.PagePlatform.ANDROID 
+            or self.page.platform == ft.PagePlatform.IOS
+        )
+        
+        # Mostrar mensaje de inicio
+        self.page.snack_bar = ft.SnackBar(
+            content=ft.Text("Autenticando con Google..."),
+            bgcolor=ft.Colors.BLUE,
+            duration=2000,
+        )
+        self.page.snack_bar.open = True
+        self.page.update()
+        
+        try:
+            # Autenticar con Google
+            if not self.google_sheets_service.authenticate():
+                raise Exception("No se pudo autenticar con Google. Verifica las credenciales.")
+            
+            # Mostrar mensaje de exportación
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Exportando datos a Google Sheets..."),
+                bgcolor=ft.Colors.BLUE,
+                duration=3000,
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            
+            # Exportar a Google Sheets
+            result = self.google_sheets_service.export_to_sheets()
+            
+            # Mostrar éxito con URL
+            success_msg = (
+                f"✓ Datos exportados correctamente a Google Sheets!\n\n"
+                f"Título: {result.get('title', 'Sin título')}\n"
+                f"ID: {result['spreadsheet_id']}\n\n"
+                f"Puedes acceder al spreadsheet desde:\n"
+                f"{result['url']}"
+            )
+            
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(success_msg),
+                bgcolor=ft.Colors.GREEN,
+                duration=12000,
+            )
+            self.page.snack_bar.open = True
+            
+        except FileNotFoundError as ex:
+            error_msg = (
+                f"❌ Error: Archivo de credenciales no encontrado.\n\n"
+                f"{str(ex)}\n\n"
+                f"Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto."
+            )
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(error_msg),
+                bgcolor=ft.Colors.RED,
+                duration=12000,
+            )
+            self.page.snack_bar.open = True
+        except Exception as ex:
+            error_type = type(ex).__name__
+            error_details = str(ex)
+            
+            error_msg = (
+                f"❌ Error al exportar a Google Sheets:\n\n"
+                f"Tipo: {error_type}\n"
+                f"Detalle: {error_details}\n\n"
+                f"Por favor, verifica tu conexión a internet y las credenciales."
+            )
+            
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(error_msg),
+                bgcolor=ft.Colors.RED,
+                duration=12000,
+            )
+            self.page.snack_bar.open = True
+        finally:
+            self.page.update()
+    
+    def _start_import_from_sheets(self, e):
+        """Inicia el proceso de importación desde Google Sheets."""
+        is_mobile = (
+            self.page.platform == ft.PagePlatform.ANDROID 
+            or self.page.platform == ft.PagePlatform.IOS
+        )
+        
+        # Crear diálogo para ingresar el ID del spreadsheet
+        spreadsheet_id_field = ft.TextField(
+            label="ID del Google Sheets",
+            hint_text="Pega el ID del spreadsheet aquí",
+            autofocus=True,
+            expand=True,
+        )
+        
+        def do_import(dialog_event):
+            spreadsheet_id = spreadsheet_id_field.value.strip()
+            
+            if not spreadsheet_id:
+                spreadsheet_id_field.error_text = "El ID del spreadsheet es requerido"
+                spreadsheet_id_field.update()
+                return
+            
+            # Cerrar diálogo
+            import_dialog.open = False
+            self.page.dialog = None
+            self.page.update()
+            
+            # Mostrar mensaje de autenticación
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Autenticando con Google..."),
+                bgcolor=ft.Colors.BLUE,
+                duration=2000,
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            
+            try:
+                # Autenticar con Google
+                if not self.google_sheets_service.authenticate():
+                    raise Exception("No se pudo autenticar con Google. Verifica las credenciales.")
+                
+                # Mostrar mensaje de importación
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Importando datos desde Google Sheets..."),
+                    bgcolor=ft.Colors.BLUE,
+                    duration=3000,
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+                
+                # Importar desde Google Sheets
+                result = self.google_sheets_service.import_from_sheets(spreadsheet_id)
+                
+                # Construir mensaje de éxito
+                msg_parts = [f"✓ Importación completada desde Google Sheets."]
+                if result.tasks_imported > 0:
+                    msg_parts.append(f"Tareas nuevas: {result.tasks_imported}")
+                if result.subtasks_imported > 0:
+                    msg_parts.append(f"Subtareas nuevas: {result.subtasks_imported}")
+                if result.habits_imported > 0:
+                    msg_parts.append(f"Hábitos nuevos: {result.habits_imported}")
+                if result.habit_completions_imported > 0:
+                    msg_parts.append(f"Cumplimientos nuevos: {result.habit_completions_imported}")
+                
+                if result.errors:
+                    msg_parts.append(f"\n⚠ Advertencias: {len(result.errors)}")
+                    for error in result.errors[:3]:
+                        msg_parts.append(f"  - {error}")
+                    if len(result.errors) > 3:
+                        msg_parts.append(f"  ... y {len(result.errors) - 3} más")
+                
+                msg = "\n".join(msg_parts)
+                
+                bg_color = ft.Colors.GREEN if not result.errors else ft.Colors.ORANGE
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(msg),
+                    bgcolor=bg_color,
+                    duration=10000 if is_mobile else 8000,
+                )
+                self.page.snack_bar.open = True
+                
+                # Refrescar vistas
+                if self.current_section == "tasks":
+                    self._load_tasks()
+                elif self.current_section == "habits":
+                    self._load_habits()
+                
+            except FileNotFoundError as ex:
+                error_msg = (
+                    f"❌ Error: Archivo de credenciales no encontrado.\n\n"
+                    f"{str(ex)}\n\n"
+                    f"Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto."
+                )
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(error_msg),
+                    bgcolor=ft.Colors.RED,
+                    duration=12000,
+                )
+                self.page.snack_bar.open = True
+            except Exception as ex:
+                error_type = type(ex).__name__
+                error_details = str(ex)
+                
+                error_msg = (
+                    f"❌ Error al importar desde Google Sheets:\n\n"
+                    f"Tipo: {error_type}\n"
+                    f"Detalle: {error_details}\n\n"
+                    f"Verifica que el ID del spreadsheet sea correcto y que tengas acceso."
+                )
+                
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(error_msg),
+                    bgcolor=ft.Colors.RED,
+                    duration=12000,
+                )
+                self.page.snack_bar.open = True
+            finally:
+                self.page.update()
+        
+        import_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Importar desde Google Sheets"),
+            content=ft.Column(
+                [
+                    ft.Text(
+                        "Ingresa el ID del Google Sheets que quieres importar.\n\n"
+                        "El ID se encuentra en la URL del documento:\n"
+                        "https://docs.google.com/spreadsheets/d/[ID_AQUI]/edit",
+                        size=14,
+                        color=ft.Colors.GREY_600,
+                    ),
+                    spreadsheet_id_field,
+                ],
+                tight=True,
+                spacing=12,
+            ),
+            actions=[
+                ft.TextButton("Cancelar", on_click=lambda e: setattr(import_dialog, 'open', False) or setattr(self.page, 'dialog', None) or self.page.update()),
+                ft.ElevatedButton("Importar", on_click=do_import),
+            ],
+        )
+        
+        self.page.dialog = import_dialog
+        import_dialog.open = True
+        self.page.update()
 
     def _show_storage_permission_dialog(self):
         """Muestra un diálogo informativo sobre permisos de almacenamiento en Android/iOS."""
