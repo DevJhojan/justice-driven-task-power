@@ -1777,7 +1777,6 @@ class HomeView:
         # Navegar a la vista principal
         if self.page.views:
             self.page.go(self.page.views[-1].route)
-        self.page.update()
         else:
             self.page.go("/")
         self.page.update()
