@@ -2,4 +2,6 @@ flet>=0.28.0
 google-api-python-client>=2.100.0
 google-auth-httplib2>=0.1.1
 google-auth-oauthlib>=1.1.0
+# wsgiref es parte de la stdlib pero puede no estar incluido en algunos builds
+# Intentamos incluirlo explícitamente aunque normalmente no es necesario
 

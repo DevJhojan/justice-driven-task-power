@@ -1347,15 +1347,32 @@ class HomeView:
                 "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
             )
         except ImportError as ex:
-            self._show_error_page(
-                "Error: Dependencias no disponibles",
-                f"No se pueden importar las dependencias de Google Sheets:\n\n{str(ex)}\n\n"
-                "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
-                "- google-api-python-client>=2.100.0\n"
-                "- google-auth-httplib2>=0.1.1\n"
-                "- google-auth-oauthlib>=1.1.0\n\n"
-                "Luego reconstruye la aplicación con: ./build_android.sh"
-            )
+            error_msg = str(ex)
+            # Detectar si es el error de wsgiref
+            if 'wsgiref' in error_msg.lower():
+                self._show_error_page(
+                    "Error: Módulo wsgiref no disponible",
+                    f"{error_msg}\n\n"
+                    "Este es un problema conocido con builds de Android.\n\n"
+                    "SOLUCIÓN TEMPORAL:\n"
+                    "El módulo wsgiref es parte de la biblioteca estándar de Python pero "
+                    "puede no estar incluido en el build de Android.\n\n"
+                    "OPCIONES:\n"
+                    "1. Reconstruir el APK puede ayudar si Flet actualiza su build.\n"
+                    "2. Usar un método de autenticación alternativo (requiere cambios en el código).\n\n"
+                    "Por ahora, la autenticación OAuth2 no funcionará en Android hasta que "
+                    "se resuelva este problema con wsgiref."
+                )
+            else:
+                self._show_error_page(
+                    "Error: Dependencias no disponibles",
+                    f"No se pueden importar las dependencias de Google Sheets:\n\n{error_msg}\n\n"
+                    "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
+                    "- google-api-python-client>=2.100.0\n"
+                    "- google-auth-httplib2>=0.1.1\n"
+                    "- google-auth-oauthlib>=1.1.0\n\n"
+                    "Luego reconstruye la aplicación con: ./build_android.sh"
+                )
         except Exception as ex:
             error_type = type(ex).__name__
             error_details = str(ex)
@@ -1502,15 +1519,32 @@ class HomeView:
                     "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
                 )
             except ImportError as ex:
-                self._show_error_page(
-                    "Error: Dependencias no disponibles",
-                    f"No se pueden importar las dependencias de Google Sheets:\n\n{str(ex)}\n\n"
-                    "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
-                    "- google-api-python-client>=2.100.0\n"
-                    "- google-auth-httplib2>=0.1.1\n"
-                    "- google-auth-oauthlib>=1.1.0\n\n"
-                    "Luego reconstruye la aplicación con: ./build_android.sh"
-                )
+                error_msg = str(ex)
+                # Detectar si es el error de wsgiref
+                if 'wsgiref' in error_msg.lower():
+                    self._show_error_page(
+                        "Error: Módulo wsgiref no disponible",
+                        f"{error_msg}\n\n"
+                        "Este es un problema conocido con builds de Android.\n\n"
+                        "SOLUCIÓN TEMPORAL:\n"
+                        "El módulo wsgiref es parte de la biblioteca estándar de Python pero "
+                        "puede no estar incluido en el build de Android.\n\n"
+                        "OPCIONES:\n"
+                        "1. Reconstruir el APK puede ayudar si Flet actualiza su build.\n"
+                        "2. Usar un método de autenticación alternativo (requiere cambios en el código).\n\n"
+                        "Por ahora, la autenticación OAuth2 no funcionará en Android hasta que "
+                        "se resuelva este problema con wsgiref."
+                    )
+                else:
+                    self._show_error_page(
+                        "Error: Dependencias no disponibles",
+                        f"No se pueden importar las dependencias de Google Sheets:\n\n{error_msg}\n\n"
+                        "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
+                        "- google-api-python-client>=2.100.0\n"
+                        "- google-auth-httplib2>=0.1.1\n"
+                        "- google-auth-oauthlib>=1.1.0\n\n"
+                        "Luego reconstruye la aplicación con: ./build_android.sh"
+                    )
             except Exception as ex:
                 error_type = type(ex).__name__
                 error_details = str(ex)

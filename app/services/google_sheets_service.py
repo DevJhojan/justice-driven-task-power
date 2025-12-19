@@ -109,43 +109,74 @@ class GoogleSheetsService:
                     str(self.credentials_path), SCOPES
                 )
                 
-                # Para Android, abrir el navegador manualmente y usar servidor local
+                # Para Android, manejar la falta de wsgiref
                 if self.page:
-                    # Obtener URL de autorización primero
+                    # Verificar si wsgiref está disponible ANTES de intentar usarlo
+                    wsgiref_available = False
+                    try:
+                        import wsgiref.simple_server
+                        wsgiref_available = True
+                    except ImportError:
+                        # wsgiref no está disponible - común en builds de Android
+                        wsgiref_available = False
+                    
+                    # Obtener URL de autorización
                     auth_url, _ = flow.authorization_url(prompt='consent')
                     
                     # Abrir navegador en Android usando Flet
                     try:
-                        # launch_url abre el navegador externo en Android
                         self.page.launch_url(auth_url)
                     except Exception as launch_error:
-                        # Si falla, intentar método alternativo
                         try:
                             import webbrowser
                             webbrowser.open(auth_url)
                         except Exception:
-                            # Si todo falla, lanzar error con instrucciones
                             raise Exception(
                                 f"No se pudo abrir el navegador. "
-                                f"Por favor, abre manualmente esta URL en tu navegador:\n\n{auth_url}\n\n"
+                                f"Por favor, abre manualmente esta URL:\n\n{auth_url}\n\n"
                                 f"Error: {str(launch_error)}"
                             )
                     
-                    # Usar servidor local (el navegador redirigirá después de autorizar)
-                    # Nota: En Android, esto puede requerir que el usuario copie la URL de redirección
-                    # o que configuremos un redirect_uri personalizado
-                    try:
-                        creds = flow.run_local_server(port=0, open_browser=False)
-                    except Exception as server_error:
-                        # Si el servidor local falla, mostrar instrucciones al usuario
-                        raise Exception(
-                            f"Error en la autenticación. "
-                            f"Por favor, asegúrate de haber autorizado la aplicación en el navegador.\n\n"
-                            f"Error: {str(server_error)}"
+                    # Intentar usar servidor local solo si wsgiref está disponible
+                    if wsgiref_available:
+                        try:
+                            creds = flow.run_local_server(port=0, open_browser=False)
+                        except (ImportError, ModuleNotFoundError) as e:
+                            if 'wsgiref' in str(e) or 'wsgi' in str(e).lower():
+                                wsgiref_available = False
+                            else:
+                                raise Exception(
+                                    f"Error en la autenticación: {str(e)}\n\n"
+                                    f"Por favor, asegúrate de haber autorizado la aplicación en el navegador."
+                                )
+                    
+                    # Si wsgiref no está disponible, lanzar error con instrucciones claras
+                    if not wsgiref_available:
+                        raise ImportError(
+                            "El módulo 'wsgiref' no está disponible en este build de Android.\n\n"
+                            "SOLUCIÓN:\n"
+                            "1. El navegador se abrió con la URL de autorización.\n"
+                            "2. Autoriza la aplicación en el navegador.\n"
+                            "3. Después de autorizar, Google te redirigirá a una URL.\n"
+                            "4. Copia esa URL completa y pégala cuando se te solicite.\n\n"
+                            "Nota: Este es un problema conocido con builds de Android que no incluyen "
+                            "todos los módulos estándar de Python. El módulo wsgiref es necesario "
+                            "para el servidor local de autenticación OAuth2.\n\n"
+                            "URL de autorización: " + auth_url
                         )
                 else:
                     # Para escritorio, usar servidor local normal
-                    creds = flow.run_local_server(port=0, open_browser=True)
+                    try:
+                        creds = flow.run_local_server(port=0, open_browser=True)
+                    except ImportError as e:
+                        if 'wsgiref' in str(e) or 'wsgi' in str(e).lower():
+                            raise ImportError(
+                                "El módulo 'wsgiref' no está disponible.\n\n"
+                                "Por favor, asegúrate de que Python esté completamente instalado.\n"
+                                "En algunos sistemas, wsgiref puede no estar incluido.\n\n"
+                                f"Error original: {str(e)}"
+                            )
+                        raise
             
             # Guardar credenciales para próximas veces
             try:
