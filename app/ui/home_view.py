@@ -13,9 +13,16 @@ from app.services.settings_service import SettingsService, apply_theme_to_page
 
 # Importación de Google Sheets - si falla, se manejará en tiempo de ejecución
 try:
+    # Intentar importar las dependencias de Google primero
+    import google.oauth2.credentials
+    import google_auth_oauthlib.flow
+    import googleapiclient.discovery
+    # Si las dependencias están disponibles, importar el servicio
     from app.services.google_sheets_service import GoogleSheetsService
-except ImportError:
+except (ImportError, ModuleNotFoundError) as e:
+    # Si falla la importación, el servicio no está disponible
     GoogleSheetsService = None
+    _google_sheets_import_error = str(e)
 from app.ui.widgets import (
     create_task_card, create_empty_state, create_statistics_card,
     create_habit_card, create_habit_empty_state, create_habit_statistics_card
@@ -1252,14 +1259,25 @@ class HomeView:
         """Inicia el proceso de exportación a Google Sheets."""
         # Verificar si Google Sheets está disponible
         if GoogleSheetsService is None:
+            error_details = ""
+            try:
+                error_details = f"\n\nDetalle técnico: {_google_sheets_import_error}"
+            except NameError:
+                pass
+            
             self._show_error_page(
                 "Error: Dependencias no disponibles",
-                "Las dependencias de Google Sheets API no están instaladas.\n\n"
-                "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
-                "- google-api-python-client>=2.100.0\n"
-                "- google-auth-httplib2>=0.1.1\n"
-                "- google-auth-oauthlib>=1.1.0\n\n"
-                "Luego reconstruye la aplicación con: ./build_android.sh"
+                "Las dependencias de Google Sheets API no están incluidas en el APK.\n\n"
+                "SOLUCIÓN:\n\n"
+                "1. Las dependencias YA están en pyproject.toml:\n"
+                "   ✓ google-api-python-client>=2.100.0\n"
+                "   ✓ google-auth-httplib2>=0.1.1\n"
+                "   ✓ google-auth-oauthlib>=1.1.0\n\n"
+                "2. NECESITAS RECONSTRUIR el APK para incluirlas:\n"
+                "   ./build_android.sh\n\n"
+                "3. El APK actual se construyó ANTES de agregar estas dependencias.\n"
+                "   Por eso no están disponibles en la aplicación actual."
+                + error_details
             )
             return
         
@@ -1359,14 +1377,25 @@ class HomeView:
         """Inicia el proceso de importación desde Google Sheets."""
         # Verificar si Google Sheets está disponible
         if GoogleSheetsService is None:
+            error_details = ""
+            try:
+                error_details = f"\n\nDetalle técnico: {_google_sheets_import_error}"
+            except NameError:
+                pass
+            
             self._show_error_page(
                 "Error: Dependencias no disponibles",
-                "Las dependencias de Google Sheets API no están instaladas.\n\n"
-                "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
-                "- google-api-python-client>=2.100.0\n"
-                "- google-auth-httplib2>=0.1.1\n"
-                "- google-auth-oauthlib>=1.1.0\n\n"
-                "Luego reconstruye la aplicación con: ./build_android.sh"
+                "Las dependencias de Google Sheets API no están incluidas en el APK.\n\n"
+                "SOLUCIÓN:\n\n"
+                "1. Las dependencias YA están en pyproject.toml:\n"
+                "   ✓ google-api-python-client>=2.100.0\n"
+                "   ✓ google-auth-httplib2>=0.1.1\n"
+                "   ✓ google-auth-oauthlib>=1.1.0\n\n"
+                "2. NECESITAS RECONSTRUIR el APK para incluirlas:\n"
+                "   ./build_android.sh\n\n"
+                "3. El APK actual se construyó ANTES de agregar estas dependencias.\n"
+                "   Por eso no están disponibles en la aplicación actual."
+                + error_details
             )
             return
         
