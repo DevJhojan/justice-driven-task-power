@@ -1167,24 +1167,85 @@ class HomeView:
 
     # ==================== IMPORT / EXPORT GOOGLE SHEETS ====================
 
-    def _show_error_dialog(self, title: str, message: str):
-        """Muestra un diálogo de error con el mensaje especificado."""
-        error_dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(title, color=ft.Colors.RED),
+    def _show_error_page(self, title: str, message: str):
+        """Muestra una página de error con el mensaje especificado."""
+        # Obtener color del tema
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        scheme = self.page.theme.color_scheme if self.page.theme else None
+        preview_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_700
+        
+        # Crear contenido de la página de error
+        error_content = ft.Container(
             content=ft.Column(
                 [
-                    ft.Text(message, size=14),
+                    # Header con título
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.ERROR_OUTLINE, color=ft.Colors.RED, size=40),
+                                ft.Text(
+                                    title,
+                                    size=24,
+                                    weight=ft.FontWeight.BOLD,
+                                    color=ft.Colors.RED,
+                                ),
+                            ],
+                            spacing=12,
+                        ),
+                        padding=ft.padding.only(bottom=20),
+                    ),
+                    
+                    # Mensaje de error
+                    ft.Container(
+                        content=ft.Text(
+                            message,
+                            size=14,
+                            color=ft.Colors.GREY_700 if not is_dark else ft.Colors.GREY_300,
+                        ),
+                        padding=ft.padding.only(bottom=30),
+                    ),
+                    
+                    # Botón para volver
+                    ft.ElevatedButton(
+                        text="Volver",
+                        icon=ft.Icons.ARROW_BACK,
+                        on_click=self._go_back,
+                        bgcolor=preview_color,
+                        color=ft.Colors.WHITE,
+                    ),
                 ],
-                tight=True,
                 scroll=ft.ScrollMode.AUTO,
+                expand=True,
             ),
-            actions=[
-                ft.TextButton("Cerrar", on_click=lambda e: setattr(error_dialog, 'open', False) or setattr(self.page, 'dialog', None) or self.page.update()),
-            ],
+            padding=20,
+            expand=True,
         )
-        self.page.dialog = error_dialog
-        error_dialog.open = True
+        
+        # Crear la vista de error
+        error_view = ft.View(
+            route="/error",
+            controls=[error_content],
+            appbar=ft.AppBar(
+                title=ft.Text("Error"),
+                bgcolor=preview_color,
+                color=ft.Colors.WHITE,
+            ),
+        )
+        
+        # Agregar la vista y navegar a ella
+        self.page.views.append(error_view)
+        self.page.go("/error")
+        self.page.update()
+    
+    def _go_back(self, e=None):
+        """Vuelve a la vista anterior."""
+        if len(self.page.views) > 1:
+            self.page.views.pop()
+            top_view = self.page.views[-1]
+            self.page.go(top_view.route)
+        else:
+            # Si no hay vista anterior, ir a la principal
+            self.page.go("/")
         self.page.update()
 
     def _start_export_to_sheets(self, e):
@@ -1261,14 +1322,14 @@ class HomeView:
             self.page.snack_bar.open = True
             
         except FileNotFoundError as ex:
-            self._show_error_dialog(
+            self._show_error_page(
                 "Error: Archivo de credenciales no encontrado",
                 f"No se encontró el archivo de credenciales de Google:\n\n{str(ex)}\n\n"
                 "Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto.\n\n"
                 "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
             )
         except ImportError as ex:
-            self._show_error_dialog(
+            self._show_error_page(
                 "Error: Dependencias no disponibles",
                 f"No se pueden importar las dependencias de Google Sheets:\n\n{str(ex)}\n\n"
                 "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
@@ -1281,7 +1342,7 @@ class HomeView:
             error_type = type(ex).__name__
             error_details = str(ex)
             
-            self._show_error_dialog(
+            self._show_error_page(
                 "Error al exportar a Google Sheets",
                 f"Ocurrió un error durante la exportación:\n\n"
                 f"Tipo: {error_type}\n"
@@ -1325,7 +1386,7 @@ class HomeView:
             or self.page.platform == ft.PagePlatform.IOS
         )
         
-        # Crear diálogo para ingresar el ID del spreadsheet
+        # Crear página para ingresar el ID del spreadsheet
         spreadsheet_id_field = ft.TextField(
             label="ID del Google Sheets",
             hint_text="Pega el ID del spreadsheet aquí",
@@ -1333,7 +1394,7 @@ class HomeView:
             expand=True,
         )
         
-        def do_import(dialog_event):
+        def do_import(e):
             spreadsheet_id = spreadsheet_id_field.value.strip()
             
             if not spreadsheet_id:
@@ -1341,10 +1402,8 @@ class HomeView:
                 spreadsheet_id_field.update()
                 return
             
-            # Cerrar diálogo
-            import_dialog.open = False
-            self.page.dialog = None
-            self.page.update()
+            # Volver a la vista anterior
+            self._go_back(e)
             
             # Mostrar mensaje de autenticación
             self.page.snack_bar = ft.SnackBar(
@@ -1407,14 +1466,14 @@ class HomeView:
                     self._load_habits()
                 
             except FileNotFoundError as ex:
-                self._show_error_dialog(
+                self._show_error_page(
                     "Error: Archivo de credenciales no encontrado",
                     f"No se encontró el archivo de credenciales de Google:\n\n{str(ex)}\n\n"
                     "Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto.\n\n"
                     "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
                 )
             except ImportError as ex:
-                self._show_error_dialog(
+                self._show_error_page(
                     "Error: Dependencias no disponibles",
                     f"No se pueden importar las dependencias de Google Sheets:\n\n{str(ex)}\n\n"
                     "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
@@ -1427,7 +1486,7 @@ class HomeView:
                 error_type = type(ex).__name__
                 error_details = str(ex)
                 
-                self._show_error_dialog(
+                self._show_error_page(
                     "Error al importar desde Google Sheets",
                     f"Ocurrió un error durante la importación:\n\n"
                     f"Tipo: {error_type}\n"
@@ -1441,31 +1500,71 @@ class HomeView:
             finally:
                 self.page.update()
         
-        import_dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Importar desde Google Sheets"),
+        # Obtener color del tema
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        scheme = self.page.theme.color_scheme if self.page.theme else None
+        preview_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_700
+        
+        # Crear contenido de la página de importación
+        import_content = ft.Container(
             content=ft.Column(
                 [
+                    ft.Text(
+                        "Importar desde Google Sheets",
+                        size=24,
+                        weight=ft.FontWeight.BOLD,
+                        color=preview_color,
+                    ),
                     ft.Text(
                         "Ingresa el ID del Google Sheets que quieres importar.\n\n"
                         "El ID se encuentra en la URL del documento:\n"
                         "https://docs.google.com/spreadsheets/d/[ID_AQUI]/edit",
                         size=14,
-                        color=ft.Colors.GREY_600,
+                        color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_300,
                     ),
                     spreadsheet_id_field,
+                    ft.Row(
+                        [
+                            ft.ElevatedButton(
+                                "Cancelar",
+                                icon=ft.Icons.CANCEL,
+                                on_click=self._go_back,
+                                bgcolor=ft.Colors.GREY,
+                                color=ft.Colors.WHITE,
+                            ),
+                            ft.ElevatedButton(
+                                "Importar",
+                                icon=ft.Icons.UPLOAD,
+                                on_click=do_import,
+                                bgcolor=preview_color,
+                                color=ft.Colors.WHITE,
+                            ),
+                        ],
+                        spacing=12,
+                    ),
                 ],
-                tight=True,
-                spacing=12,
+                scroll=ft.ScrollMode.AUTO,
+                spacing=16,
+                expand=True,
             ),
-            actions=[
-                ft.TextButton("Cancelar", on_click=lambda e: setattr(import_dialog, 'open', False) or setattr(self.page, 'dialog', None) or self.page.update()),
-                ft.ElevatedButton("Importar", on_click=do_import),
-            ],
+            padding=20,
+            expand=True,
         )
         
-        self.page.dialog = import_dialog
-        import_dialog.open = True
+        # Crear la vista de importación
+        import_view = ft.View(
+            route="/import_sheets",
+            controls=[import_content],
+            appbar=ft.AppBar(
+                title=ft.Text("Importar desde Google Sheets"),
+                bgcolor=preview_color,
+                color=ft.Colors.WHITE,
+            ),
+        )
+        
+        # Agregar la vista y navegar a ella
+        self.page.views.append(import_view)
+        self.page.go("/import_sheets")
         self.page.update()
 
     def _show_storage_permission_dialog(self):
@@ -1668,8 +1767,8 @@ class HomeView:
         self.page.views.append(form_view)
         self.page.go("/form")
     
-    def _go_back(self):
-        """Vuelve a la vista principal."""
+    def _go_back_from_form(self, e=None):
+        """Vuelve a la vista principal desde un formulario."""
         self.editing_task = None
         self.editing_habit = None
         # Remover la última vista (el formulario)
@@ -1678,6 +1777,7 @@ class HomeView:
         # Navegar a la vista principal
         if self.page.views:
             self.page.go(self.page.views[-1].route)
+        self.page.update()
         else:
             self.page.go("/")
         self.page.update()
@@ -1695,7 +1795,7 @@ class HomeView:
             self.task_service.create_task(title, description, priority)
         
         # Volver a la vista principal
-        self._go_back()
+        self._go_back_from_form()
         
         # Forzar actualización de la página antes de recargar tareas
         self.page.update()
@@ -2089,7 +2189,7 @@ class HomeView:
                         self.page.update()
                         return
                 
-                self._go_back()
+                self._go_back_from_form()
                 self._load_tasks()
             except Exception as ex:
                 # Mostrar error en la página en lugar de actualizar el campo
@@ -2331,7 +2431,7 @@ class HomeView:
             self.habit_service.create_habit(title, description, frequency, target_days)
         
         # Volver a la vista principal
-        self._go_back()
+        self._go_back_from_form()
         
         # Forzar actualización de la página antes de recargar hábitos
         self.page.update()
