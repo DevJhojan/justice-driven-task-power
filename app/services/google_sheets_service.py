@@ -34,6 +34,16 @@ SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 API_KEY = "AIzaSyDoI3Q72rpy57OCFcMi2HDUMxIWPXI0afY"
 
 
+class ManualAuthRequired(Exception):
+    """Excepción lanzada cuando se requiere autenticación manual (sin wsgiref)."""
+    def __init__(self, auth_url: str, state: str):
+        self.auth_url = auth_url
+        self.state = state
+        super().__init__(
+            "Autenticación manual requerida debido a la falta de wsgiref en Android."
+        )
+
+
 @dataclass
 class SheetsImportResult:
     """Resultado de una importación desde Google Sheets."""
@@ -64,11 +74,74 @@ class GoogleSheetsService:
         self.service = None
         self.credentials = None
         self.page = page  # Página de Flet para abrir URLs en Android
+        self.pending_flow = None  # Guardar el flow para autenticación manual
+        self.pending_state = None  # Guardar el state para validación
         
         # Rutas para credenciales y token
         self.root_dir = Path(__file__).parent.parent.parent
         self.credentials_path = self.root_dir / 'credenciales_android.json'
         self.token_path = self.root_dir / 'token.pickle'
+    
+    def complete_manual_auth(self, redirect_url: str) -> Credentials:
+        """
+        Completa la autenticación manual usando la URL de redirección.
+        
+        Args:
+            redirect_url: URL completa de redirección después de autorizar en el navegador.
+        
+        Returns:
+            Credenciales de Google OAuth2.
+        
+        Raises:
+            ValueError: Si la URL no es válida o no contiene el código de autorización.
+        """
+        if not self.pending_flow:
+            raise ValueError("No hay un flujo de autenticación pendiente. Inicia la autenticación primero.")
+        
+        # Extraer el código de autorización de la URL
+        from urllib.parse import urlparse, parse_qs
+        
+        parsed = urlparse(redirect_url)
+        query_params = parse_qs(parsed.query)
+        
+        # Obtener el código de autorización
+        if 'code' not in query_params:
+            raise ValueError(
+                f"La URL de redirección no contiene un código de autorización.\n\n"
+                f"URL recibida: {redirect_url}\n\n"
+                f"Por favor, asegúrate de copiar la URL completa después de autorizar en el navegador."
+            )
+        
+        auth_code = query_params['code'][0]
+        
+        # Verificar el state (seguridad)
+        if 'state' in query_params:
+            received_state = query_params['state'][0]
+            if received_state != self.pending_state:
+                raise ValueError("El state no coincide. La autenticación puede haber sido comprometida.")
+        
+        # Intercambiar el código por credenciales
+        try:
+            self.pending_flow.fetch_token(code=auth_code)
+            creds = self.pending_flow.credentials
+            
+            # Guardar credenciales
+            try:
+                with open(self.token_path, 'wb') as token:
+                    pickle.dump(creds, token)
+            except Exception:
+                pass  # Si no se puede guardar, continuar de todas formas
+            
+            # Limpiar el flow pendiente
+            self.pending_flow = None
+            self.pending_state = None
+            
+            return creds
+        except Exception as e:
+            raise ValueError(
+                f"Error al intercambiar el código por credenciales: {str(e)}\n\n"
+                f"Por favor, intenta autorizar nuevamente."
+            )
         
     def _get_credentials(self) -> Credentials:
         """
@@ -109,19 +182,18 @@ class GoogleSheetsService:
                     str(self.credentials_path), SCOPES
                 )
                 
-                # Para Android, manejar la falta de wsgiref
+                # Para Android, usar método manual sin wsgiref
                 if self.page:
-                    # Verificar si wsgiref está disponible ANTES de intentar usarlo
+                    # Verificar si wsgiref está disponible
                     wsgiref_available = False
                     try:
                         import wsgiref.simple_server
                         wsgiref_available = True
                     except ImportError:
-                        # wsgiref no está disponible - común en builds de Android
                         wsgiref_available = False
                     
                     # Obtener URL de autorización
-                    auth_url, _ = flow.authorization_url(prompt='consent')
+                    auth_url, state = flow.authorization_url(prompt='consent')
                     
                     # Abrir navegador en Android usando Flet
                     try:
@@ -150,20 +222,13 @@ class GoogleSheetsService:
                                     f"Por favor, asegúrate de haber autorizado la aplicación en el navegador."
                                 )
                     
-                    # Si wsgiref no está disponible, lanzar error con instrucciones claras
+                    # Si wsgiref no está disponible, usar método manual
                     if not wsgiref_available:
-                        raise ImportError(
-                            "El módulo 'wsgiref' no está disponible en este build de Android.\n\n"
-                            "SOLUCIÓN:\n"
-                            "1. El navegador se abrió con la URL de autorización.\n"
-                            "2. Autoriza la aplicación en el navegador.\n"
-                            "3. Después de autorizar, Google te redirigirá a una URL.\n"
-                            "4. Copia esa URL completa y pégala cuando se te solicite.\n\n"
-                            "Nota: Este es un problema conocido con builds de Android que no incluyen "
-                            "todos los módulos estándar de Python. El módulo wsgiref es necesario "
-                            "para el servidor local de autenticación OAuth2.\n\n"
-                            "URL de autorización: " + auth_url
-                        )
+                        # Guardar el flow y state para completar la autenticación manualmente
+                        self.pending_flow = flow
+                        self.pending_state = state
+                        # Lanzar excepción especial que será capturada para mostrar diálogo
+                        raise ManualAuthRequired(auth_url, state)
                 else:
                     # Para escritorio, usar servidor local normal
                     try:
@@ -190,7 +255,11 @@ class GoogleSheetsService:
     def _get_service(self):
         """Obtiene el servicio de Google Sheets API."""
         if self.service is None:
-            creds = self._get_credentials()
+            try:
+                creds = self._get_credentials()
+            except ManualAuthRequired:
+                # Si se requiere autenticación manual, relanzar la excepción
+                raise
             # Construir servicio con credenciales OAuth2 y API key (opcional pero recomendado)
             self.service = build('sheets', 'v4', credentials=creds, developerKey=API_KEY)
         return self.service

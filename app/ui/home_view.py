@@ -18,10 +18,11 @@ try:
     import google_auth_oauthlib.flow
     import googleapiclient.discovery
     # Si las dependencias están disponibles, importar el servicio
-    from app.services.google_sheets_service import GoogleSheetsService
+    from app.services.google_sheets_service import GoogleSheetsService, ManualAuthRequired
 except (ImportError, ModuleNotFoundError) as e:
     # Si falla la importación, el servicio no está disponible
     GoogleSheetsService = None
+    ManualAuthRequired = None
     _google_sheets_import_error = str(e)
 from app.ui.widgets import (
     create_task_card, create_empty_state, create_statistics_card,
@@ -1254,6 +1255,198 @@ class HomeView:
             # Si no hay vista anterior, ir a la principal
             self.page.go("/")
         self.page.update()
+    
+    def _show_manual_auth_page(self, auth_url: str):
+        """Muestra una página para autenticación manual (sin wsgiref)."""
+        # Obtener color del tema
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        scheme = self.page.theme.color_scheme if self.page.theme else None
+        preview_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_700
+        
+        # Campo para pegar la URL de redirección
+        redirect_url_field = ft.TextField(
+            label="URL de redirección",
+            hint_text="Pega aquí la URL completa después de autorizar",
+            multiline=True,
+            min_lines=3,
+            max_lines=5,
+            expand=True,
+        )
+        
+        def complete_auth(e):
+            redirect_url = redirect_url_field.value.strip()
+            
+            if not redirect_url:
+                redirect_url_field.error_text = "La URL de redirección es requerida"
+                redirect_url_field.update()
+                return
+            
+            # Volver a la vista anterior
+            self._go_back(e)
+            
+            # Mostrar mensaje de procesamiento
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Procesando autenticación..."),
+                bgcolor=ft.Colors.BLUE,
+                duration=2000,
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            
+            try:
+                # Completar la autenticación manual
+                creds = self.google_sheets_service.complete_manual_auth(redirect_url)
+                
+                # Continuar con la exportación
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text("✓ Autenticación completada. Exportando datos..."),
+                    bgcolor=ft.Colors.GREEN,
+                    duration=3000,
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+                
+                # Ahora que tenemos credenciales, exportar a Google Sheets
+                # Forzar recreación del servicio con las nuevas credenciales
+                self.google_sheets_service.service = None
+                self.google_sheets_service.credentials = None
+                
+                # Exportar a Google Sheets
+                result = self.google_sheets_service.export_to_sheets()
+                
+                # Mostrar éxito
+                success_msg = (
+                    f"✓ Datos exportados correctamente a Google Sheets!\n\n"
+                    f"Título: {result.get('title', 'Sin título')}\n"
+                    f"ID: {result['spreadsheet_id']}\n\n"
+                    f"Puedes acceder al spreadsheet desde:\n"
+                    f"{result['url']}"
+                )
+                
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(success_msg),
+                    bgcolor=ft.Colors.GREEN,
+                    duration=12000,
+                )
+                self.page.snack_bar.open = True
+                
+            except ValueError as ve:
+                self._show_error_page(
+                    "Error en la autenticación",
+                    f"{str(ve)}\n\n"
+                    "Por favor, verifica que hayas copiado la URL completa después de autorizar."
+                )
+            except Exception as ex:
+                self._show_error_page(
+                    "Error al completar la autenticación",
+                    f"Ocurrió un error: {str(ex)}\n\n"
+                    "Por favor, intenta nuevamente."
+                )
+            finally:
+                self.page.update()
+        
+        # Crear contenido de la página de autenticación manual
+        auth_content = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.LOCK, color=ft.Colors.ORANGE, size=40),
+                                ft.Text(
+                                    "Autenticación Manual",
+                                    size=24,
+                                    weight=ft.FontWeight.BOLD,
+                                    color=preview_color,
+                                ),
+                            ],
+                            spacing=12,
+                        ),
+                        padding=ft.padding.only(bottom=20),
+                    ),
+                    
+                    ft.Text(
+                        "El módulo wsgiref no está disponible en Android, por lo que necesitamos "
+                        "completar la autenticación manualmente.",
+                        size=14,
+                        color=ft.Colors.GREY_700 if not is_dark else ft.Colors.GREY_300,
+                    ),
+                    
+                    ft.Divider(),
+                    
+                    ft.Text(
+                        "Instrucciones:",
+                        size=16,
+                        weight=ft.FontWeight.BOLD,
+                        color=preview_color,
+                    ),
+                    
+                    ft.Text(
+                        "1. Se abrió el navegador con la URL de autorización.\n"
+                        "2. Autoriza la aplicación en el navegador.\n"
+                        "3. Después de autorizar, Google te redirigirá a una URL.\n"
+                        "4. Copia esa URL completa (debe comenzar con http://localhost o similar).\n"
+                        "5. Pega la URL en el campo de abajo.",
+                        size=14,
+                        color=ft.Colors.GREY_700 if not is_dark else ft.Colors.GREY_300,
+                    ),
+                    
+                    ft.Container(
+                        content=ft.ElevatedButton(
+                            "Abrir URL de autorización",
+                            icon=ft.Icons.OPEN_IN_BROWSER,
+                            on_click=lambda e: self.page.launch_url(auth_url),
+                            bgcolor=preview_color,
+                            color=ft.Colors.WHITE,
+                        ),
+                        padding=ft.padding.only(bottom=10),
+                    ),
+                    
+                    redirect_url_field,
+                    
+                    ft.Row(
+                        [
+                            ft.ElevatedButton(
+                                "Cancelar",
+                                icon=ft.Icons.CANCEL,
+                                on_click=self._go_back,
+                                bgcolor=ft.Colors.GREY,
+                                color=ft.Colors.WHITE,
+                            ),
+                            ft.ElevatedButton(
+                                "Completar Autenticación",
+                                icon=ft.Icons.CHECK,
+                                on_click=complete_auth,
+                                bgcolor=preview_color,
+                                color=ft.Colors.WHITE,
+                            ),
+                        ],
+                        spacing=12,
+                    ),
+                ],
+                scroll=ft.ScrollMode.AUTO,
+                spacing=16,
+                expand=True,
+            ),
+            padding=20,
+            expand=True,
+        )
+        
+        # Crear la vista de autenticación manual
+        auth_view = ft.View(
+            route="/manual_auth",
+            controls=[auth_content],
+            appbar=ft.AppBar(
+                title=ft.Text("Autenticación Manual"),
+                bgcolor=preview_color,
+                color=ft.Colors.WHITE,
+            ),
+        )
+        
+        # Agregar la vista y navegar a ella
+        self.page.views.append(auth_view)
+        self.page.go("/manual_auth")
+        self.page.update()
 
     def _start_export_to_sheets(self, e):
         """Inicia el proceso de exportación a Google Sheets."""
@@ -1346,6 +1539,9 @@ class HomeView:
                 "Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto.\n\n"
                 "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
             )
+        except ManualAuthRequired as ex:
+            # Autenticación manual requerida (sin wsgiref)
+            self._show_manual_auth_page(ex.auth_url)
         except ImportError as ex:
             error_msg = str(ex)
             # Detectar si es el error de wsgiref
@@ -1518,6 +1714,9 @@ class HomeView:
                     "Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto.\n\n"
                     "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
                 )
+            except ManualAuthRequired as ex:
+                # Autenticación manual requerida (sin wsgiref)
+                self._show_manual_auth_page(ex.auth_url)
             except ImportError as ex:
                 error_msg = str(ex)
                 # Detectar si es el error de wsgiref
