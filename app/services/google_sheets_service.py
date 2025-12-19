@@ -109,11 +109,9 @@ class GoogleSheetsService:
                     str(self.credentials_path), SCOPES
                 )
                 
-                # Para Android, necesitamos un enfoque diferente
-                # run_local_server no funciona bien porque requiere localhost
-                # Usaremos authorization_url y luego el usuario ingresará el código
+                # Para Android, abrir el navegador manualmente y usar servidor local
                 if self.page:
-                    # Obtener URL de autorización
+                    # Obtener URL de autorización primero
                     auth_url, _ = flow.authorization_url(prompt='consent')
                     
                     # Abrir navegador en Android usando Flet
@@ -129,19 +127,22 @@ class GoogleSheetsService:
                             # Si todo falla, lanzar error con instrucciones
                             raise Exception(
                                 f"No se pudo abrir el navegador. "
-                                f"Por favor, abre manualmente esta URL:\n{auth_url}\n\n"
+                                f"Por favor, abre manualmente esta URL en tu navegador:\n\n{auth_url}\n\n"
                                 f"Error: {str(launch_error)}"
                             )
                     
-                    # Después de abrir el navegador, usar run_console para obtener el código
-                    # El usuario copiará el código de la URL de redirección
+                    # Usar servidor local (el navegador redirigirá después de autorizar)
+                    # Nota: En Android, esto puede requerir que el usuario copie la URL de redirección
+                    # o que configuremos un redirect_uri personalizado
                     try:
-                        # run_console pide al usuario que ingrese el código manualmente
-                        creds = flow.run_console()
-                    except AttributeError:
-                        # Si run_console no existe, usar servidor local
-                        # En Android esto puede no funcionar perfectamente
                         creds = flow.run_local_server(port=0, open_browser=False)
+                    except Exception as server_error:
+                        # Si el servidor local falla, mostrar instrucciones al usuario
+                        raise Exception(
+                            f"Error en la autenticación. "
+                            f"Por favor, asegúrate de haber autorizado la aplicación en el navegador.\n\n"
+                            f"Error: {str(server_error)}"
+                        )
                 else:
                     # Para escritorio, usar servidor local normal
                     creds = flow.run_local_server(port=0, open_browser=True)
