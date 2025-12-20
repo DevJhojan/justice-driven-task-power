@@ -202,82 +202,113 @@ include_assets() {
                 if [ -f "$PUBSPEC_FILE" ]; then
                     echo -e "${BLUE}Actualizando pubspec.yaml para incluir assets...${NC}"
                     
+                    # Primero, corregir cualquier formato incorrecto (assets fuera de la sección)
+                    if grep -q "^  - app/" "$PUBSPEC_FILE" || grep -q "^  - assets/" "$PUBSPEC_FILE"; then
+                        echo -e "${YELLOW}  Corrigiendo formato incorrecto en pubspec.yaml...${NC}"
+                        python3 << 'PYTHON_FIX'
+import re
+import sys
+
+pubspec_file = "build/flutter/pubspec.yaml"
+try:
+    with open(pubspec_file, 'r') as f:
+        content = f.read()
+    
+    # Encontrar todas las líneas de assets (bien y mal ubicadas)
+    all_assets = []
+    lines = content.split('\n')
+    new_lines = []
+    in_flutter = False
+    in_assets = False
+    
+    for line in lines:
+        if line.strip() == "flutter:":
+            in_flutter = True
+            new_lines.append(line)
+        elif in_flutter and line.strip() == "assets:":
+            in_assets = True
+            new_lines.append(line)
+        elif in_assets:
+            if line.strip().startswith("- "):
+                # Asset dentro de la sección, agregarlo a la lista
+                asset = line.strip()[2:].strip()
+                if asset not in all_assets:
+                    all_assets.append(asset)
+            elif line.strip() == "" or line.strip().startswith("#"):
+                new_lines.append(line)
+            else:
+                # Fin de la sección assets
+                in_assets = False
+                # Agregar todos los assets ordenados
+                for asset in sorted(set(all_assets)):
+                    new_lines.append(f"    - {asset}")
+                new_lines.append(line)
+        elif in_flutter and line.strip().startswith("- ") and (line.strip().startswith("- app/") or line.strip().startswith("- assets/")):
+            # Asset mal ubicado, agregarlo a la lista pero no a new_lines
+            asset = line.strip()[2:].strip()
+            if asset not in all_assets:
+                all_assets.append(asset)
+        else:
+            new_lines.append(line)
+    
+    # Si quedaron assets sin agregar, agregarlos a la sección assets
+    if all_assets and not in_assets:
+        for i, line in enumerate(new_lines):
+            if line.strip() == "assets:":
+                # Encontrar dónde termina la lista de assets
+                j = i + 1
+                while j < len(new_lines) and (new_lines[j].strip().startswith("- ") or new_lines[j].strip() == ""):
+                    j += 1
+                # Insertar los assets faltantes
+                for asset in sorted(set(all_assets)):
+                    asset_line = f"    - {asset}"
+                    if asset_line not in new_lines[i+1:j]:
+                        new_lines.insert(j, asset_line)
+                        j += 1
+                break
+    
+    with open(pubspec_file, 'w') as f:
+        f.write('\n'.join(new_lines))
+    
+    print("✓ Formato corregido")
+except Exception as e:
+    print(f"Error: {e}")
+    sys.exit(1)
+PYTHON_FIX
+                    fi
+                    
                     # Obtener lista de archivos de assets de la carpeta assets/
                     NEW_ASSET_FILES=$(find build/flutter/assets -type f -printf "assets/%P\n" | sort)
                     
-                    # Extraer assets originales de app/ que ya están en el archivo (dentro de la sección assets)
-                    ORIGINAL_ASSETS=$(grep "^    - app/" "$PUBSPEC_FILE" 2>/dev/null || true)
+                    # Extraer todos los assets actuales del pubspec.yaml
+                    EXISTING_ASSETS=$(grep "^    - " "$PUBSPEC_FILE" | sed 's/^[[:space:]]*-[[:space:]]*//' | sort)
                     
-                    # Crear un archivo temporal para reconstruir la sección assets correctamente
-                    TEMP_PUBSPEC=$(mktemp)
-                    IN_FLUTTER_SECTION=false
-                    IN_ASSETS_SECTION=false
-                    ASSETS_PROCESSED=false
-                    
-                    # Leer el archivo línea por línea y reconstruirlo
-                    while IFS= read -r line || [ -n "$line" ]; do
-                        # Detectar inicio de sección flutter
-                        if [[ "$line" =~ ^flutter:[[:space:]]*$ ]]; then
-                            IN_FLUTTER_SECTION=true
-                            echo "$line" >> "$TEMP_PUBSPEC"
-                        # Detectar inicio de sección assets
-                        elif [[ "$line" =~ ^[[:space:]]*assets:[[:space:]]*$ ]] && [ "$IN_FLUTTER_SECTION" = true ]; then
-                            IN_ASSETS_SECTION=true
-                            echo "$line" >> "$TEMP_PUBSPEC"
-                            
-                            # Agregar todos los assets en el orden correcto
-                            # Primero los assets originales de app/
-                            if [ -n "$ORIGINAL_ASSETS" ]; then
-                                echo "$ORIGINAL_ASSETS" >> "$TEMP_PUBSPEC"
+                    # Agregar nuevos assets si no existen
+                    for asset in $NEW_ASSET_FILES; do
+                        if [ -n "$asset" ] && ! echo "$EXISTING_ASSETS" | grep -q "^$asset$"; then
+                            # Encontrar la línea "assets:" y agregar después
+                            ASSETS_LINE=$(grep -n "^  assets:" "$PUBSPEC_FILE" | head -1 | cut -d: -f1)
+                            if [ -n "$ASSETS_LINE" ]; then
+                                # Encontrar la última línea de asset
+                                LAST_ASSET_LINE=$ASSETS_LINE
+                                LINE_NUM=$((ASSETS_LINE + 1))
+                                TOTAL_LINES=$(wc -l < "$PUBSPEC_FILE")
+                                
+                                while [ "$LINE_NUM" -le "$TOTAL_LINES" ]; do
+                                    LINE_CONTENT=$(sed -n "${LINE_NUM}p" "$PUBSPEC_FILE")
+                                    if echo "$LINE_CONTENT" | grep -q "^    - "; then
+                                        LAST_ASSET_LINE=$LINE_NUM
+                                    elif [[ ! "$LINE_CONTENT" =~ ^[[:space:]]*$ ]] && [[ ! "$LINE_CONTENT" =~ ^[[:space:]]*# ]]; then
+                                        break
+                                    fi
+                                    LINE_NUM=$((LINE_NUM + 1))
+                                done
+                                
+                                sed -i "${LAST_ASSET_LINE}a\    - $asset" "$PUBSPEC_FILE"
                             fi
-                            # Luego los nuevos assets de assets/
-                            for asset in $NEW_ASSET_FILES; do
-                                if [ -n "$asset" ] && ! echo "$ORIGINAL_ASSETS" | grep -q "$asset"; then
-                                    echo "    - $asset" >> "$TEMP_PUBSPEC"
-                                fi
-                            done
-                            ASSETS_PROCESSED=true
-                        # Omitir líneas de assets que están fuera de la sección (errores de formato)
-                        elif [[ "$line" =~ ^[[:space:]]*-[[:space:]]*(app/|assets/) ]] && [ "$IN_ASSETS_SECTION" = false ] && [ "$IN_FLUTTER_SECTION" = true ]; then
-                            # Estas líneas están mal ubicadas, las omitimos porque ya las agregamos
-                            continue
-                        # Detectar fin de sección assets (línea que no es asset y no es parte de flutter)
-                        elif [ "$IN_ASSETS_SECTION" = true ] && [[ ! "$line" =~ ^[[:space:]]*- ]] && [[ ! "$line" =~ ^[[:space:]]*$ ]]; then
-                            IN_ASSETS_SECTION=false
-                            echo "$line" >> "$TEMP_PUBSPEC"
-                        # Detectar fin de sección flutter
-                        elif [ "$IN_FLUTTER_SECTION" = true ] && [[ "$line" =~ ^[^[:space:]] ]] && [[ ! "$line" =~ ^flutter: ]]; then
-                            IN_FLUTTER_SECTION=false
-                            IN_ASSETS_SECTION=false
-                            echo "$line" >> "$TEMP_PUBSPEC"
-                        else
-                            # Línea normal, copiarla
-                            echo "$line" >> "$TEMP_PUBSPEC"
                         fi
-                    done < "$PUBSPEC_FILE"
+                    done
                     
-                    # Si la sección assets no existía, agregarla
-                    if [ "$ASSETS_PROCESSED" = false ]; then
-                        # Buscar la línea "flutter:" y agregar assets después
-                        sed -i '/^flutter:/a\  assets:' "$TEMP_PUBSPEC"
-                        # Agregar los assets originales de app/ si existen
-                        if [ -n "$ORIGINAL_ASSETS" ]; then
-                            echo "$ORIGINAL_ASSETS" | while read orig_line; do
-                                if [ -n "$orig_line" ]; then
-                                    sed -i "/^  assets:/a\\$orig_line" "$TEMP_PUBSPEC"
-                                fi
-                            done
-                        fi
-                        # Agregar los nuevos assets
-                        for asset in $NEW_ASSET_FILES; do
-                            if [ -n "$asset" ]; then
-                                sed -i "/^  assets:/a\    - $asset" "$TEMP_PUBSPEC"
-                            fi
-                        done
-                    fi
-                    
-                    # Reemplazar el archivo original
-                    mv "$TEMP_PUBSPEC" "$PUBSPEC_FILE"
                     echo -e "${GREEN}✓ pubspec.yaml actualizado con assets${NC}"
                 else
                     echo -e "${YELLOW}Advertencia: No se encontró pubspec.yaml${NC}"
@@ -468,8 +499,84 @@ if [ -d "build/flutter" ]; then
         echo -e "${BLUE}  ℹ Si la app funciona correctamente, las dependencias están incluidas${NC}"
     fi
     
-    # Incluir assets en el build
+    # Incluir assets en el build ANTES de reconstruir
     include_assets
+    
+    # Verificar y corregir pubspec.yaml después de incluir assets
+    PUBSPEC_FILE="build/flutter/pubspec.yaml"
+    if [ -f "$PUBSPEC_FILE" ]; then
+        # Verificar si hay líneas de assets fuera de la sección assets:
+        if grep -q "^  - app/" "$PUBSPEC_FILE" || grep -q "^  - assets/" "$PUBSPEC_FILE"; then
+            echo -e "${YELLOW}Corrigiendo formato de pubspec.yaml...${NC}"
+            # Corregir el formato moviendo las líneas mal ubicadas dentro de assets:
+            python3 << 'PYTHON_SCRIPT'
+import re
+import sys
+
+pubspec_file = "build/flutter/pubspec.yaml"
+try:
+    with open(pubspec_file, 'r') as f:
+        lines = f.readlines()
+    
+    new_lines = []
+    in_flutter = False
+    in_assets = False
+    assets_items = []
+    misplaced_assets = []
+    
+    for i, line in enumerate(lines):
+        if line.strip() == "flutter:":
+            in_flutter = True
+            new_lines.append(line)
+        elif in_flutter and line.strip() == "assets:":
+            in_assets = True
+            new_lines.append(line)
+        elif in_assets:
+            if line.strip().startswith("- "):
+                assets_items.append(line)
+            elif line.strip() == "" or line.strip().startswith("#"):
+                new_lines.append(line)
+            else:
+                # Fin de la sección assets
+                in_assets = False
+                # Agregar todos los assets
+                for asset_line in assets_items:
+                    new_lines.append(asset_line)
+                assets_items = []
+                new_lines.append(line)
+        elif in_flutter and line.strip().startswith("- ") and (line.strip().startswith("- app/") or line.strip().startswith("- assets/")):
+            # Assets mal ubicados, guardarlos para agregarlos después
+            misplaced_assets.append(line)
+            # No agregar esta línea aquí
+        else:
+            new_lines.append(line)
+    
+    # Si quedaron assets mal ubicados, agregarlos a la sección assets
+    if misplaced_assets:
+        # Buscar la sección assets y agregar los assets mal ubicados
+        for i, line in enumerate(new_lines):
+            if line.strip() == "assets:":
+                # Encontrar el final de la lista de assets
+                j = i + 1
+                while j < len(new_lines) and (new_lines[j].strip().startswith("- ") or new_lines[j].strip() == ""):
+                    j += 1
+                # Insertar los assets mal ubicados
+                for asset_line in misplaced_assets:
+                    if asset_line not in new_lines[i+1:j]:
+                        new_lines.insert(j, asset_line)
+                        j += 1
+                break
+    
+    with open(pubspec_file, 'w') as f:
+        f.writelines(new_lines)
+    
+    print("✓ pubspec.yaml corregido")
+except Exception as e:
+    print(f"Error corrigiendo pubspec.yaml: {e}")
+    sys.exit(1)
+PYTHON_SCRIPT
+        fi
+    fi
     
     # Reemplazar iconos personalizados (solo modifica recursos, no afecta dependencias)
     replace_icons
@@ -478,6 +585,56 @@ if [ -d "build/flutter" ]; then
     # Aunque esto puede ser costoso, es necesario para que los assets estén disponibles en el APK
     if [ -d "build/flutter/assets" ] && [ "$(ls -A build/flutter/assets 2>/dev/null)" ]; then
         echo -e "${BLUE}Reconstruyendo APK con assets incluidos...${NC}"
+        
+        # Verificar nuevamente el pubspec.yaml antes de reconstruir
+        if [ -f "$PUBSPEC_FILE" ]; then
+            # Verificar sintaxis YAML básica
+            if grep -q "^  - app/" "$PUBSPEC_FILE" || grep -q "^  - assets/" "$PUBSPEC_FILE"; then
+                echo -e "${RED}Error: pubspec.yaml tiene formato incorrecto. Corrigiendo...${NC}"
+                # Ejecutar el script de corrección nuevamente
+                python3 << 'PYTHON_SCRIPT'
+import re
+
+pubspec_file = "build/flutter/pubspec.yaml"
+with open(pubspec_file, 'r') as f:
+    content = f.read()
+
+# Patrón para encontrar la sección flutter y assets
+pattern = r'(flutter:\s+assets:\s+)(.*?)(\s+uses-material-design:)'
+match = re.search(pattern, content, re.DOTALL)
+
+if match:
+    assets_section = match.group(2)
+    # Extraer todos los assets (incluyendo los mal ubicados)
+    all_assets = re.findall(r'^\s*-\s+(app/.*?|assets/.*?)$', content, re.MULTILINE)
+    # Crear nueva sección de assets ordenada
+    new_assets = '\n'.join([f'    - {asset}' for asset in sorted(set(all_assets))])
+    # Reemplazar
+    new_content = content[:match.start()] + match.group(1) + new_assets + '\n' + match.group(3) + content[match.end():]
+    # Eliminar líneas de assets fuera de la sección
+    lines = new_content.split('\n')
+    new_lines = []
+    in_assets = False
+    for line in lines:
+        if 'assets:' in line:
+            in_assets = True
+            new_lines.append(line)
+        elif in_assets and line.strip().startswith('uses-material-design:'):
+            in_assets = False
+            new_lines.append(line)
+        elif not in_assets and (line.strip().startswith('- app/') or line.strip().startswith('- assets/')):
+            # Omitir assets fuera de la sección
+            continue
+        else:
+            new_lines.append(line)
+    
+    with open(pubspec_file, 'w') as f:
+        f.write('\n'.join(new_lines))
+    print("✓ pubspec.yaml corregido")
+PYTHON_SCRIPT
+            fi
+        fi
+        
         cd build/flutter
         flutter pub get > /dev/null 2>&1 || true
         cd ../..
@@ -487,6 +644,11 @@ if [ -d "build/flutter" ]; then
             --project "$PROJECT_NAME" \
             --description "$PROJECT_DESCRIPTION" \
             --product "$PROJECT_NAME"
+        
+        # Después de reconstruir, verificar y corregir nuevamente si es necesario
+        if [ -f "$PUBSPEC_FILE" ]; then
+            include_assets
+        fi
         
         echo -e "${GREEN}✓ APK reconstruido con assets incluidos${NC}"
     fi
