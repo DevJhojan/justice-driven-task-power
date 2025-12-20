@@ -389,11 +389,12 @@ else
 fi
 
 # Construir el APK - Flet leerá dependencias automáticamente
-# IMPORTANTE: No usar flags adicionales que puedan interferir con el empaquetado de dependencias
+# IMPORTANTE: Usar --include-packages para asegurar que se incluyan los paquetes necesarios
 # Flet usa main.py como punto de entrada por defecto, que importa desde app.main
 echo -e "${BLUE}Ejecutando: flet build apk${NC}"
 echo -e "${BLUE}  Punto de entrada: main.py${NC}"
 echo -e "${BLUE}  Flet detectará automáticamente requirements.txt o pyproject.toml${NC}"
+echo -e "${BLUE}  Incluyendo paquetes explícitamente: gspread, google_auth_oauthlib, googleapiclient, google_auth_httplib2, wsgiref${NC}"
 
 # Asegurar que requirements.txt existe y está actualizado
 if [ -f "requirements.txt" ]; then
@@ -401,7 +402,8 @@ if [ -f "requirements.txt" ]; then
     # Verificar que todas las dependencias de pyproject.toml estén en requirements.txt
     if grep -q "google-api-python-client" requirements.txt && \
        grep -q "google-auth-httplib2" requirements.txt && \
-       grep -q "google-auth-oauthlib" requirements.txt; then
+       grep -q "google-auth-oauthlib" requirements.txt && \
+       grep -q "gspread" requirements.txt; then
         echo -e "${GREEN}  ✓ requirements.txt contiene todas las dependencias necesarias${NC}"
     else
         echo -e "${YELLOW}  ⚠ Advertencia: requirements.txt puede estar incompleto${NC}"
@@ -410,10 +412,12 @@ else
     echo -e "${BLUE}  Usando pyproject.toml para dependencias${NC}"
 fi
 
+# Construir con --include-packages para asegurar que se incluyan los paquetes
 flet build apk \
     --project "$PROJECT_NAME" \
     --description "$PROJECT_DESCRIPTION" \
-    --product "$PROJECT_NAME"
+    --product "$PROJECT_NAME" \
+    --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2,wsgiref
 
 # Esperar a que se cree la estructura de build
 if [ -d "build/flutter" ]; then
@@ -639,11 +643,12 @@ PYTHON_SCRIPT
         flutter pub get > /dev/null 2>&1 || true
         cd ../..
         
-        # Reconstruir el APK con los assets
+        # Reconstruir el APK con los assets y paquetes incluidos
         flet build apk \
             --project "$PROJECT_NAME" \
             --description "$PROJECT_DESCRIPTION" \
-            --product "$PROJECT_NAME"
+            --product "$PROJECT_NAME" \
+            --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2,wsgiref
         
         # Después de reconstruir, verificar y corregir nuevamente si es necesario
         if [ -f "$PUBSPEC_FILE" ]; then
@@ -671,7 +676,8 @@ PYTHON_SCRIPT
         flet build apk \
             --project "$PROJECT_NAME" \
             --description "$PROJECT_DESCRIPTION" \
-            --product "$PROJECT_NAME"
+            --product "$PROJECT_NAME" \
+            --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2,wsgiref
         
         # Verificar nuevamente las dependencias después de reconstruir
         DEPENDENCIES_AFTER_RECONSTRUCT=false
@@ -735,11 +741,12 @@ include_assets
 # Asegurar que los iconos estén actualizados antes de construir el AAB
 replace_icons
 
-# Construir el AAB usando el comando de Flet
+# Construir el AAB usando el comando de Flet con paquetes incluidos
 flet build aab \
     --project "$PROJECT_NAME" \
     --description "$PROJECT_DESCRIPTION" \
-    --product "$PROJECT_NAME"
+    --product "$PROJECT_NAME" \
+    --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2,wsgiref
 
 # Asegurar que los assets estén incluidos después del build (por si Flet regeneró la estructura)
 include_assets
@@ -753,7 +760,9 @@ if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
     flet build aab \
         --project "$PROJECT_NAME" \
         --description "$PROJECT_DESCRIPTION" \
-        --product "$PROJECT_NAME"
+        --product "$PROJECT_NAME" \
+        --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2,wsgiref \
+        --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2,wsgiref
 fi
 
 # Verificar que el AAB se generó
