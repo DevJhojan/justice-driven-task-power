@@ -196,18 +196,41 @@ class GoogleSheetsService:
                     auth_url, state = flow.authorization_url(prompt='consent')
                     
                     # Abrir navegador en Android usando Flet
+                    # En Android, launch_url puede no funcionar, así que usamos método alternativo
+                    browser_opened = False
                     try:
-                        self.page.launch_url(auth_url)
+                        # Intentar con launch_url primero
+                        self.page.launch_url(auth_url, web_window_name="_blank")
+                        browser_opened = True
                     except Exception as launch_error:
+                        # Si falla, intentar método alternativo
                         try:
-                            import webbrowser
-                            webbrowser.open(auth_url)
+                            # En Android, podemos usar el intent de Android directamente
+                            import subprocess
+                            import platform
+                            
+                            if platform.system() == "Linux" or "android" in str(platform.platform()).lower():
+                                # Intentar usar am start para abrir el navegador en Android
+                                try:
+                                    subprocess.run(
+                                        ["am", "start", "-a", "android.intent.action.VIEW", "-d", auth_url],
+                                        check=False,
+                                        timeout=2
+                                    )
+                                    browser_opened = True
+                                except Exception:
+                                    pass
+                            
+                            # Si aún no funciona, intentar webbrowser
+                            if not browser_opened:
+                                import webbrowser
+                                webbrowser.open(auth_url)
+                                browser_opened = True
                         except Exception:
-                            raise Exception(
-                                f"No se pudo abrir el navegador. "
-                                f"Por favor, abre manualmente esta URL:\n\n{auth_url}\n\n"
-                                f"Error: {str(launch_error)}"
-                            )
+                            # Si todo falla, mostrar la URL para que el usuario la abra manualmente
+                            browser_opened = False
+                            # No lanzar error aquí, solo marcar que no se pudo abrir
+                            # La página de autenticación manual mostrará la URL
                     
                     # Intentar usar servidor local solo si wsgiref está disponible
                     if wsgiref_available:
@@ -228,6 +251,7 @@ class GoogleSheetsService:
                         self.pending_flow = flow
                         self.pending_state = state
                         # Lanzar excepción especial que será capturada para mostrar diálogo
+                        # La página de autenticación manual intentará abrir el navegador también
                         raise ManualAuthRequired(auth_url, state)
                 else:
                     # Para escritorio, usar servidor local normal

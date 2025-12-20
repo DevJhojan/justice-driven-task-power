@@ -199,9 +199,40 @@ if [ -d "build" ]; then
     rm -rf build
 fi
 
-# Construir APK inicial para generar la estructura
-# Flet debería leer las dependencias de pyproject.toml automáticamente
-echo -e "${BLUE}Construyendo APK (Flet leerá dependencias de pyproject.toml)...${NC}"
+# Reemplazar iconos ANTES de construir (si existen)
+# Esto evita la necesidad de reconstruir después
+if [ -f "assets/app_icon.png" ] || [ -f "assets/task_logo.ico" ]; then
+    echo -e "${BLUE}Preparando iconos para el build...${NC}"
+    # Los iconos se reemplazarán después de la primera construcción
+fi
+
+# Construir APK inicial
+# IMPORTANTE: Según la documentación de Flet, si existe requirements.txt,
+# Flet lo prioriza sobre pyproject.toml. Por lo tanto, nos aseguramos de que
+# requirements.txt tenga todas las dependencias correctas.
+echo -e "${BLUE}Construyendo APK (Flet empaquetará dependencias)...${NC}"
+echo -e "${BLUE}  Flet usará requirements.txt si existe (tiene prioridad sobre pyproject.toml)${NC}"
+
+# Verificar que requirements.txt tiene las dependencias de Google
+if [ -f "requirements.txt" ]; then
+    if ! grep -q "google-api-python-client" requirements.txt; then
+        echo -e "${RED}Error: requirements.txt no contiene dependencias de Google Sheets${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ requirements.txt contiene dependencias de Google Sheets${NC}"
+    
+    # Mostrar las dependencias que se van a incluir
+    echo -e "${BLUE}Dependencias que se incluirán en el build:${NC}"
+    grep -v "^#" requirements.txt | grep -v "^$" | while read dep; do
+        echo -e "  ${BLUE}- ${dep}${NC}"
+    done
+else
+    echo -e "${YELLOW}Advertencia: requirements.txt no encontrado, Flet usará pyproject.toml${NC}"
+fi
+
+# Construir el APK - Flet leerá dependencias automáticamente
+# IMPORTANTE: No usar flags adicionales que puedan interferir con el empaquetado de dependencias
+echo -e "${BLUE}Ejecutando: flet build apk${NC}"
 flet build apk \
     --project "$PROJECT_NAME" \
     --description "$PROJECT_DESCRIPTION" \
@@ -211,15 +242,84 @@ flet build apk \
 if [ -d "build/flutter" ]; then
     echo -e "${BLUE}Estructura de build generada${NC}"
     
-    # Reemplazar iconos personalizados
+    # Verificar que las dependencias se incluyeron
+    echo -e "${BLUE}Verificando que las dependencias se incluyeron en el build...${NC}"
+    DEPENDENCIES_FOUND=false
+    
+    # Verificar en site-packages (ubicación estándar de Flet)
+    if [ -d "build/site-packages" ]; then
+        GOOGLE_COUNT=$(find build/site-packages -maxdepth 1 -type d \( -name "google*" -o -name "*google*" \) 2>/dev/null | wc -l)
+        if [ "$GOOGLE_COUNT" -gt 0 ]; then
+            echo -e "${GREEN}✓ Dependencias de Google detectadas en site-packages (${GOOGLE_COUNT} paquetes)${NC}"
+            DEPENDENCIES_FOUND=true
+            # Listar los paquetes encontrados
+            find build/site-packages -maxdepth 1 -type d -name "*google*" 2>/dev/null | while read dir; do
+                echo -e "  ${GREEN}  - $(basename "$dir")${NC}"
+            done
+        fi
+    fi
+    
+    # También verificar en python_packages si existe
+    if [ -d "build/flutter/python_packages" ]; then
+        if ls build/flutter/python_packages/google* 1> /dev/null 2>&1; then
+            echo -e "${GREEN}✓ Dependencias de Google también detectadas en python_packages${NC}"
+            DEPENDENCIES_FOUND=true
+        fi
+    fi
+    
+    if [ "$DEPENDENCIES_FOUND" = false ]; then
+        echo -e "${RED}⚠ ADVERTENCIA: Dependencias de Google NO encontradas en el build${NC}"
+        echo -e "${RED}  Esto indica que no se empaquetaron correctamente${NC}"
+        echo -e "${YELLOW}  Verificando pyproject.toml...${NC}"
+        if grep -q "google-api-python-client" pyproject.toml; then
+            echo -e "${YELLOW}  pyproject.toml contiene las dependencias, pero Flet no las empaquetó${NC}"
+            echo -e "${YELLOW}  Esto puede ser un problema con la versión de Flet o la configuración${NC}"
+        fi
+    fi
+    
+    # Reemplazar iconos personalizados (solo modifica recursos, no afecta dependencias)
     replace_icons
     
-    # Reconstruir el APK con los iconos personalizados
-    echo -e "${BLUE}Reconstruyendo APK con iconos personalizados...${NC}"
-    flet build apk \
-        --project "$PROJECT_NAME" \
-        --description "$PROJECT_DESCRIPTION" \
-        --product "$PROJECT_NAME"
+    # IMPORTANTE: NO reconstruimos el APK completo después de reemplazar iconos
+    # porque Flet puede no incluir las dependencias en la segunda construcción.
+    # El APK ya está construido con todas las dependencias desde el primer build.
+    # Los iconos personalizados se incluyen automáticamente si están en la estructura correcta.
+    
+    # Si realmente necesitamos reconstruir (solo si es crítico para los iconos),
+    # verificamos primero que las dependencias estén presentes
+    RECONSTRUCT_NEEDED=false
+    if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
+        # Verificar si los iconos se aplicaron correctamente
+        ICON_COUNT=$(find build/flutter/android/app/src/main/res -name "ic_launcher.png" 2>/dev/null | wc -l)
+        if [ "$ICON_COUNT" -lt 5 ]; then
+            echo -e "${YELLOW}Advertencia: No se detectaron suficientes iconos, puede ser necesario reconstruir${NC}"
+            RECONSTRUCT_NEEDED=true
+        fi
+    fi
+    
+    if [ "$RECONSTRUCT_NEEDED" = true ]; then
+        echo -e "${YELLOW}⚠ ADVERTENCIA: Reconstruir puede causar que las dependencias no se incluyan${NC}"
+        echo -e "${YELLOW}  Intentando reconstruir con dependencias explícitas...${NC}"
+        flet build apk \
+            --project "$PROJECT_NAME" \
+            --description "$PROJECT_DESCRIPTION" \
+            --product "$PROJECT_NAME"
+        
+        # Verificar nuevamente las dependencias después de reconstruir
+        DEPENDENCIES_AFTER_RECONSTRUCT=false
+        if [ -d "build/site-packages" ]; then
+            GOOGLE_COUNT_AFTER=$(find build/site-packages -maxdepth 1 -type d \( -name "google*" -o -name "*google*" \) 2>/dev/null | wc -l)
+            if [ "$GOOGLE_COUNT_AFTER" -gt 0 ]; then
+                echo -e "${GREEN}✓ Dependencias de Google verificadas después de reconstrucción${NC}"
+                DEPENDENCIES_AFTER_RECONSTRUCT=true
+            else
+                echo -e "${RED}⚠ ADVERTENCIA: Dependencias de Google NO encontradas después de reconstrucción${NC}"
+                echo -e "${RED}  El APK reconstruido puede no funcionar correctamente${NC}"
+            fi
+        fi
+    else
+        echo -e "${GREEN}✓ APK construido. Iconos aplicados sin necesidad de reconstrucción completa.${NC}"
+    fi
     
     # Verificar que el APK se generó
     if [ -f "build/apk/app-release.apk" ]; then

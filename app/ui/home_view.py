@@ -8,7 +8,6 @@ from datetime import date, datetime
 from app.data.models import Task, SubTask, Habit
 from app.services.task_service import TaskService
 from app.services.habit_service import HabitService
-from app.services.csv_backup_service import CSVBackupService
 from app.services.settings_service import SettingsService, apply_theme_to_page
 
 # Importación de Google Sheets - si falla, se manejará en tiempo de ejecución
@@ -45,7 +44,6 @@ class HomeView:
         self.page = page
         self.task_service = TaskService()
         self.habit_service = HabitService()
-        self.csv_backup_service = CSVBackupService()
         # Intentar inicializar Google Sheets Service
         try:
             self.google_sheets_service = GoogleSheetsService(page=self.page) if GoogleSheetsService else None
@@ -68,19 +66,6 @@ class HomeView:
         self.habit_stats_card = None
         self.title_bar = None  # Guardar referencia a la barra de título
         
-        # File pickers para importación/exportación de base de datos
-        # IMPORTANTE: Los FilePickers deben estar en el overlay de la página
-        self.import_file_picker = ft.FilePicker(on_result=self._handle_import_result)
-        self.export_file_picker = ft.FilePicker(on_result=self._handle_export_result)
-        
-        # Asegurar que los FilePickers estén en el overlay
-        if self.import_file_picker not in self.page.overlay:
-            self.page.overlay.append(self.import_file_picker)
-        if self.export_file_picker not in self.page.overlay:
-            self.page.overlay.append(self.export_file_picker)
-        
-        # Forzar actualización para asegurar que los FilePickers estén registrados
-        self.page.update()
 
         # Diálogo para seleccionar matiz (paleta de colores)
         # Debe tener al menos title, content o actions para que Flet no lance AssertionError.
@@ -646,533 +631,6 @@ class HomeView:
         self.home_view.bgcolor = bgcolor
         self.page.update()
 
-    # ==================== IMPORT / EXPORT CSV ====================
-
-    def _start_import(self, e):
-        """Inicia el proceso de selección de archivo ZIP (CSV) para importar."""
-        try:
-            self.import_file_picker.pick_files(
-                allow_multiple=False,
-                file_type=ft.FilePickerFileType.CUSTOM,
-                allowed_extensions=["zip"],
-            )
-        except Exception as ex:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error al iniciar la importación: {str(ex)}"),
-                bgcolor=ft.Colors.RED,
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-
-    def _handle_import_result(self, e: ft.FilePickerResultEvent):
-        """Maneja el resultado de la selección de archivo CSV para importación."""
-        if not e.files:
-            return  # Usuario canceló
-
-        file = e.files[0]
-        path = file.path
-        if not path or not path.lower().endswith(".zip"):
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Debe seleccionar un archivo ZIP con extensión .zip"),
-                bgcolor=ft.Colors.RED,
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-            return
-
-        # Detectar si estamos en Android/iOS
-        is_mobile = (
-            self.page.platform == ft.PagePlatform.ANDROID 
-            or self.page.platform == ft.PagePlatform.IOS
-        )
-
-        try:
-            result = self.csv_backup_service.import_from_csv(path)
-            
-            # Construir mensaje de éxito
-            msg_parts = [f"Importación completada."]
-            if result.tasks_imported > 0:
-                msg_parts.append(f"Tareas nuevas: {result.tasks_imported}")
-            if result.subtasks_imported > 0:
-                msg_parts.append(f"Subtareas nuevas: {result.subtasks_imported}")
-            if result.habits_imported > 0:
-                msg_parts.append(f"Hábitos nuevos: {result.habits_imported}")
-            if result.habit_completions_imported > 0:
-                msg_parts.append(f"Cumplimientos nuevos: {result.habit_completions_imported}")
-            
-            if result.errors:
-                msg_parts.append(f"\nAdvertencias: {len(result.errors)}")
-                # Mostrar primeros errores en el mensaje
-                for error in result.errors[:3]:
-                    msg_parts.append(f"  - {error}")
-                if len(result.errors) > 3:
-                    msg_parts.append(f"  ... y {len(result.errors) - 3} más")
-
-            msg = " ".join(msg_parts)
-            
-            bg_color = ft.Colors.GREEN if not result.errors else ft.Colors.ORANGE
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(msg),
-                bgcolor=bg_color,
-                duration=8000 if is_mobile else 5000,
-            )
-            self.page.snack_bar.open = True
-
-            # Refrescar vistas si estamos en tareas/hábitos
-            if self.current_section == "tasks":
-                self._load_tasks()
-            elif self.current_section == "habits":
-                self._load_habits()
-
-        except Exception as ex:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error al importar datos CSV: {str(ex)}"),
-                bgcolor=ft.Colors.RED,
-                duration=8000 if is_mobile else 5000,
-            )
-            self.page.snack_bar.open = True
-        finally:
-            self.page.update()
-
-    def _start_export(self, e):
-        """Inicia el diálogo para elegir dónde guardar el backup CSV (ZIP).
-        
-        IMPORTANTE para Android 13+:
-        - En Android, el método save_file() REQUIERE el parámetro src_bytes
-        - Si no se pasa src_bytes, el archivo se crea vacío (0 bytes)
-        - El Storage Access Framework (SAF) se activa automáticamente y solicita
-          permisos cuando el usuario selecciona la ubicación
-        - Flet maneja internamente la escritura usando SAF cuando se pasa src_bytes
-        """
-        # Mostrar mensaje inmediato para confirmar que el botón funciona
-        self.page.snack_bar = ft.SnackBar(
-            content=ft.Text("Iniciando exportación..."),
-            bgcolor=ft.Colors.BLUE,
-            duration=2000,
-        )
-        self.page.snack_bar.open = True
-        self.page.update()
-        
-        # Detectar si estamos en Android/iOS
-        is_android = self.page.platform == ft.PagePlatform.ANDROID
-        is_mobile = (
-            is_android 
-            or self.page.platform == ft.PagePlatform.IOS
-        )
-        
-        # Verificar que el FilePicker esté inicializado
-        if not hasattr(self, 'export_file_picker') or self.export_file_picker is None:
-            error_msg = (
-                "❌ Error: FilePicker no está inicializado.\n"
-                "Por favor, reinicia la aplicación."
-            )
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(error_msg),
-                bgcolor=ft.Colors.RED,
-                duration=8000,
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-            return
-        
-        try:
-            # Verificar que el servicio de backup esté disponible
-            if not hasattr(self, 'csv_backup_service') or self.csv_backup_service is None:
-                raise ValueError("Servicio de backup no disponible")
-            
-            # Generar el archivo ZIP en memoria primero
-            try:
-                zip_bytes = self.csv_backup_service.export_to_csv_bytes()
-            except Exception as gen_ex:
-                error_msg = (
-                    f"❌ Error al generar archivo ZIP:\n\n"
-                    f"{str(gen_ex)}\n\n"
-                    f"Por favor, verifica que la base de datos esté accesible."
-                )
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(error_msg),
-                    bgcolor=ft.Colors.RED,
-                    duration=10000,
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
-                return
-            
-            if not zip_bytes or len(zip_bytes) == 0:
-                error_msg = (
-                    "⚠ Advertencia: No se pudo generar el archivo ZIP.\n"
-                    "La base de datos podría estar vacía o hay un problema con los datos."
-                )
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(error_msg),
-                    bgcolor=ft.Colors.ORANGE,
-                    duration=8000,
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
-                return
-            
-            # Nombre sugerido con timestamp para evitar sobrescribir
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            file_name = f"tasks_backup_{ts}.zip"
-            
-            # SOLUCIÓN CRÍTICA PARA ANDROID 13+:
-            # En Android, save_file() DEBE recibir src_bytes directamente.
-            # Si no se pasa, el archivo se crea vacío (0 bytes).
-            # Flet maneja internamente la escritura usando Storage Access Framework
-            # cuando se pasa src_bytes, lo que evita problemas con URIs de contenido.
-            if is_android:
-                # Guardar bytes también como respaldo (por si necesitamos verificar después)
-                self._export_zip_bytes = zip_bytes
-                
-                # Mostrar mensaje informativo en Android
-                info_msg = (
-                    f"Preparando exportación...\n"
-                    f"Tamaño: {len(zip_bytes) / 1024:.1f} KB\n"
-                    f"Se abrirá el diálogo para seleccionar ubicación."
-                )
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(info_msg),
-                    bgcolor=ft.Colors.BLUE,
-                    duration=3000,
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
-                
-                # En Android: pasar los bytes directamente a save_file()
-                # Esto activa automáticamente el SAF y solicita permisos
-                try:
-                    # Verificar que el FilePicker esté en el overlay
-                    if self.export_file_picker not in self.page.overlay:
-                        self.page.overlay.append(self.export_file_picker)
-                        self.page.update()
-                    
-                    # Forzar actualización antes de abrir el diálogo
-                    self.page.update()
-                    
-                    # Llamar a save_file con los bytes
-                    # NOTA: En algunas versiones de Flet, puede que necesitemos usar solo file_name
-                    # y luego escribir manualmente. Intentamos primero con src_bytes.
-                    try:
-                        self.export_file_picker.save_file(
-                            file_name=file_name,
-                            src_bytes=zip_bytes  # CRÍTICO: pasar bytes directamente en Android
-                        )
-                    except TypeError:
-                        # Si src_bytes no es un parámetro válido, intentar sin él
-                        # (para versiones antiguas de Flet)
-                        self.export_file_picker.save_file(file_name=file_name)
-                        # En este caso, escribiremos manualmente en _handle_export_result
-                    
-                    # Forzar actualización después de abrir el diálogo
-                    self.page.update()
-                    
-                except AttributeError as attr_ex:
-                    # Error si save_file no acepta src_bytes (versión antigua de Flet)
-                    error_msg = (
-                        f"❌ Error: Tu versión de Flet puede no soportar src_bytes.\n\n"
-                        f"Error: {str(attr_ex)}\n\n"
-                        f"Por favor, actualiza Flet a la versión más reciente:\n"
-                        f"pip install --upgrade flet"
-                    )
-                    self.page.snack_bar = ft.SnackBar(
-                        content=ft.Text(error_msg),
-                        bgcolor=ft.Colors.RED,
-                        duration=12000,
-                    )
-                    self.page.snack_bar.open = True
-                    self.page.update()
-                    return
-                except Exception as save_ex:
-                    # Si falla al llamar save_file, mostrar error inmediatamente
-                    error_type = type(save_ex).__name__
-                    error_msg = (
-                        f"❌ Error al abrir diálogo de exportación en Android:\n\n"
-                        f"Tipo: {error_type}\n"
-                        f"Detalle: {str(save_ex)}\n\n"
-                        f"Por favor, verifica los permisos de almacenamiento."
-                    )
-                    self.page.snack_bar = ft.SnackBar(
-                        content=ft.Text(error_msg),
-                        bgcolor=ft.Colors.RED,
-                        duration=12000,
-                    )
-                    self.page.snack_bar.open = True
-                    self.page.update()
-                    return
-            else:
-                # En escritorio/iOS: guardar bytes para escribir después
-                # (comportamiento original para compatibilidad)
-                self._export_zip_bytes = zip_bytes
-                self.export_file_picker.save_file(file_name=file_name)
-                
-        except Exception as ex:
-            # Capturar errores al iniciar la exportación
-            error_type = type(ex).__name__
-            error_details = str(ex)
-            
-            if is_android:
-                error_msg = (
-                    f"❌ Error al iniciar exportación en Android:\n\n"
-                    f"Tipo: {error_type}\n"
-                    f"Detalle: {error_details}\n\n"
-                    f"Por favor, verifica que la aplicación tenga permisos de almacenamiento."
-                )
-                
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(error_msg),
-                    bgcolor=ft.Colors.RED,
-                    duration=10000,
-                )
-            else:
-                error_msg = f"Error al iniciar la exportación: {error_details}"
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(error_msg),
-                    bgcolor=ft.Colors.RED,
-                    duration=5000,
-                )
-            
-            self.page.snack_bar.open = True
-            self.page.update()
-
-    def _handle_export_result(self, e: ft.FilePickerResultEvent):
-        """Maneja el resultado de la exportación CSV.
-        
-        IMPORTANTE para Android 13+:
-        - En Android, cuando se pasa src_bytes a save_file(), Flet maneja
-          automáticamente la escritura usando Storage Access Framework (SAF).
-        - En este caso, el archivo ya está escrito cuando se llama a este callback,
-          por lo que solo verificamos el resultado.
-        - En escritorio/iOS, aún necesitamos escribir manualmente.
-        """
-        # Detectar si estamos en Android/iOS para mostrar mensajes más específicos
-        is_android = self.page.platform == ft.PagePlatform.ANDROID
-        is_mobile = (
-            is_android 
-            or self.page.platform == ft.PagePlatform.IOS
-        )
-
-        if not e.path:
-            # Usuario canceló la exportación
-            self._export_zip_bytes = None  # Limpiar bytes guardados
-            return
-
-        # Si es una prueba de permisos (archivo test_permission.zip), solo verificar que funciona
-        if "test_permission" in e.path.lower():
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(
-                    "✓ Permisos de almacenamiento activados correctamente.\n"
-                    "Ya puedes usar importar/exportar sin problemas."
-                ),
-                bgcolor=ft.Colors.GREEN,
-                duration=4000,
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-            return  # No exportar realmente, solo verificar permisos
-
-        try:
-            if is_android:
-                # En Android: el archivo debería haber sido escrito por Flet cuando se pasó src_bytes
-                # Intentamos verificar que el archivo existe y tiene contenido
-                target_path = e.path
-                
-                # Intentar verificar que el archivo se escribió correctamente
-                file_written = False
-                file_size = 0
-                
-                try:
-                    # Intentar verificar el archivo (puede fallar con URIs de contenido)
-                    if os.path.exists(target_path):
-                        file_size = os.path.getsize(target_path)
-                        if file_size > 0:
-                            file_written = True
-                    else:
-                        # En Android con URIs de contenido, os.path.exists() puede fallar
-                        # pero el archivo puede haberse escrito. Intentamos leerlo.
-                        try:
-                            with open(target_path, 'rb') as f:
-                                content = f.read()
-                                if len(content) > 0:
-                                    file_size = len(content)
-                                    file_written = True
-                        except Exception:
-                            # Si no podemos leerlo, asumimos que puede estar escrito
-                            # pero no podemos verificarlo (comportamiento de SAF)
-                            file_written = True  # Optimista: Flet debería haberlo escrito
-                except Exception as verify_ex:
-                    # Si falla la verificación, intentamos leer el archivo directamente
-                    try:
-                        with open(target_path, 'rb') as f:
-                            content = f.read()
-                            if len(content) > 0:
-                                file_size = len(content)
-                                file_written = True
-                            else:
-                                # Archivo vacío - esto es el problema
-                                raise OSError(
-                                    "El archivo se creó pero está vacío (0 bytes). "
-                                    "Esto puede ocurrir si los permisos no se otorgaron correctamente."
-                                )
-                    except OSError:
-                        raise  # Re-lanzar el error de archivo vacío
-                    except Exception:
-                        # No podemos verificar, pero asumimos éxito si llegamos aquí
-                        file_written = True
-                
-                if file_written and file_size > 0:
-                    # Éxito: archivo escrito correctamente
-                    size_kb = file_size / 1024
-                    success_msg = (
-                        f"✓ Datos exportados correctamente a CSV.\n"
-                        f"Ubicación: {os.path.basename(target_path)}\n"
-                        f"Tamaño: {size_kb:.1f} KB\n"
-                        f"Contiene: tasks.csv, subtasks.csv, habits.csv, habit_completions.csv"
-                    )
-                    
-                    self.page.snack_bar = ft.SnackBar(
-                        content=ft.Text(success_msg),
-                        bgcolor=ft.Colors.GREEN,
-                        duration=6000,
-                    )
-                    self.page.snack_bar.open = True
-                elif file_written:
-                    # Archivo existe pero está vacío o no pudimos verificar tamaño
-                    # Esto es un problema común en Android 13+
-                    error_msg = (
-                        "⚠ Error al exportar en Android:\n"
-                        "El archivo se creó pero parece estar vacío o no se pudo verificar.\n\n"
-                        "Posibles causas:\n"
-                        "1. Permisos no otorgados correctamente\n"
-                        "2. Ubicación no accesible\n"
-                        "3. Problema con Storage Access Framework\n\n"
-                        "Solución: Intenta guardar en la carpeta 'Descargas' y otorga permisos cuando se soliciten."
-                    )
-                    
-                    self.page.snack_bar = ft.SnackBar(
-                        content=ft.Text(error_msg),
-                        bgcolor=ft.Colors.ORANGE,
-                        duration=10000,
-                    )
-                    self.page.snack_bar.open = True
-                else:
-                    # No se pudo escribir el archivo
-                    raise OSError(
-                        "No se pudo escribir el archivo. "
-                        "Verifica que otorgaste permisos de almacenamiento."
-                    )
-            else:
-                # En escritorio/iOS: escribir manualmente (comportamiento original)
-                if not self._export_zip_bytes:
-                    raise ValueError("No se encontraron datos para exportar. Intenta exportar nuevamente.")
-                
-                # Asegurar extensión .zip
-                target_path = e.path
-                if not target_path.lower().endswith(".zip"):
-                    target_path = target_path + ".zip"
-                
-                # Escribir los bytes del ZIP al archivo seleccionado
-                with open(target_path, 'wb') as f:
-                    f.write(self._export_zip_bytes)
-                    f.flush()
-                    os.fsync(f.fileno())
-                
-                # Verificar que el archivo se escribió correctamente
-                if os.path.exists(target_path):
-                    file_size = os.path.getsize(target_path)
-                    if file_size > 0:
-                        size_mb = file_size / (1024 * 1024)
-                        success_msg = (
-                            f"Datos exportados correctamente a CSV.\n"
-                            f"Ubicación: {os.path.basename(target_path)}\n"
-                            f"Tamaño: {size_mb:.2f} MB\n"
-                            f"Contiene: tasks.csv, subtasks.csv, habits.csv, habit_completions.csv"
-                        )
-                        
-                        self.page.snack_bar = ft.SnackBar(
-                            content=ft.Text(success_msg),
-                            bgcolor=ft.Colors.GREEN,
-                            duration=4000,
-                        )
-                        self.page.snack_bar.open = True
-                    else:
-                        raise OSError("El archivo exportado está vacío")
-                else:
-                    raise OSError("No se pudo crear el archivo en la ubicación seleccionada")
-                
-        except OSError as ex:
-            # Errores específicos de permisos/almacenamiento
-            error_msg = str(ex)
-            
-            if is_android:
-                # Mensaje de error específico y detallado para Android
-                detailed_error = (
-                    f"❌ Error al exportar en Android 13+:\n\n"
-                    f"{error_msg}\n\n"
-                    f"🔧 Soluciones a intentar:\n"
-                    f"1. Selecciona la carpeta 'Descargas' como ubicación\n"
-                    f"2. Otorga permisos cuando Android los solicite\n"
-                    f"3. No canceles el diálogo de selección de ubicación\n"
-                    f"4. Verifica que tienes espacio de almacenamiento disponible\n"
-                    f"5. Intenta cerrar y reabrir la aplicación\n\n"
-                    f"Si el problema persiste, el archivo puede haberse creado vacío (0 bytes)."
-                )
-                
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(detailed_error),
-                    bgcolor=ft.Colors.RED,
-                    duration=12000,  # Más tiempo para leer el mensaje
-                )
-            elif is_mobile:
-                error_msg += (
-                    "\n\nSugerencia: Intenta guardar en la carpeta 'Descargas' "
-                    "o selecciona otra ubicación accesible."
-                )
-                
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(error_msg),
-                    bgcolor=ft.Colors.RED,
-                    duration=8000,
-                )
-            else:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(error_msg),
-                    bgcolor=ft.Colors.RED,
-                    duration=5000,
-                )
-            
-            self.page.snack_bar.open = True
-        except Exception as ex:
-            # Capturar cualquier otro error y mostrar mensaje detallado
-            error_type = type(ex).__name__
-            error_details = str(ex)
-            
-            if is_android:
-                error_msg = (
-                    f"❌ Error inesperado al exportar en Android:\n\n"
-                    f"Tipo: {error_type}\n"
-                    f"Detalle: {error_details}\n\n"
-                    f"Por favor, intenta nuevamente o contacta al soporte."
-                )
-                
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(error_msg),
-                    bgcolor=ft.Colors.RED,
-                    duration=10000,
-                )
-            else:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Error al exportar datos CSV: {error_details}"),
-                    bgcolor=ft.Colors.RED,
-                    duration=6000,
-                )
-            
-            self.page.snack_bar.open = True
-        finally:
-            # Limpiar bytes guardados
-            self._export_zip_bytes = None
-            self.page.update()
-
     # ==================== IMPORT / EXPORT GOOGLE SHEETS ====================
 
     def _show_error_page(self, title: str, message: str):
@@ -1255,6 +713,63 @@ class HomeView:
             # Si no hay vista anterior, ir a la principal
             self.page.go("/")
         self.page.update()
+    
+    def _open_auth_url(self, url: str):
+        """Abre una URL en el navegador externo, con múltiples métodos de respaldo para Android."""
+        opened = False
+        
+        # Método 1: Intentar con launch_url de Flet
+        try:
+            self.page.launch_url(url, web_window_name="_blank")
+            opened = True
+        except Exception as e1:
+            # Método 2: Intentar con subprocess (Android)
+            try:
+                import subprocess
+                import platform
+                
+                # En Android, usar am start
+                if self.page.platform == ft.PagePlatform.ANDROID:
+                    try:
+                        # Intentar usar el método de Android
+                        subprocess.run(
+                            ["am", "start", "-a", "android.intent.action.VIEW", "-d", url],
+                            check=False,
+                            timeout=2,
+                            stderr=subprocess.DEVNULL,
+                            stdout=subprocess.DEVNULL
+                        )
+                        opened = True
+                    except Exception:
+                        pass
+                
+                # Método 3: webbrowser (fallback)
+                if not opened:
+                    import webbrowser
+                    webbrowser.open(url)
+                    opened = True
+            except Exception as e2:
+                # Si todo falla, mostrar mensaje
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(
+                        f"No se pudo abrir el navegador automáticamente.\n\n"
+                        f"Por favor, copia esta URL y ábrela manualmente:\n{url}"
+                    ),
+                    bgcolor=ft.Colors.ORANGE,
+                    duration=10000,
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+                return
+        
+        if opened:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Abriendo navegador..."),
+                bgcolor=ft.Colors.BLUE,
+                duration=2000,
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
     
     def _show_manual_auth_page(self, auth_url: str):
         """Muestra una página para autenticación manual (sin wsgiref)."""
@@ -1382,22 +897,59 @@ class HomeView:
                     ),
                     
                     ft.Text(
-                        "1. Se abrió el navegador con la URL de autorización.\n"
-                        "2. Autoriza la aplicación en el navegador.\n"
-                        "3. Después de autorizar, Google te redirigirá a una URL.\n"
-                        "4. Copia esa URL completa (debe comenzar con http://localhost o similar).\n"
-                        "5. Pega la URL en el campo de abajo.",
+                        "Pasos para autenticarse:",
+                        size=16,
+                        weight=ft.FontWeight.BOLD,
+                        color=preview_color,
+                    ),
+                    ft.Text(
+                        "1. Presiona el botón 'Abrir URL de autorización' para abrir el navegador.\n"
+                        "2. Si el botón no funciona, copia la URL de abajo y ábrela manualmente.\n"
+                        "3. Autoriza la aplicación en el navegador.\n"
+                        "4. Después de autorizar, Google te redirigirá a una URL.\n"
+                        "5. Copia esa URL completa (debe comenzar con http://localhost o similar).\n"
+                        "6. Pega la URL en el campo de abajo y presiona 'Completar Autenticación'.",
                         size=14,
                         color=ft.Colors.GREY_700 if not is_dark else ft.Colors.GREY_300,
                     ),
                     
                     ft.Container(
-                        content=ft.ElevatedButton(
-                            "Abrir URL de autorización",
-                            icon=ft.Icons.OPEN_IN_BROWSER,
-                            on_click=lambda e: self.page.launch_url(auth_url),
-                            bgcolor=preview_color,
-                            color=ft.Colors.WHITE,
+                        content=ft.Column(
+                            [
+                                ft.ElevatedButton(
+                                    "Abrir URL de autorización",
+                                    icon=ft.Icons.OPEN_IN_BROWSER,
+                                    on_click=lambda e: self._open_auth_url(auth_url),
+                                    bgcolor=preview_color,
+                                    color=ft.Colors.WHITE,
+                                    width=300,
+                                ),
+                                ft.Container(
+                                    content=ft.Column(
+                                        [
+                                            ft.Text(
+                                                "URL de autorización (copia si el botón no funciona):",
+                                                size=12,
+                                                weight=ft.FontWeight.BOLD,
+                                            ),
+                                            ft.Container(
+                                                content=ft.Text(
+                                                    auth_url,
+                                                    size=11,
+                                                    color=ft.Colors.BLUE,
+                                                    selectable=True,
+                                                ),
+                                                bgcolor=ft.Colors.GREY_100 if not is_dark else ft.Colors.GREY_800,
+                                                padding=8,
+                                                border_radius=4,
+                                            ),
+                                        ],
+                                        spacing=4,
+                                    ),
+                                    padding=ft.padding.only(top=10, bottom=10),
+                                ),
+                            ],
+                            spacing=8,
                         ),
                         padding=ft.padding.only(bottom=10),
                     ),
