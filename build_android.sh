@@ -205,56 +205,79 @@ include_assets() {
                     # Obtener lista de archivos de assets de la carpeta assets/
                     NEW_ASSET_FILES=$(find build/flutter/assets -type f -printf "assets/%P\n" | sort)
                     
-                    # Extraer assets originales de app/ que ya están en el archivo
+                    # Extraer assets originales de app/ que ya están en el archivo (dentro de la sección assets)
                     ORIGINAL_ASSETS=$(grep "^    - app/" "$PUBSPEC_FILE" 2>/dev/null || true)
                     
-                    # Si la sección assets existe, agregar los nuevos assets
-                    if grep -q "^  assets:" "$PUBSPEC_FILE"; then
-                        # Agregar cada nuevo asset si no existe ya
-                        for asset in $NEW_ASSET_FILES; do
-                            if [ -n "$asset" ] && ! grep -q "    - $asset" "$PUBSPEC_FILE"; then
-                                # Encontrar la última línea de asset dentro de la sección assets
-                                # Buscar después de "  assets:" y antes de la siguiente sección
-                                ASSETS_START=$(grep -n "^  assets:" "$PUBSPEC_FILE" | head -1 | cut -d: -f1)
-                                LAST_ASSET_LINE=$ASSETS_START
-                                LINE_NUM=$((ASSETS_START + 1))
-                                TOTAL_LINES=$(wc -l < "$PUBSPEC_FILE")
-                                
-                                while [ "$LINE_NUM" -le "$TOTAL_LINES" ]; do
-                                    LINE_CONTENT=$(sed -n "${LINE_NUM}p" "$PUBSPEC_FILE")
-                                    # Si es una línea de asset
-                                    if echo "$LINE_CONTENT" | grep -q "^    - "; then
-                                        LAST_ASSET_LINE=$LINE_NUM
-                                    # Si encontramos el fin de la sección assets
-                                    elif echo "$LINE_CONTENT" | grep -q "^  [^a]" || echo "$LINE_CONTENT" | grep -q "^[^ ]"; then
-                                        break
-                                    fi
-                                    LINE_NUM=$((LINE_NUM + 1))
-                                done
-                                
-                                # Insertar el nuevo asset después de la última línea de asset
-                                sed -i "${LAST_ASSET_LINE}a\    - $asset" "$PUBSPEC_FILE"
+                    # Crear un archivo temporal para reconstruir la sección assets correctamente
+                    TEMP_PUBSPEC=$(mktemp)
+                    IN_FLUTTER_SECTION=false
+                    IN_ASSETS_SECTION=false
+                    ASSETS_PROCESSED=false
+                    
+                    # Leer el archivo línea por línea y reconstruirlo
+                    while IFS= read -r line || [ -n "$line" ]; do
+                        # Detectar inicio de sección flutter
+                        if [[ "$line" =~ ^flutter:[[:space:]]*$ ]]; then
+                            IN_FLUTTER_SECTION=true
+                            echo "$line" >> "$TEMP_PUBSPEC"
+                        # Detectar inicio de sección assets
+                        elif [[ "$line" =~ ^[[:space:]]*assets:[[:space:]]*$ ]] && [ "$IN_FLUTTER_SECTION" = true ]; then
+                            IN_ASSETS_SECTION=true
+                            echo "$line" >> "$TEMP_PUBSPEC"
+                            
+                            # Agregar todos los assets en el orden correcto
+                            # Primero los assets originales de app/
+                            if [ -n "$ORIGINAL_ASSETS" ]; then
+                                echo "$ORIGINAL_ASSETS" >> "$TEMP_PUBSPEC"
                             fi
-                        done
-                    else
-                        # No existe la sección assets, crearla
-                        sed -i '/^flutter:/a\  assets:' "$PUBSPEC_FILE"
-                        # Agregar assets originales de app/ primero
+                            # Luego los nuevos assets de assets/
+                            for asset in $NEW_ASSET_FILES; do
+                                if [ -n "$asset" ] && ! echo "$ORIGINAL_ASSETS" | grep -q "$asset"; then
+                                    echo "    - $asset" >> "$TEMP_PUBSPEC"
+                                fi
+                            done
+                            ASSETS_PROCESSED=true
+                        # Omitir líneas de assets que están fuera de la sección (errores de formato)
+                        elif [[ "$line" =~ ^[[:space:]]*-[[:space:]]*(app/|assets/) ]] && [ "$IN_ASSETS_SECTION" = false ] && [ "$IN_FLUTTER_SECTION" = true ]; then
+                            # Estas líneas están mal ubicadas, las omitimos porque ya las agregamos
+                            continue
+                        # Detectar fin de sección assets (línea que no es asset y no es parte de flutter)
+                        elif [ "$IN_ASSETS_SECTION" = true ] && [[ ! "$line" =~ ^[[:space:]]*- ]] && [[ ! "$line" =~ ^[[:space:]]*$ ]]; then
+                            IN_ASSETS_SECTION=false
+                            echo "$line" >> "$TEMP_PUBSPEC"
+                        # Detectar fin de sección flutter
+                        elif [ "$IN_FLUTTER_SECTION" = true ] && [[ "$line" =~ ^[^[:space:]] ]] && [[ ! "$line" =~ ^flutter: ]]; then
+                            IN_FLUTTER_SECTION=false
+                            IN_ASSETS_SECTION=false
+                            echo "$line" >> "$TEMP_PUBSPEC"
+                        else
+                            # Línea normal, copiarla
+                            echo "$line" >> "$TEMP_PUBSPEC"
+                        fi
+                    done < "$PUBSPEC_FILE"
+                    
+                    # Si la sección assets no existía, agregarla
+                    if [ "$ASSETS_PROCESSED" = false ]; then
+                        # Buscar la línea "flutter:" y agregar assets después
+                        sed -i '/^flutter:/a\  assets:' "$TEMP_PUBSPEC"
+                        # Agregar los assets originales de app/ si existen
                         if [ -n "$ORIGINAL_ASSETS" ]; then
                             echo "$ORIGINAL_ASSETS" | while read orig_line; do
                                 if [ -n "$orig_line" ]; then
-                                    sed -i "/^  assets:/a\\$orig_line" "$PUBSPEC_FILE"
+                                    sed -i "/^  assets:/a\\$orig_line" "$TEMP_PUBSPEC"
                                 fi
                             done
                         fi
-                        # Agregar nuevos assets
+                        # Agregar los nuevos assets
                         for asset in $NEW_ASSET_FILES; do
                             if [ -n "$asset" ]; then
-                                sed -i "/^  assets:/a\    - $asset" "$PUBSPEC_FILE"
+                                sed -i "/^  assets:/a\    - $asset" "$TEMP_PUBSPEC"
                             fi
                         done
                     fi
                     
+                    # Reemplazar el archivo original
+                    mv "$TEMP_PUBSPEC" "$PUBSPEC_FILE"
                     echo -e "${GREEN}✓ pubspec.yaml actualizado con assets${NC}"
                 else
                     echo -e "${YELLOW}Advertencia: No se encontró pubspec.yaml${NC}"
