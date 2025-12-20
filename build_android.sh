@@ -202,61 +202,60 @@ include_assets() {
                 if [ -f "$PUBSPEC_FILE" ]; then
                     echo -e "${BLUE}Actualizando pubspec.yaml para incluir assets...${NC}"
                     
-                    # Obtener lista de archivos de assets (excluyendo app.zip que ya está incluido)
-                    ASSET_FILES=$(find build/flutter/assets -type f -printf "assets/%P\n" | grep -v "^assets/app\.zip" | grep -v "^assets/app\.zip\.hash" | sort)
+                    # Obtener lista de archivos de assets de la carpeta assets/
+                    NEW_ASSET_FILES=$(find build/flutter/assets -type f -printf "assets/%P\n" | sort)
                     
-                    # Verificar si la sección flutter existe
-                    if grep -q "^flutter:" "$PUBSPEC_FILE"; then
-                        # Crear un archivo temporal con los assets a agregar
-                        TEMP_ASSETS=$(mktemp)
-                        for asset in $ASSET_FILES; do
+                    # Extraer assets originales de app/ que ya están en el archivo
+                    ORIGINAL_ASSETS=$(grep "^    - app/" "$PUBSPEC_FILE" 2>/dev/null || true)
+                    
+                    # Si la sección assets existe, agregar los nuevos assets
+                    if grep -q "^  assets:" "$PUBSPEC_FILE"; then
+                        # Agregar cada nuevo asset si no existe ya
+                        for asset in $NEW_ASSET_FILES; do
                             if [ -n "$asset" ] && ! grep -q "    - $asset" "$PUBSPEC_FILE"; then
-                                echo "    - $asset" >> "$TEMP_ASSETS"
-                            fi
-                        done
-                        
-                        # Verificar si hay assets para agregar
-                        if [ -s "$TEMP_ASSETS" ]; then
-                            # Verificar si ya existe la sección assets
-                            if grep -q "^  assets:" "$PUBSPEC_FILE"; then
-                                # La sección assets ya existe, agregar después de la última línea de asset
-                                # Buscar la última línea que empiece con "    - " después de "  assets:"
-                                ASSETS_LINE=$(grep -n "^  assets:" "$PUBSPEC_FILE" | head -1 | cut -d: -f1)
-                                INSERT_LINE=$ASSETS_LINE
-                                
-                                # Buscar la última línea de asset
-                                LINE_NUM=$((ASSETS_LINE + 1))
+                                # Encontrar la última línea de asset dentro de la sección assets
+                                # Buscar después de "  assets:" y antes de la siguiente sección
+                                ASSETS_START=$(grep -n "^  assets:" "$PUBSPEC_FILE" | head -1 | cut -d: -f1)
+                                LAST_ASSET_LINE=$ASSETS_START
+                                LINE_NUM=$((ASSETS_START + 1))
                                 TOTAL_LINES=$(wc -l < "$PUBSPEC_FILE")
+                                
                                 while [ "$LINE_NUM" -le "$TOTAL_LINES" ]; do
                                     LINE_CONTENT=$(sed -n "${LINE_NUM}p" "$PUBSPEC_FILE")
-                                    # Si la línea es un asset (empieza con "    - ")
+                                    # Si es una línea de asset
                                     if echo "$LINE_CONTENT" | grep -q "^    - "; then
-                                        INSERT_LINE=$LINE_NUM
-                                    # Si encontramos una línea que no es parte de assets (no tiene indentación de 4 espacios o es otra sección)
-                                    elif echo "$LINE_CONTENT" | grep -q "^[^ ]" || echo "$LINE_CONTENT" | grep -q "^  [^ ]"; then
+                                        LAST_ASSET_LINE=$LINE_NUM
+                                    # Si encontramos el fin de la sección assets
+                                    elif echo "$LINE_CONTENT" | grep -q "^  [^a]" || echo "$LINE_CONTENT" | grep -q "^[^ ]"; then
                                         break
                                     fi
                                     LINE_NUM=$((LINE_NUM + 1))
                                 done
                                 
-                                # Insertar los assets después de la última línea encontrada
-                                sed -i "${INSERT_LINE}r $TEMP_ASSETS" "$PUBSPEC_FILE"
-                            else
-                                # No existe la sección assets, agregarla después de "flutter:"
-                                sed -i '/^flutter:/a\  assets:' "$PUBSPEC_FILE"
-                                # Agregar los assets
-                                sed -i "/^  assets:/r $TEMP_ASSETS" "$PUBSPEC_FILE"
+                                # Insertar el nuevo asset después de la última línea de asset
+                                sed -i "${LAST_ASSET_LINE}a\    - $asset" "$PUBSPEC_FILE"
                             fi
-                            echo -e "${GREEN}✓ pubspec.yaml actualizado con assets${NC}"
-                        else
-                            echo -e "${GREEN}✓ Todos los assets ya están incluidos en pubspec.yaml${NC}"
-                        fi
-                        
-                        # Limpiar archivo temporal
-                        rm -f "$TEMP_ASSETS"
+                        done
                     else
-                        echo -e "${YELLOW}Advertencia: No se encontró la sección flutter en pubspec.yaml${NC}"
+                        # No existe la sección assets, crearla
+                        sed -i '/^flutter:/a\  assets:' "$PUBSPEC_FILE"
+                        # Agregar assets originales de app/ primero
+                        if [ -n "$ORIGINAL_ASSETS" ]; then
+                            echo "$ORIGINAL_ASSETS" | while read orig_line; do
+                                if [ -n "$orig_line" ]; then
+                                    sed -i "/^  assets:/a\\$orig_line" "$PUBSPEC_FILE"
+                                fi
+                            done
+                        fi
+                        # Agregar nuevos assets
+                        for asset in $NEW_ASSET_FILES; do
+                            if [ -n "$asset" ]; then
+                                sed -i "/^  assets:/a\    - $asset" "$PUBSPEC_FILE"
+                            fi
+                        done
                     fi
+                    
+                    echo -e "${GREEN}✓ pubspec.yaml actualizado con assets${NC}"
                 else
                     echo -e "${YELLOW}Advertencia: No se encontró pubspec.yaml${NC}"
                 fi
