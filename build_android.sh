@@ -394,7 +394,7 @@ fi
 echo -e "${BLUE}Ejecutando: flet build apk${NC}"
 echo -e "${BLUE}  Punto de entrada: main.py${NC}"
 echo -e "${BLUE}  Flet detectará automáticamente requirements.txt o pyproject.toml${NC}"
-echo -e "${BLUE}  Incluyendo paquetes explícitamente: gspread, google_auth_oauthlib, googleapiclient, google_auth_httplib2, wsgiref${NC}"
+echo -e "${BLUE}  Incluyendo paquetes explícitamente: gspread, google_auth_oauthlib, googleapiclient, google_auth_httplib2${NC}"
 
 # Asegurar que requirements.txt existe y está actualizado
 if [ -f "requirements.txt" ]; then
@@ -417,7 +417,7 @@ flet build apk \
     --project "$PROJECT_NAME" \
     --description "$PROJECT_DESCRIPTION" \
     --product "$PROJECT_NAME" \
-    --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2,wsgiref
+    --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2
 
 # Esperar a que se cree la estructura de build
 if [ -d "build/flutter" ]; then
@@ -648,7 +648,7 @@ PYTHON_SCRIPT
             --project "$PROJECT_NAME" \
             --description "$PROJECT_DESCRIPTION" \
             --product "$PROJECT_NAME" \
-            --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2,wsgiref
+            --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2
         
         # Después de reconstruir, verificar y corregir nuevamente si es necesario
         if [ -f "$PUBSPEC_FILE" ]; then
@@ -677,7 +677,7 @@ PYTHON_SCRIPT
             --project "$PROJECT_NAME" \
             --description "$PROJECT_DESCRIPTION" \
             --product "$PROJECT_NAME" \
-            --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2,wsgiref
+            --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2
         
         # Verificar nuevamente las dependencias después de reconstruir
         DEPENDENCIES_AFTER_RECONSTRUCT=false
@@ -746,7 +746,7 @@ flet build aab \
     --project "$PROJECT_NAME" \
     --description "$PROJECT_DESCRIPTION" \
     --product "$PROJECT_NAME" \
-    --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2,wsgiref
+    --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2
 
 # Asegurar que los assets estén incluidos después del build (por si Flet regeneró la estructura)
 include_assets
@@ -761,8 +761,8 @@ if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
         --project "$PROJECT_NAME" \
         --description "$PROJECT_DESCRIPTION" \
         --product "$PROJECT_NAME" \
-        --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2,wsgiref \
-        --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2,wsgiref
+        --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2 \
+        --include-packages gspread,google_auth_oauthlib,googleapiclient,google_auth_httplib2
 fi
 
 # Verificar que el AAB se generó
