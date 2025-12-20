@@ -89,7 +89,18 @@ class GoogleSheetsService:
         # Rutas para credenciales y token
         self.root_dir = Path(__file__).parent.parent.parent
         self.credentials_path = self.root_dir / 'credenciales_android.json'
-        self.token_path = self.root_dir / 'token.pickle'
+        
+        # En Android, guardar el token en el directorio de datos persistente
+        # En desarrollo, usar el directorio raíz
+        app_data_dir = os.getenv("FLET_APP_STORAGE_DATA")
+        if app_data_dir:
+            # Android: usar directorio persistente
+            token_dir = Path(app_data_dir)
+            token_dir.mkdir(parents=True, exist_ok=True)
+            self.token_path = token_dir / 'google_token.pickle'
+        else:
+            # Desarrollo: usar directorio raíz
+            self.token_path = self.root_dir / 'token.pickle'
     
     def complete_manual_auth(self, redirect_url: str) -> Credentials:
         """
@@ -136,10 +147,13 @@ class GoogleSheetsService:
             
             # Guardar credenciales
             try:
+                # Asegurar que el directorio existe
+                self.token_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(self.token_path, 'wb') as token:
                     pickle.dump(creds, token)
-            except Exception:
-                pass  # Si no se puede guardar, continuar de todas formas
+            except Exception as save_error:
+                # Si no se puede guardar, continuar de todas formas pero mostrar advertencia
+                print(f"Advertencia: No se pudo guardar el token: {save_error}")
             
             # Limpiar el flow pendiente
             self.pending_flow = None
@@ -147,7 +161,12 @@ class GoogleSheetsService:
             
             # Actualizar el cliente de gspread
             self.credentials = creds
-            self.client = gspread.authorize(creds)
+            try:
+                self.client = gspread.authorize(creds)
+            except Exception as auth_error:
+                # Si hay error al autorizar, limpiar y relanzar
+                self.client = None
+                raise Exception(f"Error al autorizar con gspread: {str(auth_error)}")
             
             return creds
         except Exception as e:
@@ -206,7 +225,11 @@ class GoogleSheetsService:
                         wsgiref_available = False
                     
                     # Obtener URL de autorización
-                    auth_url, state = flow.authorization_url(prompt='consent')
+                    auth_url, state = flow.authorization_url(
+                        prompt='consent',
+                        access_type='offline',  # Para obtener refresh_token
+                        include_granted_scopes=True
+                    )
                     
                     # Abrir navegador en Android usando Flet
                     browser_opened = False
@@ -274,10 +297,13 @@ class GoogleSheetsService:
             
             # Guardar credenciales para próximas veces
             try:
+                # Asegurar que el directorio existe
+                self.token_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(self.token_path, 'wb') as token:
                     pickle.dump(creds, token)
-            except Exception:
-                pass  # Si no se puede guardar, continuar de todas formas
+            except Exception as save_error:
+                # Si no se puede guardar, continuar de todas formas pero mostrar advertencia
+                print(f"Advertencia: No se pudo guardar el token: {save_error}")
         
         return creds
     
@@ -291,7 +317,12 @@ class GoogleSheetsService:
                 raise
             # Crear cliente de gspread con las credenciales
             self.credentials = creds
-            self.client = gspread.authorize(creds)
+            try:
+                self.client = gspread.authorize(creds)
+            except Exception as e:
+                # Si hay un error al autorizar, limpiar el cliente y relanzar
+                self.client = None
+                raise Exception(f"Error al autorizar con gspread: {str(e)}")
         return self.client
     
     def authenticate(self) -> bool:

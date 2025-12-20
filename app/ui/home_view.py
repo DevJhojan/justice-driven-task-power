@@ -58,6 +58,8 @@ class HomeView:
         self.editing_habit: Optional[Habit] = None
         # Secciones: "tasks", "habits", "settings"
         self.current_section = "tasks"
+        # Variable para guardar el spreadsheet_id durante autenticación manual de importación
+        self._pending_import_spreadsheet_id = None
         
         # Contenedores principales
         self.tasks_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
@@ -771,8 +773,13 @@ class HomeView:
             self.page.snack_bar.open = True
             self.page.update()
     
-    def _show_manual_auth_page(self, auth_url: str):
-        """Muestra una página para autenticación manual (sin wsgiref)."""
+    def _show_manual_auth_page(self, auth_url: str, is_import: bool = False):
+        """Muestra una página para autenticación manual (sin wsgiref).
+        
+        Args:
+            auth_url: URL de autorización de Google OAuth2
+            is_import: Si es True, después de autenticar continuará con la importación
+        """
         # Obtener color del tema
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         scheme = self.page.theme.color_scheme if self.page.theme else None
@@ -812,38 +819,100 @@ class HomeView:
                 # Completar la autenticación manual
                 creds = self.google_sheets_service.complete_manual_auth(redirect_url)
                 
-                # Continuar con la exportación
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("✓ Autenticación completada. Exportando datos..."),
-                    bgcolor=ft.Colors.GREEN,
-                    duration=3000,
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
-                
-                # Ahora que tenemos credenciales, exportar a Google Sheets
-                # Forzar recreación del servicio con las nuevas credenciales
-                self.google_sheets_service.service = None
-                self.google_sheets_service.credentials = None
-                
-                # Exportar a Google Sheets
-                result = self.google_sheets_service.export_to_sheets()
-                
-                # Mostrar éxito
-                success_msg = (
-                    f"✓ Datos exportados correctamente a Google Sheets!\n\n"
-                    f"Título: {result.get('title', 'Sin título')}\n"
-                    f"ID: {result['spreadsheet_id']}\n\n"
-                    f"Puedes acceder al spreadsheet desde:\n"
-                    f"{result['url']}"
-                )
-                
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(success_msg),
-                    bgcolor=ft.Colors.GREEN,
-                    duration=12000,
-                )
-                self.page.snack_bar.open = True
+                # Continuar con la exportación o importación según corresponda
+                if is_import and self._pending_import_spreadsheet_id:
+                    # Continuar con la importación
+                    self.page.snack_bar = ft.SnackBar(
+                        content=ft.Text("✓ Autenticación completada. Importando datos..."),
+                        bgcolor=ft.Colors.GREEN,
+                        duration=3000,
+                    )
+                    self.page.snack_bar.open = True
+                    self.page.update()
+                    
+                    # Forzar recreación del cliente de gspread con las nuevas credenciales
+                    self.google_sheets_service.client = None
+                    self.google_sheets_service.credentials = creds
+                    
+                    # Esperar un momento para que se actualice el cliente
+                    import time
+                    time.sleep(0.5)
+                    
+                    # Importar desde Google Sheets
+                    spreadsheet_id = self._pending_import_spreadsheet_id
+                    self._pending_import_spreadsheet_id = None
+                    result = self.google_sheets_service.import_from_sheets(spreadsheet_id)
+                    
+                    # Construir mensaje de éxito
+                    msg_parts = [f"✓ Importación completada desde Google Sheets."]
+                    if result.tasks_imported > 0:
+                        msg_parts.append(f"Tareas nuevas: {result.tasks_imported}")
+                    if result.subtasks_imported > 0:
+                        msg_parts.append(f"Subtareas nuevas: {result.subtasks_imported}")
+                    if result.habits_imported > 0:
+                        msg_parts.append(f"Hábitos nuevos: {result.habits_imported}")
+                    if result.habit_completions_imported > 0:
+                        msg_parts.append(f"Cumplimientos nuevos: {result.habit_completions_imported}")
+                    
+                    if result.errors:
+                        msg_parts.append(f"\n⚠ Advertencias: {len(result.errors)}")
+                        for error in result.errors[:3]:
+                            msg_parts.append(f"  - {error}")
+                        if len(result.errors) > 3:
+                            msg_parts.append(f"  ... y {len(result.errors) - 3} más")
+                    
+                    msg = "\n".join(msg_parts)
+                    bg_color = ft.Colors.GREEN if not result.errors else ft.Colors.ORANGE
+                    
+                    self.page.snack_bar = ft.SnackBar(
+                        content=ft.Text(msg),
+                        bgcolor=bg_color,
+                        duration=10000,
+                    )
+                    self.page.snack_bar.open = True
+                    
+                    # Refrescar vistas
+                    if self.current_section == "tasks":
+                        self._load_tasks()
+                    elif self.current_section == "habits":
+                        self._load_habits()
+                else:
+                    # Continuar con la exportación
+                    self.page.snack_bar = ft.SnackBar(
+                        content=ft.Text("✓ Autenticación completada. Exportando datos..."),
+                        bgcolor=ft.Colors.GREEN,
+                        duration=3000,
+                    )
+                    self.page.snack_bar.open = True
+                    self.page.update()
+                    
+                    # Ahora que tenemos credenciales, exportar a Google Sheets
+                    # Forzar recreación del cliente de gspread con las nuevas credenciales
+                    self.google_sheets_service.client = None
+                    self.google_sheets_service.credentials = creds
+                    
+                    # Esperar un momento para que se actualice el cliente
+                    import time
+                    time.sleep(0.5)
+                    
+                    # Exportar a Google Sheets
+                    result = self.google_sheets_service.export_to_sheets()
+                    
+                    # Mostrar éxito
+                    success_msg = (
+                        f"✓ Datos exportados correctamente a Google Sheets!\n\n"
+                        f"Título: {result.get('title', 'Sin título')}\n"
+                        f"ID: {result['spreadsheet_id']}\n\n"
+                        f"Puedes acceder al spreadsheet desde:\n"
+                        f"{result['url']}"
+                    )
+                    
+                    self.page.snack_bar = ft.SnackBar(
+                        content=ft.Text(success_msg),
+                        bgcolor=ft.Colors.GREEN,
+                        duration=12000,
+                    )
+                    self.page.snack_bar.open = True
                 
             except ValueError as ve:
                 self._show_error_page(
@@ -1093,7 +1162,7 @@ class HomeView:
             )
         except ManualAuthRequired as ex:
             # Autenticación manual requerida (sin wsgiref)
-            self._show_manual_auth_page(ex.auth_url)
+            self._show_manual_auth_page(ex.auth_url, is_import=False)
         except ImportError as ex:
             error_msg = str(ex)
             # Detectar si es el error de wsgiref
@@ -1268,7 +1337,9 @@ class HomeView:
                 )
             except ManualAuthRequired as ex:
                 # Autenticación manual requerida (sin wsgiref)
-                self._show_manual_auth_page(ex.auth_url)
+                # Guardar el spreadsheet_id para continuar después de la autenticación
+                self._pending_import_spreadsheet_id = spreadsheet_id
+                self._show_manual_auth_page(ex.auth_url, is_import=True)
             except ImportError as ex:
                 error_msg = str(ex)
                 # Detectar si es el error de wsgiref
