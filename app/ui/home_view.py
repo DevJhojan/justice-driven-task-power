@@ -9,6 +9,7 @@ from app.data.models import Task, SubTask, Habit
 from app.services.task_service import TaskService
 from app.services.habit_service import HabitService
 from app.services.settings_service import SettingsService, apply_theme_to_page
+from app.services.sync_service import SyncService
 
 # Importación de Google Sheets - si falla, se manejará en tiempo de ejecución
 try:
@@ -50,6 +51,7 @@ class HomeView:
         except Exception:
             self.google_sheets_service = None
         self.settings_service = SettingsService()
+        self.sync_service = SyncService()
         self.current_task_filter: Optional[bool] = None  # None=all, True=completed, False=pending
         self.current_habit_filter: Optional[bool] = None  # None=all, True=active, False=inactive
         self.editing_task: Optional[Task] = None
@@ -499,20 +501,28 @@ class HomeView:
 
         # ==================== Sección 2: Copia de seguridad con Google Sheets ====================
         # Botones de importación/exportación desde/hacia Google Sheets
+        # Estos botones se deshabilitarán si no hay sincronización activa
+        sync_settings = self.sync_service.get_sync_settings()
+        is_synced = sync_settings.is_authenticated
+        
         export_sheets_button = ft.ElevatedButton(
             text="Exportar a Google Sheets",
             icon=ft.Icons.CLOUD_UPLOAD,
             on_click=self._start_export_to_sheets,
-            bgcolor=preview_color,
+            bgcolor=preview_color if is_synced else ft.Colors.GREY_400,
             color=ft.Colors.WHITE,
+            disabled=not is_synced,
+            tooltip="Primero debes sincronizar con Google" if not is_synced else "Exportar datos a Google Sheets"
         )
 
         import_sheets_button = ft.ElevatedButton(
             text="Importar desde Google Sheets",
             icon=ft.Icons.CLOUD_DOWNLOAD,
             on_click=self._start_import_from_sheets,
-            bgcolor=preview_color,
+            bgcolor=preview_color if is_synced else ft.Colors.GREY_400,
             color=ft.Colors.WHITE,
+            disabled=not is_synced,
+            tooltip="Primero debes sincronizar con Google" if not is_synced else "Importar datos desde Google Sheets"
         )
 
         settings_content = ft.Container(
@@ -570,7 +580,24 @@ class HomeView:
 
                     ft.Divider(),
 
-                    # ==================== Sección 2: Exportación a Google Sheets ====================
+                    # ==================== Sección 2: Sincronización con Google Sheets ====================
+                    ft.Text(
+                        "Sincronización",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                        color=preview_color
+                    ),
+                    ft.Text(
+                        "Conecta tu cuenta de Google para sincronizar tus datos con Google Sheets. "
+                        "Solo necesitas autenticarte una vez.",
+                        size=14,
+                        color=ft.Colors.GREY_600
+                    ),
+                    self._build_sync_section(preview_color, is_dark),
+
+                    ft.Divider(),
+
+                    # ==================== Sección 3: Exportación a Google Sheets ====================
                     ft.Text(
                         "Exportación a Google Sheets",
                         size=18,
@@ -591,7 +618,7 @@ class HomeView:
 
                     ft.Divider(),
 
-                    # ==================== Sección 3: Importación desde Google Sheets ====================
+                    # ==================== Sección 4: Importación desde Google Sheets ====================
                     ft.Text(
                         "Importación desde Google Sheets",
                         size=18,
@@ -632,6 +659,224 @@ class HomeView:
         ]
         self.home_view.bgcolor = bgcolor
         self.page.update()
+
+    def _build_sync_section(self, preview_color, is_dark):
+        """Construye la sección de sincronización con Google Sheets."""
+        sync_settings = self.sync_service.get_sync_settings()
+        is_synced = sync_settings.is_authenticated
+        
+        if is_synced:
+            # Mostrar estado de sincronización
+            email_text = ft.Text(
+                f"✓ Conectado como: {sync_settings.email or 'Usuario de Google'}",
+                size=14,
+                color=ft.Colors.GREEN if not is_dark else ft.Colors.GREEN_300,
+                weight=ft.FontWeight.BOLD
+            )
+            
+            spreadsheet_id_text = ft.Text(
+                f"ID del Sheet: {sync_settings.spreadsheet_id or 'No vinculado'}",
+                size=12,
+                color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
+            )
+            
+            copy_id_button = ft.IconButton(
+                icon=ft.Icons.COPY,
+                tooltip="Copiar ID al portapapeles",
+                on_click=lambda e: self._copy_spreadsheet_id_to_clipboard(sync_settings.spreadsheet_id),
+                icon_color=preview_color,
+                disabled=not sync_settings.spreadsheet_id
+            )
+            
+            return ft.Column(
+                [
+                    email_text,
+                    ft.Row(
+                        [
+                            spreadsheet_id_text,
+                            copy_id_button
+                        ],
+                        spacing=8,
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                    )
+                ],
+                spacing=8
+            )
+        else:
+            # Mostrar botón de sincronización
+            sync_button = ft.ElevatedButton(
+                text="Sincronizar con Google",
+                icon=ft.Icons.SYNC,
+                on_click=self._start_sync_with_google,
+                bgcolor=preview_color,
+                color=ft.Colors.WHITE,
+            )
+            
+            return ft.Column(
+                [
+                    sync_button,
+                    ft.Text(
+                        "Autentícate con Google para habilitar la exportación e importación de datos.",
+                        size=12,
+                        color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400,
+                        italic=True
+                    )
+                ],
+                spacing=8
+            )
+
+    def _copy_spreadsheet_id_to_clipboard(self, spreadsheet_id: Optional[str]):
+        """Copia el ID del spreadsheet al portapapeles."""
+        if not spreadsheet_id:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("No hay un ID de spreadsheet para copiar"),
+                bgcolor=ft.Colors.ORANGE,
+                duration=2000
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+        
+        try:
+            # En Flet, podemos usar set_clipboard para copiar al portapapeles
+            self.page.set_clipboard(spreadsheet_id)
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"✓ ID copiado al portapapeles: {spreadsheet_id}"),
+                bgcolor=ft.Colors.GREEN,
+                duration=2000
+            )
+            self.page.snack_bar.open = True
+        except Exception as e:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error al copiar: {str(e)}"),
+                bgcolor=ft.Colors.RED,
+                duration=3000
+            )
+            self.page.snack_bar.open = True
+        finally:
+            self.page.update()
+
+    def _start_sync_with_google(self, e):
+        """Inicia el proceso de sincronización con Google (OAuth2)."""
+        # Verificar si Google Sheets está disponible
+        if GoogleSheetsService is None:
+            error_details = ""
+            try:
+                error_details = f"\n\nDetalle técnico: {_google_sheets_import_error}"
+            except NameError:
+                pass
+            
+            self._show_error_page(
+                "Error: Dependencias no disponibles",
+                "Las dependencias de Google Sheets API no están incluidas en el APK.\n\n"
+                "SOLUCIÓN:\n\n"
+                "1. Las dependencias YA están en pyproject.toml:\n"
+                "   ✓ google-api-python-client>=2.100.0\n"
+                "   ✓ google-auth-httplib2>=0.1.1\n"
+                "   ✓ google-auth-oauthlib>=1.1.0\n"
+                "   ✓ gspread>=5.12.0\n\n"
+                "2. NECESITAS RECONSTRUIR el APK para incluirlas:\n"
+                "   ./build_android.sh\n\n"
+                "3. El APK actual se construyó ANTES de agregar estas dependencias.\n"
+                "   Por eso no están disponibles en la aplicación actual."
+                + error_details
+            )
+            return
+        
+        if self.google_sheets_service is None:
+            try:
+                self.google_sheets_service = GoogleSheetsService(page=self.page)
+            except Exception as ex:
+                self._show_error_page(
+                    "Error al inicializar Google Sheets",
+                    f"No se pudo inicializar el servicio de Google Sheets:\n\n{str(ex)}"
+                )
+                return
+        
+        # Mostrar mensaje de inicio
+        self.page.snack_bar = ft.SnackBar(
+            content=ft.Text("Iniciando autenticación con Google..."),
+            bgcolor=ft.Colors.BLUE,
+            duration=2000,
+        )
+        self.page.snack_bar.open = True
+        self.page.update()
+        
+        try:
+            # Autenticar con Google
+            if not self.google_sheets_service.authenticate():
+                raise Exception("No se pudo autenticar con Google. Verifica las credenciales.")
+            
+            # Obtener email del usuario
+            user_email = self.google_sheets_service.get_user_email()
+            
+            # Guardar estado de sincronización
+            self.sync_service.update_sync_settings(
+                is_authenticated=True,
+                email=user_email
+            )
+            
+            # Mostrar éxito y actualizar la vista
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"✓ Sincronización exitosa con {user_email or 'Google'}"),
+                bgcolor=ft.Colors.GREEN,
+                duration=3000,
+            )
+            self.page.snack_bar.open = True
+            
+            # Refrescar la vista de configuración
+            if self.current_section == "settings":
+                self._build_settings_view()
+            
+        except FileNotFoundError as ex:
+            self._show_error_page(
+                "Error: Archivo de credenciales no encontrado",
+                f"No se encontró el archivo de credenciales de Google:\n\n{str(ex)}\n\n"
+                "Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto.\n\n"
+                "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
+            )
+        except ManualAuthRequired as ex:
+            # Autenticación manual requerida (sin wsgiref)
+            self._show_manual_auth_page(ex.auth_url, is_sync=True)
+        except ImportError as ex:
+            error_msg = str(ex)
+            if 'wsgiref' in error_msg.lower():
+                self._show_error_page(
+                    "Error: Módulo wsgiref no disponible",
+                    f"{error_msg}\n\n"
+                    "Este es un problema conocido con builds de Android.\n\n"
+                    "SOLUCIÓN:\n"
+                    "El módulo wsgiref es parte de la biblioteca estándar de Python pero "
+                    "puede no estar incluido en el build de Android.\n\n"
+                    "Por favor, reconstruye el APK con: ./build_android.sh"
+                )
+            else:
+                self._show_error_page(
+                    "Error: Dependencias no disponibles",
+                    f"No se pueden importar las dependencias de Google Sheets:\n\n{error_msg}\n\n"
+                    "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
+                    "- google-api-python-client>=2.100.0\n"
+                    "- google-auth-httplib2>=0.1.1\n"
+                    "- google-auth-oauthlib>=1.1.0\n"
+                    "- gspread>=5.12.0\n\n"
+                    "Luego reconstruye la aplicación con: ./build_android.sh"
+                )
+        except Exception as ex:
+            error_type = type(ex).__name__
+            error_details = str(ex)
+            
+            self._show_error_page(
+                "Error al sincronizar con Google",
+                f"Ocurrió un error durante la sincronización:\n\n"
+                f"Tipo: {error_type}\n"
+                f"Detalle: {error_details}\n\n"
+                f"Por favor, verifica:\n"
+                f"- Tu conexión a internet\n"
+                f"- Las credenciales de Google\n"
+                f"- Que Google Sheets API esté habilitada en Google Cloud Console"
+            )
+        finally:
+            self.page.update()
 
     # ==================== IMPORT / EXPORT GOOGLE SHEETS ====================
 
@@ -773,12 +1018,13 @@ class HomeView:
             self.page.snack_bar.open = True
             self.page.update()
     
-    def _show_manual_auth_page(self, auth_url: str, is_import: bool = False):
+    def _show_manual_auth_page(self, auth_url: str, is_import: bool = False, is_sync: bool = False):
         """Muestra una página para autenticación manual (sin wsgiref).
         
         Args:
             auth_url: URL de autorización de Google OAuth2
             is_import: Si es True, después de autenticar continuará con la importación
+            is_sync: Si es True, después de autenticar guardará el estado de sincronización
         """
         # Obtener color del tema
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
@@ -818,6 +1064,31 @@ class HomeView:
             try:
                 # Completar la autenticación manual
                 creds = self.google_sheets_service.complete_manual_auth(redirect_url)
+                
+                # Si es sincronización, guardar el estado
+                if is_sync:
+                    # Obtener email del usuario
+                    user_email = self.google_sheets_service.get_user_email()
+                    
+                    # Guardar estado de sincronización
+                    self.sync_service.update_sync_settings(
+                        is_authenticated=True,
+                        email=user_email
+                    )
+                    
+                    # Mostrar éxito
+                    self.page.snack_bar = ft.SnackBar(
+                        content=ft.Text(f"✓ Sincronización exitosa con {user_email or 'Google'}"),
+                        bgcolor=ft.Colors.GREEN,
+                        duration=3000,
+                    )
+                    self.page.snack_bar.open = True
+                    
+                    # Refrescar la vista de configuración
+                    if self.current_section == "settings":
+                        self._build_settings_view()
+                    
+                    return
                 
                 # Continuar con la exportación o importación según corresponda
                 if is_import and self._pending_import_spreadsheet_id:
@@ -898,6 +1169,12 @@ class HomeView:
                     # Exportar a Google Sheets
                     result = self.google_sheets_service.export_to_sheets()
                     
+                    # Guardar el ID del spreadsheet en la configuración de sincronización
+                    if result.get('spreadsheet_id'):
+                        self.sync_service.update_sync_settings(
+                            spreadsheet_id=result['spreadsheet_id']
+                        )
+                    
                     # Mostrar éxito
                     success_msg = (
                         f"✓ Datos exportados correctamente a Google Sheets!\n\n"
@@ -913,6 +1190,10 @@ class HomeView:
                         duration=12000,
                     )
                     self.page.snack_bar.open = True
+                    
+                    # Refrescar la vista de configuración para mostrar el nuevo ID
+                    if self.current_section == "settings":
+                        self._build_settings_view()
                 
             except ValueError as ve:
                 self._show_error_page(
@@ -1137,6 +1418,12 @@ class HomeView:
             # Exportar a Google Sheets
             result = self.google_sheets_service.export_to_sheets()
             
+            # Guardar el ID del spreadsheet en la configuración de sincronización
+            if result.get('spreadsheet_id'):
+                self.sync_service.update_sync_settings(
+                    spreadsheet_id=result['spreadsheet_id']
+                )
+            
             # Mostrar éxito con URL
             success_msg = (
                 f"✓ Datos exportados correctamente a Google Sheets!\n\n"
@@ -1152,6 +1439,10 @@ class HomeView:
                 duration=12000,
             )
             self.page.snack_bar.open = True
+            
+            # Refrescar la vista de configuración para mostrar el nuevo ID
+            if self.current_section == "settings":
+                self._build_settings_view()
             
         except FileNotFoundError as ex:
             self._show_error_page(

@@ -338,6 +338,45 @@ class GoogleSheetsService:
         except Exception as e:
             return False
     
+    def get_user_email(self) -> Optional[str]:
+        """
+        Obtiene el correo electrónico del usuario autenticado.
+        
+        Returns:
+            Correo electrónico del usuario o None si no se puede obtener.
+        """
+        try:
+            creds = self._get_credentials()
+            if not creds or not creds.valid:
+                return None
+            
+            # Obtener información del usuario desde la API de Google
+            from googleapiclient.discovery import build
+            service = build('oauth2', 'v2', credentials=creds)
+            user_info = service.userinfo().get().execute()
+            return user_info.get('email')
+        except Exception:
+            # Si falla, intentar obtener desde el token directamente
+            try:
+                if hasattr(creds, 'id_token'):
+                    import base64
+                    import json
+                    # Decodificar el id_token (JWT)
+                    parts = creds.id_token.split('.')
+                    if len(parts) >= 2:
+                        # Decodificar el payload (segunda parte)
+                        payload = parts[1]
+                        # Agregar padding si es necesario
+                        padding = 4 - len(payload) % 4
+                        if padding != 4:
+                            payload += '=' * padding
+                        decoded = base64.urlsafe_b64decode(payload)
+                        data = json.loads(decoded)
+                        return data.get('email')
+            except Exception:
+                pass
+            return None
+    
     def create_spreadsheet(self, title: str) -> str:
         """
         Crea un nuevo spreadsheet en Google Sheets.
