@@ -13,16 +13,15 @@ from app.services.sync_service import SyncService
 
 # Importación de Google Sheets - si falla, se manejará en tiempo de ejecución
 try:
-    # Intentar importar gspread y las dependencias de Google
-    import gspread
+    # Intentar importar las dependencias de Google API
     import google.oauth2.credentials
     import google_auth_oauthlib.flow
+    from googleapiclient.discovery import build
     # Si las dependencias están disponibles, importar el servicio
-    from app.services.google_sheets_service import GoogleSheetsService, ManualAuthRequired
+    from app.services.google_sheets_service import GoogleSheetsService
 except (ImportError, ModuleNotFoundError) as e:
     # Si falla la importación, el servicio no está disponible
     GoogleSheetsService = None
-    ManualAuthRequired = None
     _google_sheets_import_error = str(e)
 from app.ui.widgets import (
     create_task_card, create_empty_state, create_statistics_card,
@@ -774,7 +773,6 @@ class HomeView:
                 "   ✓ google-api-python-client>=2.100.0\n"
                 "   ✓ google-auth-httplib2>=0.1.1\n"
                 "   ✓ google-auth-oauthlib>=1.1.0\n"
-                "   ✓ gspread>=5.12.0\n\n"
                 "2. NECESITAS RECONSTRUIR el APK para incluirlas:\n"
                 "   ./build_android.sh\n\n"
                 "3. El APK actual se construyó ANTES de agregar estas dependencias.\n"
@@ -835,9 +833,20 @@ class HomeView:
                 "Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto.\n\n"
                 "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
             )
-        except ManualAuthRequired as ex:
-            # Autenticación manual requerida (sin wsgiref)
-            self._show_manual_auth_page(ex.auth_url, is_sync=True)
+        except Exception as ex:
+            # Si hay un error relacionado con wsgiref, mostrar mensaje específico
+            error_msg = str(ex)
+            if 'wsgiref' in error_msg.lower():
+                self._show_error_page(
+                    "Error: wsgiref no disponible",
+                    f"{error_msg}\n\n"
+                    "wsgiref es necesario para la autenticación OAuth2.\n\n"
+                    "SOLUCIÓN:\n"
+                    "Por favor, reconstruye el APK con: ./build_android.sh\n"
+                    "El script de build inyectará wsgiref automáticamente."
+                )
+            else:
+                raise
         except ImportError as ex:
             error_msg = str(ex)
             if 'wsgiref' in error_msg.lower():
@@ -858,7 +867,6 @@ class HomeView:
                     "- google-api-python-client>=2.100.0\n"
                     "- google-auth-httplib2>=0.1.1\n"
                     "- google-auth-oauthlib>=1.1.0\n"
-                    "- gspread>=5.12.0\n\n"
                     "Luego reconstruye la aplicación con: ./build_android.sh"
                 )
         except Exception as ex:
@@ -1018,7 +1026,7 @@ class HomeView:
             self.page.snack_bar.open = True
             self.page.update()
     
-    def _show_manual_auth_page(self, auth_url: str, is_import: bool = False, is_sync: bool = False):
+    def _show_manual_auth_page_removed(self, auth_url: str, is_import: bool = False, is_sync: bool = False):
         """Muestra una página para autenticación manual (sin wsgiref).
         
         Args:
@@ -1101,8 +1109,8 @@ class HomeView:
                     self.page.snack_bar.open = True
                     self.page.update()
                     
-                    # Forzar recreación del cliente de gspread con las nuevas credenciales
-                    self.google_sheets_service.client = None
+                    # Forzar recreación del servicio con las nuevas credenciales
+                    self.google_sheets_service.service = None
                     self.google_sheets_service.credentials = creds
                     
                     # Esperar un momento para que se actualice el cliente
@@ -1158,8 +1166,8 @@ class HomeView:
                     self.page.update()
                     
                     # Ahora que tenemos credenciales, exportar a Google Sheets
-                    # Forzar recreación del cliente de gspread con las nuevas credenciales
-                    self.google_sheets_service.client = None
+                    # Forzar recreación del servicio con las nuevas credenciales
+                    self.google_sheets_service.service = None
                     self.google_sheets_service.credentials = creds
                     
                     # Esperar un momento para que se actualice el cliente
@@ -1451,9 +1459,20 @@ class HomeView:
                 "Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto.\n\n"
                 "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
             )
-        except ManualAuthRequired as ex:
-            # Autenticación manual requerida (sin wsgiref)
-            self._show_manual_auth_page(ex.auth_url, is_import=False)
+        except Exception as ex:
+            # Si hay un error relacionado con wsgiref, mostrar mensaje específico
+            error_msg = str(ex)
+            if 'wsgiref' in error_msg.lower():
+                self._show_error_page(
+                    "Error: wsgiref no disponible",
+                    f"{error_msg}\n\n"
+                    "wsgiref es necesario para la autenticación OAuth2.\n\n"
+                    "SOLUCIÓN:\n"
+                    "Por favor, reconstruye el APK con: ./build_android.sh\n"
+                    "El script de build inyectará wsgiref automáticamente."
+                )
+            else:
+                raise
         except ImportError as ex:
             error_msg = str(ex)
             # Detectar si es el error de wsgiref
@@ -1626,11 +1645,20 @@ class HomeView:
                     "Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto.\n\n"
                     "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
                 )
-            except ManualAuthRequired as ex:
-                # Autenticación manual requerida (sin wsgiref)
-                # Guardar el spreadsheet_id para continuar después de la autenticación
-                self._pending_import_spreadsheet_id = spreadsheet_id
-                self._show_manual_auth_page(ex.auth_url, is_import=True)
+            except Exception as ex:
+                # Si hay un error relacionado con wsgiref, mostrar mensaje específico
+                error_msg = str(ex)
+                if 'wsgiref' in error_msg.lower():
+                    self._show_error_page(
+                        "Error: wsgiref no disponible",
+                        f"{error_msg}\n\n"
+                        "wsgiref es necesario para la autenticación OAuth2.\n\n"
+                        "SOLUCIÓN:\n"
+                        "Por favor, reconstruye el APK con: ./build_android.sh\n"
+                        "El script de build inyectará wsgiref automáticamente."
+                    )
+                else:
+                    raise
             except ImportError as ex:
                 error_msg = str(ex)
                 # Detectar si es el error de wsgiref
