@@ -273,8 +273,12 @@ include_assets() {
 # Verificar que pyproject.toml existe y tiene las dependencias
 echo -e "${BLUE}Verificando pyproject.toml...${NC}"
 if [ -f "pyproject.toml" ]; then
+    if ! grep -q "gspread" pyproject.toml; then
+        echo -e "${RED}Error: pyproject.toml no contiene gspread${NC}"
+        exit 1
+    fi
     if grep -q "google-api-python-client" pyproject.toml; then
-        echo -e "${GREEN}✓ pyproject.toml contiene dependencias de Google Sheets${NC}"
+        echo -e "${GREEN}✓ pyproject.toml contiene gspread y dependencias de Google Sheets${NC}"
     else
         echo -e "${RED}Error: pyproject.toml no contiene dependencias de Google Sheets${NC}"
         exit 1
@@ -311,11 +315,15 @@ echo -e "${BLUE}  Flet usará requirements.txt si existe (tiene prioridad sobre 
 
 # Verificar que requirements.txt tiene las dependencias de Google
 if [ -f "requirements.txt" ]; then
+    if ! grep -q "gspread" requirements.txt; then
+        echo -e "${RED}Error: requirements.txt no contiene gspread${NC}"
+        exit 1
+    fi
     if ! grep -q "google-api-python-client" requirements.txt; then
         echo -e "${RED}Error: requirements.txt no contiene dependencias de Google Sheets${NC}"
         exit 1
     fi
-    echo -e "${GREEN}✓ requirements.txt contiene dependencias de Google Sheets${NC}"
+    echo -e "${GREEN}✓ requirements.txt contiene gspread y dependencias de Google Sheets${NC}"
     
     # Mostrar las dependencias que se van a incluir
     echo -e "${BLUE}Dependencias que se incluirán en el build:${NC}"
@@ -427,11 +435,11 @@ if [ -d "build/flutter" ]; then
         # Solo mostrar advertencia si realmente no se encontraron
         echo -e "${YELLOW}⚠ ADVERTENCIA: Dependencias de Google no encontradas en ubicaciones esperadas${NC}"
         echo -e "${YELLOW}  Verificando configuración...${NC}"
-        if grep -q "google-api-python-client" pyproject.toml 2>/dev/null; then
-            echo -e "${GREEN}  ✓ pyproject.toml contiene las dependencias${NC}"
+        if grep -q "gspread" pyproject.toml 2>/dev/null && grep -q "google-api-python-client" pyproject.toml 2>/dev/null; then
+            echo -e "${GREEN}  ✓ pyproject.toml contiene gspread y las dependencias${NC}"
         fi
-        if [ -f "requirements.txt" ] && grep -q "google-api-python-client" requirements.txt 2>/dev/null; then
-            echo -e "${GREEN}  ✓ requirements.txt contiene las dependencias${NC}"
+        if [ -f "requirements.txt" ] && grep -q "gspread" requirements.txt 2>/dev/null && grep -q "google-api-python-client" requirements.txt 2>/dev/null; then
+            echo -e "${GREEN}  ✓ requirements.txt contiene gspread y las dependencias${NC}"
         fi
         echo -e "${BLUE}  ℹ Flet debería empaquetarlas automáticamente durante el build${NC}"
         echo -e "${BLUE}  ℹ Si la app funciona correctamente, las dependencias están incluidas${NC}"

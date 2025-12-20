@@ -12,10 +12,10 @@ from app.services.settings_service import SettingsService, apply_theme_to_page
 
 # Importación de Google Sheets - si falla, se manejará en tiempo de ejecución
 try:
-    # Intentar importar las dependencias de Google primero
+    # Intentar importar gspread y las dependencias de Google
+    import gspread
     import google.oauth2.credentials
     import google_auth_oauthlib.flow
-    import googleapiclient.discovery
     # Si las dependencias están disponibles, importar el servicio
     from app.services.google_sheets_service import GoogleSheetsService, ManualAuthRequired
 except (ImportError, ModuleNotFoundError) as e:
