@@ -174,6 +174,103 @@ replace_icons() {
     fi
 }
 
+# Función para incluir assets en el APK
+include_assets() {
+    if [ -d "assets" ] && [ -d "build/flutter" ]; then
+        echo -e "${BLUE}Incluyendo assets en el build...${NC}"
+        
+        # Crear directorio de assets en Flutter si no existe
+        mkdir -p build/flutter/assets
+        
+        # Copiar todos los archivos de assets
+        if [ "$(ls -A assets 2>/dev/null)" ]; then
+            echo -e "${BLUE}Copiando archivos de assets...${NC}"
+            cp -r assets/* build/flutter/assets/ 2>/dev/null || true
+            
+            # Contar archivos copiados
+            ASSET_COUNT=$(find build/flutter/assets -type f 2>/dev/null | wc -l)
+            if [ "$ASSET_COUNT" -gt 0 ]; then
+                echo -e "${GREEN}✓ ${ASSET_COUNT} archivo(s) de assets copiado(s)${NC}"
+                
+                # Listar archivos copiados
+                find build/flutter/assets -type f | while read file; do
+                    echo -e "  ${GREEN}  - $(basename "$file")${NC}"
+                done
+                
+                # Actualizar pubspec.yaml para incluir los assets
+                PUBSPEC_FILE="build/flutter/pubspec.yaml"
+                if [ -f "$PUBSPEC_FILE" ]; then
+                    echo -e "${BLUE}Actualizando pubspec.yaml para incluir assets...${NC}"
+                    
+                    # Obtener lista de archivos de assets (excluyendo app.zip que ya está incluido)
+                    ASSET_FILES=$(find build/flutter/assets -type f -printf "assets/%P\n" | grep -v "^assets/app\.zip" | grep -v "^assets/app\.zip\.hash" | sort)
+                    
+                    # Verificar si la sección flutter existe
+                    if grep -q "^flutter:" "$PUBSPEC_FILE"; then
+                        # Crear un archivo temporal con los assets a agregar
+                        TEMP_ASSETS=$(mktemp)
+                        for asset in $ASSET_FILES; do
+                            if [ -n "$asset" ] && ! grep -q "    - $asset" "$PUBSPEC_FILE"; then
+                                echo "    - $asset" >> "$TEMP_ASSETS"
+                            fi
+                        done
+                        
+                        # Verificar si hay assets para agregar
+                        if [ -s "$TEMP_ASSETS" ]; then
+                            # Verificar si ya existe la sección assets
+                            if grep -q "^  assets:" "$PUBSPEC_FILE"; then
+                                # La sección assets ya existe, agregar después de la última línea de asset
+                                # Buscar la última línea que empiece con "    - " después de "  assets:"
+                                ASSETS_LINE=$(grep -n "^  assets:" "$PUBSPEC_FILE" | head -1 | cut -d: -f1)
+                                INSERT_LINE=$ASSETS_LINE
+                                
+                                # Buscar la última línea de asset
+                                LINE_NUM=$((ASSETS_LINE + 1))
+                                TOTAL_LINES=$(wc -l < "$PUBSPEC_FILE")
+                                while [ "$LINE_NUM" -le "$TOTAL_LINES" ]; do
+                                    LINE_CONTENT=$(sed -n "${LINE_NUM}p" "$PUBSPEC_FILE")
+                                    # Si la línea es un asset (empieza con "    - ")
+                                    if echo "$LINE_CONTENT" | grep -q "^    - "; then
+                                        INSERT_LINE=$LINE_NUM
+                                    # Si encontramos una línea que no es parte de assets (no tiene indentación de 4 espacios o es otra sección)
+                                    elif echo "$LINE_CONTENT" | grep -q "^[^ ]" || echo "$LINE_CONTENT" | grep -q "^  [^ ]"; then
+                                        break
+                                    fi
+                                    LINE_NUM=$((LINE_NUM + 1))
+                                done
+                                
+                                # Insertar los assets después de la última línea encontrada
+                                sed -i "${INSERT_LINE}r $TEMP_ASSETS" "$PUBSPEC_FILE"
+                            else
+                                # No existe la sección assets, agregarla después de "flutter:"
+                                sed -i '/^flutter:/a\  assets:' "$PUBSPEC_FILE"
+                                # Agregar los assets
+                                sed -i "/^  assets:/r $TEMP_ASSETS" "$PUBSPEC_FILE"
+                            fi
+                            echo -e "${GREEN}✓ pubspec.yaml actualizado con assets${NC}"
+                        else
+                            echo -e "${GREEN}✓ Todos los assets ya están incluidos en pubspec.yaml${NC}"
+                        fi
+                        
+                        # Limpiar archivo temporal
+                        rm -f "$TEMP_ASSETS"
+                    else
+                        echo -e "${YELLOW}Advertencia: No se encontró la sección flutter en pubspec.yaml${NC}"
+                    fi
+                else
+                    echo -e "${YELLOW}Advertencia: No se encontró pubspec.yaml${NC}"
+                fi
+            else
+                echo -e "${YELLOW}Advertencia: No se encontraron archivos en assets para copiar${NC}"
+            fi
+        else
+            echo -e "${YELLOW}Advertencia: El directorio assets está vacío${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Advertencia: No se encontró el directorio assets o build/flutter${NC}"
+    fi
+}
+
 # Verificar que pyproject.toml existe y tiene las dependencias
 echo -e "${BLUE}Verificando pyproject.toml...${NC}"
 if [ -f "pyproject.toml" ]; then
@@ -277,13 +374,28 @@ if [ -d "build/flutter" ]; then
         fi
     fi
     
+    # Incluir assets en el build
+    include_assets
+    
     # Reemplazar iconos personalizados (solo modifica recursos, no afecta dependencias)
     replace_icons
     
-    # IMPORTANTE: NO reconstruimos el APK completo después de reemplazar iconos
-    # porque Flet puede no incluir las dependencias en la segunda construcción.
-    # El APK ya está construido con todas las dependencias desde el primer build.
-    # Los iconos personalizados se incluyen automáticamente si están en la estructura correcta.
+    # IMPORTANTE: Reconstruir el APK para incluir los assets
+    # Aunque esto puede ser costoso, es necesario para que los assets estén disponibles en el APK
+    if [ -d "build/flutter/assets" ] && [ "$(ls -A build/flutter/assets 2>/dev/null)" ]; then
+        echo -e "${BLUE}Reconstruyendo APK con assets incluidos...${NC}"
+        cd build/flutter
+        flutter pub get > /dev/null 2>&1 || true
+        cd ../..
+        
+        # Reconstruir el APK con los assets
+        flet build apk \
+            --project "$PROJECT_NAME" \
+            --description "$PROJECT_DESCRIPTION" \
+            --product "$PROJECT_NAME"
+        
+        echo -e "${GREEN}✓ APK reconstruido con assets incluidos${NC}"
+    fi
     
     # Si realmente necesitamos reconstruir (solo si es crítico para los iconos),
     # verificamos primero que las dependencias estén presentes
@@ -346,6 +458,9 @@ echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}Construyendo AAB para Google Play...${NC}"
 echo -e "${BLUE}========================================${NC}"
 
+# Asegurar que los assets estén incluidos antes de construir el AAB
+include_assets
+
 # Asegurar que los iconos estén actualizados antes de construir el AAB
 replace_icons
 
@@ -354,6 +469,9 @@ flet build aab \
     --project "$PROJECT_NAME" \
     --description "$PROJECT_DESCRIPTION" \
     --product "$PROJECT_NAME"
+
+# Asegurar que los assets estén incluidos después del build (por si Flet regeneró la estructura)
+include_assets
 
 # Reemplazar iconos nuevamente después del build (por si Flet regeneró la estructura)
 replace_icons
