@@ -690,7 +690,7 @@ class HomeView:
                 text="Cerrar sesión",
                 icon=ft.Icons.LOGOUT,
                 on_click=self._logout_firebase,
-                color=ft.Colors.RED
+                style=ft.ButtonStyle(color=ft.Colors.RED)
             )
             
             return ft.Column(
@@ -728,7 +728,7 @@ class HomeView:
                 text="Registrarse",
                 icon=ft.Icons.PERSON_ADD,
                 on_click=self._show_register_dialog,
-                color=preview_color
+                style=ft.ButtonStyle(color=preview_color)
             )
             
             return ft.Column(
