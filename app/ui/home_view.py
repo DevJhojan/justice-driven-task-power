@@ -86,6 +86,7 @@ class HomeView:
         }
         self.priority_section_refs = {}  # Referencias a los contenedores de sección para scroll
         self.main_scroll_container = None  # Contenedor principal con scroll
+        self.main_scroll_listview = None  # Referencia directa al ListView para scroll programático
         self.habits_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
         self.stats_card = None
         self.habit_stats_card = None
@@ -414,12 +415,14 @@ class HomeView:
         
         # Contenedor principal con scroll - responsive
         section_spacing = 24 if is_desktop else 16
-        main_scroll_content = ft.Column(
+        # Usar ListView para mejor soporte de scroll programático
+        self.main_scroll_listview = ft.ListView(
             priority_sections,
             spacing=section_spacing,
-            scroll=ft.ScrollMode.AUTO,
-            expand=True
+            expand=True,
+            padding=0
         )
+        main_scroll_content = self.main_scroll_listview
         
         # Padding responsive para el contenedor principal
         main_padding = ft.padding.only(
@@ -2160,9 +2163,40 @@ class HomeView:
         # Actualizar la barra de navegación para reflejar el estado activo
         self._update_priority_navigation()
         
-        # Nota: Flet no tiene scroll programático directo en versiones actuales
-        # El scroll manual funcionará correctamente, y los botones sirven como navegación visual
-        # En futuras versiones de Flet se puede implementar scroll programático
+        # Mapeo de prioridades a índices en el ListView
+        priority_index_map = {
+            'urgent_important': 0,
+            'not_urgent_important': 1,
+            'urgent_not_important': 2,
+            'not_urgent_not_important': 3
+        }
+        
+        # Obtener el índice de la sección
+        target_index = priority_index_map.get(priority, 0)
+        
+        # Hacer scroll al índice correspondiente usando la referencia directa al ListView
+        if self.main_scroll_listview:
+            try:
+                # Intentar usar scroll_to con index (más preciso)
+                self.main_scroll_listview.scroll_to(
+                    index=target_index,
+                    duration=500,  # Duración de la animación en ms
+                    curve=ft.AnimationCurve.EASE_OUT
+                )
+            except (AttributeError, TypeError) as e:
+                # Si scroll_to con index no está disponible o falla, usar offset
+                print(f"Intentando scroll con offset (index no disponible): {e}")
+                try:
+                    # Calcular offset aproximado (cada sección puede tener ~400-600px de altura)
+                    # Ajustar según el tamaño promedio de las secciones
+                    estimated_offset = target_index * 500
+                    self.main_scroll_listview.scroll_to(
+                        offset=estimated_offset,
+                        duration=500,
+                        curve=ft.AnimationCurve.EASE_OUT
+                    )
+                except Exception as e2:
+                    print(f"Error en scroll_to: {e2}")
         
         self.page.update()
     
