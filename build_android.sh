@@ -1,6 +1,12 @@
 #!/bin/bash
 # Script para construir APK y AAB (Android App Bundle) para Google Play
 # Incluye inyección manual de wsgiref para soporte OAuth2 en Android
+#
+# Uso:
+#   ./build_android.sh          # Construye APK y AAB (modo completo)
+#   ./build_android.sh --apk    # Construye solo APK
+#   ./build_android.sh --aab    # Construye solo AAB
+#   ./build_android.sh --help   # Muestra esta ayuda
 
 set -e
 
@@ -11,40 +17,135 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}Construyendo APK y AAB para Android${NC}"
-echo -e "${BLUE}========================================${NC}"
+# Variables de control de build
+BUILD_APK=false
+BUILD_AAB=false
+SHOW_HELP=false
+
+# Función para mostrar ayuda
+show_help() {
+    cat << EOF
+${BLUE}========================================${NC}
+${BLUE}Script de Build para Android${NC}
+${BLUE}========================================${NC}
+
+${GREEN}Uso:${NC}
+    ./build_android.sh [OPCIÓN]
+
+${GREEN}Opciones:${NC}
+    --apk          Construye únicamente el archivo APK (instalable en dispositivos)
+    --aab          Construye únicamente el archivo AAB (para Google Play Store)
+    --help, -h     Muestra esta ayuda
+
+${GREEN}Modo por defecto:${NC}
+    Si no se especifica ninguna opción, se construyen ambos artefactos (APK + AAB)
+
+${GREEN}Ejemplos:${NC}
+    ./build_android.sh              # Construye APK y AAB
+    ./build_android.sh --apk        # Solo APK
+    ./build_android.sh --aab        # Solo AAB
+
+${GREEN}Notas:${NC}
+    - El script lee la configuración desde pyproject.toml
+    - Incluye automáticamente wsgiref para soporte OAuth2
+    - Los assets y iconos se incluyen automáticamente
+EOF
+}
+
+# Parsear argumentos de línea de comandos
+parse_arguments() {
+    local apk_count=0
+    local aab_count=0
+    
+    for arg in "$@"; do
+        case "$arg" in
+            --apk)
+                BUILD_APK=true
+                apk_count=$((apk_count + 1))
+                ;;
+            --aab)
+                BUILD_AAB=true
+                aab_count=$((aab_count + 1))
+                ;;
+            --help|-h)
+                SHOW_HELP=true
+                ;;
+            *)
+                echo -e "${RED}Error: Flag desconocido: $arg${NC}" >&2
+                echo -e "${YELLOW}Usa --help para ver las opciones disponibles${NC}" >&2
+                exit 1
+                ;;
+        esac
+    done
+    
+    # Si se muestra ayuda, salir después de mostrarla
+    if [ "$SHOW_HELP" = true ]; then
+        show_help
+        exit 0
+    fi
+    
+    # Si se pasaron ambos flags, es un error
+    if [ "$apk_count" -gt 0 ] && [ "$aab_count" -gt 0 ]; then
+        echo -e "${RED}Error: Los flags --apk y --aab son mutuamente excluyentes${NC}" >&2
+        echo -e "${YELLOW}Usa --help para ver las opciones disponibles${NC}" >&2
+        exit 1
+    fi
+    
+    # Si no se pasó ningún flag, construir ambos (modo completo)
+    if [ "$apk_count" -eq 0 ] && [ "$aab_count" -eq 0 ]; then
+        BUILD_APK=true
+        BUILD_AAB=true
+    fi
+}
+
+# Función para mostrar información del build
+show_build_info() {
+    echo -e "${BLUE}========================================${NC}"
+    if [ "$BUILD_APK" = true ] && [ "$BUILD_AAB" = true ]; then
+        echo -e "${BLUE}Construyendo APK y AAB para Android${NC}"
+        echo -e "${BLUE}Modo: ${GREEN}Completo${NC}${BLUE} (APK + AAB)${NC}"
+    elif [ "$BUILD_APK" = true ]; then
+        echo -e "${BLUE}Construyendo APK para Android${NC}"
+        echo -e "${BLUE}Modo: ${GREEN}Solo APK${NC}"
+    elif [ "$BUILD_AAB" = true ]; then
+        echo -e "${BLUE}Construyendo AAB para Google Play${NC}"
+        echo -e "${BLUE}Modo: ${GREEN}Solo AAB${NC}"
+    fi
+    echo -e "${BLUE}========================================${NC}"
+}
 
 # Leer información del proyecto desde pyproject.toml
-if [ -f "pyproject.toml" ]; then
-    PROJECT_NAME_RAW=$(grep -E "^name\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1 | tr -d ' ')
-    PROJECT_NAME=$(echo "$PROJECT_NAME_RAW" | sed 's/-/ /g' | sed 's/\b\(.\)/\u\1/g')
-    PROJECT_DESCRIPTION=$(grep -E "^description\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1 | tr -d ' ')
-    PROJECT_VERSION=$(grep -E "^version\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1 | tr -d ' ')
-    
-    if [ -z "$PROJECT_NAME_RAW" ]; then
-        echo -e "${RED}Error: No se pudo leer 'name' desde pyproject.toml${NC}"
+read_project_info() {
+    if [ -f "pyproject.toml" ]; then
+        PROJECT_NAME_RAW=$(grep -E "^name\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1 | tr -d ' ')
+        PROJECT_NAME=$(echo "$PROJECT_NAME_RAW" | sed 's/-/ /g' | sed 's/\b\(.\)/\u\1/g')
+        PROJECT_DESCRIPTION=$(grep -E "^description\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1 | tr -d ' ')
+        PROJECT_VERSION=$(grep -E "^version\s*=" pyproject.toml | sed 's/.*= *"\(.*\)".*/\1/' | head -1 | tr -d ' ')
+        
+        if [ -z "$PROJECT_NAME_RAW" ]; then
+            echo -e "${RED}Error: No se pudo leer 'name' desde pyproject.toml${NC}"
+            exit 1
+        fi
+        
+        if [ -z "$PROJECT_VERSION" ]; then
+            echo -e "${RED}Error: No se pudo leer 'version' desde pyproject.toml${NC}"
+            exit 1
+        fi
+        
+        if [ -z "$PROJECT_DESCRIPTION" ]; then
+            PROJECT_DESCRIPTION="Aplicación móvil desarrollada con Flet"
+            echo -e "${YELLOW}Advertencia: 'description' no encontrada en pyproject.toml, usando valor por defecto${NC}"
+        fi
+        
+        echo -e "${BLUE}Información del proyecto (desde pyproject.toml):${NC}"
+        echo -e "  Nombre: ${GREEN}$PROJECT_NAME${NC}"
+        echo -e "  Versión: ${GREEN}$PROJECT_VERSION${NC}"
+        echo -e "  Descripción: ${GREEN}$PROJECT_DESCRIPTION${NC}"
+    else
+        echo -e "${RED}Error: pyproject.toml no encontrado${NC}"
         exit 1
     fi
-    
-    if [ -z "$PROJECT_VERSION" ]; then
-        echo -e "${RED}Error: No se pudo leer 'version' desde pyproject.toml${NC}"
-        exit 1
-    fi
-    
-    if [ -z "$PROJECT_DESCRIPTION" ]; then
-        PROJECT_DESCRIPTION="Aplicación móvil desarrollada con Flet"
-        echo -e "${YELLOW}Advertencia: 'description' no encontrada en pyproject.toml, usando valor por defecto${NC}"
-    fi
-    
-    echo -e "${BLUE}Información del proyecto (desde pyproject.toml):${NC}"
-    echo -e "  Nombre: ${GREEN}$PROJECT_NAME${NC}"
-    echo -e "  Versión: ${GREEN}$PROJECT_VERSION${NC}"
-    echo -e "  Descripción: ${GREEN}$PROJECT_DESCRIPTION${NC}"
-else
-    echo -e "${RED}Error: pyproject.toml no encontrado${NC}"
-    exit 1
-fi
+}
 
 # Función para inyectar wsgiref manualmente
 inject_wsgiref() {
@@ -226,191 +327,206 @@ replace_icons() {
     fi
 }
 
-# Verificar dependencias de Google antes de construir
-verify_google_dependencies
-
-# Paso 1: Empaquetado inicial sin bundle para generar estructura base
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}Paso 1: Empaquetado inicial${NC}"
-echo -e "${BLUE}========================================${NC}"
-
-echo -e "${BLUE}Ejecutando: flet build apk${NC}"
-echo -e "${BLUE}  Punto de entrada: main.py${NC}"
-echo -e "${BLUE}  Flet detectará automáticamente requirements.txt o pyproject.toml${NC}"
-
-flet build apk \
-    --project "$PROJECT_NAME" \
-    --description "$PROJECT_DESCRIPTION" \
-    --product "$PROJECT_NAME"
-
-# Esperar a que se cree la estructura de build
-if [ -d "build/flutter" ]; then
-    echo -e "${BLUE}Estructura de build generada${NC}"
-else
-    echo -e "${RED}Error: No se generó la estructura de build${NC}"
-    exit 1
-fi
-
-# Paso 2: Inyección manual de wsgiref
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}Paso 2: Inyección manual de wsgiref${NC}"
-echo -e "${BLUE}========================================${NC}"
-
-# Buscar en diferentes ubicaciones posibles de site-packages
-SITE_PACKAGES_DIRS=(
-    "build/python/site-packages"
-    "build/flutter/python/site-packages"
-    "build/app/python/site-packages"
-)
-
-FOUND_SITE_PACKAGES=""
-for dir in "${SITE_PACKAGES_DIRS[@]}"; do
-    if [ -d "$dir" ]; then
-        FOUND_SITE_PACKAGES="$dir"
-        echo -e "${BLUE}Encontrado site-packages en: $dir${NC}"
-        break
-    fi
-done
-
-if [ -z "$FOUND_SITE_PACKAGES" ]; then
-    echo -e "${YELLOW}Advertencia: No se encontró build/python/site-packages${NC}"
-    echo -e "${YELLOW}Intentando buscar en otras ubicaciones...${NC}"
+# Función para construir APK
+build_apk() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}Construyendo APK${NC}"
+    echo -e "${BLUE}========================================${NC}"
     
-    # Buscar recursivamente
-    FOUND_SITE_PACKAGES=$(find build -type d -name "site-packages" 2>/dev/null | head -1)
-    
-    if [ -z "$FOUND_SITE_PACKAGES" ]; then
-        echo -e "${YELLOW}Advertencia: No se encontró site-packages. wsgiref se inyectará después del build completo.${NC}"
-    else
-        echo -e "${BLUE}Encontrado site-packages en: $FOUND_SITE_PACKAGES${NC}"
-    fi
-fi
-
-if [ -n "$FOUND_SITE_PACKAGES" ]; then
-    # Modificar la función para usar la ruta encontrada
-    OLD_BUILD_DIR="build/python/site-packages"
-    export BUILD_SITE_PACKAGES="$FOUND_SITE_PACKAGES"
-    
-    # Obtener la ruta de wsgiref usando Python
-    WSGIREF_PATH=$(python3 -c "import wsgiref; import os; print(os.path.dirname(wsgiref.__file__))" 2>/dev/null || echo "")
-    
-    if [ -z "$WSGIREF_PATH" ] || [ ! -d "$WSGIREF_PATH" ]; then
-        echo -e "${YELLOW}Advertencia: No se pudo encontrar wsgiref usando Python${NC}"
-        echo -e "${YELLOW}Intentando ubicaciones estándar...${NC}"
-        
-        # Intentar ubicaciones estándar
-        PYTHON_VERSION=$(python3 --version | grep -oP '\d+\.\d+' | head -1)
-        for base_path in "/usr/lib/python${PYTHON_VERSION}" "/usr/local/lib/python${PYTHON_VERSION}" "$HOME/.local/lib/python${PYTHON_VERSION}"; do
-            test_path="${base_path}/wsgiref"
-            if [ -d "$test_path" ]; then
-                WSGIREF_PATH="$test_path"
-                break
-            fi
-        done
-    fi
-    
-    if [ -n "$WSGIREF_PATH" ] && [ -d "$WSGIREF_PATH" ]; then
-        echo -e "${BLUE}  Ruta de wsgiref encontrada: $WSGIREF_PATH${NC}"
-        
-        TARGET_DIR="$FOUND_SITE_PACKAGES/wsgiref"
-        
-        if [ -d "$TARGET_DIR" ]; then
-            echo -e "${BLUE}  Eliminando wsgiref existente...${NC}"
-            rm -rf "$TARGET_DIR"
-        fi
-        
-        echo -e "${BLUE}  Copiando wsgiref a $TARGET_DIR...${NC}"
-        cp -r "$WSGIREF_PATH" "$TARGET_DIR"
-        
-        if [ -d "$TARGET_DIR" ] && [ -f "$TARGET_DIR/__init__.py" ]; then
-            FILE_COUNT=$(find "$TARGET_DIR" -type f | wc -l)
-            echo -e "${GREEN}  ✓ wsgiref inyectado correctamente ($FILE_COUNT archivos)${NC}"
-        else
-            echo -e "${RED}  ✗ Error al copiar wsgiref${NC}"
-        fi
-    else
-        echo -e "${RED}Error: No se pudo encontrar wsgiref en el sistema${NC}"
-        echo -e "${YELLOW}wsgiref debería estar disponible en la biblioteca estándar de Python${NC}"
-    fi
-fi
-
-# Incluir assets
-include_assets
-
-# Reemplazar iconos
-replace_icons
-
-# Paso 3: Finalización del build (reconstruir si es necesario)
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}Paso 3: Finalización del build${NC}"
-echo -e "${BLUE}========================================${NC}"
-
-# Verificar si necesitamos reconstruir
-if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
-    echo -e "${BLUE}Reconstruyendo APK con assets e iconos personalizados...${NC}"
-    
-    cd build/flutter
-    flutter pub get > /dev/null 2>&1 || true
-    cd ../..
+    # Paso 1: Empaquetado inicial
+    echo -e "${BLUE}Paso 1: Empaquetado inicial${NC}"
+    echo -e "${BLUE}Ejecutando: flet build apk${NC}"
+    echo -e "${BLUE}  Punto de entrada: main.py${NC}"
+    echo -e "${BLUE}  Flet detectará automáticamente requirements.txt o pyproject.toml${NC}"
     
     flet build apk \
         --project "$PROJECT_NAME" \
         --description "$PROJECT_DESCRIPTION" \
         --product "$PROJECT_NAME"
     
-    # Inyectar wsgiref nuevamente después de reconstruir
-    if [ -n "$FOUND_SITE_PACKAGES" ] && [ -d "$FOUND_SITE_PACKAGES" ] && [ -n "$WSGIREF_PATH" ] && [ -d "$WSGIREF_PATH" ]; then
-        TARGET_DIR="$FOUND_SITE_PACKAGES/wsgiref"
-        if [ -d "$TARGET_DIR" ]; then
-            rm -rf "$TARGET_DIR"
-        fi
-        cp -r "$WSGIREF_PATH" "$TARGET_DIR"
-        echo -e "${GREEN}  ✓ wsgiref re-inyectado después de reconstrucción${NC}"
+    # Esperar a que se cree la estructura de build
+    if [ ! -d "build/flutter" ]; then
+        echo -e "${RED}Error: No se generó la estructura de build${NC}"
+        exit 1
     fi
     
+    echo -e "${GREEN}✓ Estructura de build generada${NC}"
+    
+    # Paso 2: Inyección de wsgiref
+    echo -e "${BLUE}Paso 2: Inyección manual de wsgiref${NC}"
+    
+    SITE_PACKAGES_DIRS=(
+        "build/python/site-packages"
+        "build/flutter/python/site-packages"
+        "build/app/python/site-packages"
+    )
+    
+    FOUND_SITE_PACKAGES=""
+    for dir in "${SITE_PACKAGES_DIRS[@]}"; do
+        if [ -d "$dir" ]; then
+            FOUND_SITE_PACKAGES="$dir"
+            echo -e "${BLUE}Encontrado site-packages en: $dir${NC}"
+            break
+        fi
+    done
+    
+    if [ -z "$FOUND_SITE_PACKAGES" ]; then
+        FOUND_SITE_PACKAGES=$(find build -type d -name "site-packages" 2>/dev/null | head -1)
+        if [ -z "$FOUND_SITE_PACKAGES" ]; then
+            echo -e "${YELLOW}Advertencia: No se encontró site-packages. wsgiref se inyectará después del build completo.${NC}"
+        else
+            echo -e "${BLUE}Encontrado site-packages en: $FOUND_SITE_PACKAGES${NC}"
+        fi
+    fi
+    
+    if [ -n "$FOUND_SITE_PACKAGES" ]; then
+        WSGIREF_PATH=$(python3 -c "import wsgiref; import os; print(os.path.dirname(wsgiref.__file__))" 2>/dev/null || echo "")
+        
+        if [ -z "$WSGIREF_PATH" ] || [ ! -d "$WSGIREF_PATH" ]; then
+            PYTHON_VERSION=$(python3 --version | grep -oP '\d+\.\d+' | head -1)
+            for base_path in "/usr/lib/python${PYTHON_VERSION}" "/usr/local/lib/python${PYTHON_VERSION}" "$HOME/.local/lib/python${PYTHON_VERSION}"; do
+                test_path="${base_path}/wsgiref"
+                if [ -d "$test_path" ]; then
+                    WSGIREF_PATH="$test_path"
+                    break
+                fi
+            done
+        fi
+        
+        if [ -n "$WSGIREF_PATH" ] && [ -d "$WSGIREF_PATH" ]; then
+            TARGET_DIR="$FOUND_SITE_PACKAGES/wsgiref"
+            if [ -d "$TARGET_DIR" ]; then
+                rm -rf "$TARGET_DIR"
+            fi
+            cp -r "$WSGIREF_PATH" "$TARGET_DIR"
+            if [ -d "$TARGET_DIR" ] && [ -f "$TARGET_DIR/__init__.py" ]; then
+                FILE_COUNT=$(find "$TARGET_DIR" -type f | wc -l)
+                echo -e "${GREEN}  ✓ wsgiref inyectado correctamente ($FILE_COUNT archivos)${NC}"
+            fi
+        fi
+    fi
+    
+    # Paso 3: Incluir assets e iconos
     include_assets
-fi
+    replace_icons
+    
+    # Paso 4: Reconstruir si es necesario
+    if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
+        echo -e "${BLUE}Paso 3: Reconstruyendo APK con assets e iconos personalizados...${NC}"
+        
+        cd build/flutter
+        flutter pub get > /dev/null 2>&1 || true
+        cd ../..
+        
+        flet build apk \
+            --project "$PROJECT_NAME" \
+            --description "$PROJECT_DESCRIPTION" \
+            --product "$PROJECT_NAME"
+        
+        # Re-inyectar wsgiref después de reconstruir
+        if [ -n "$FOUND_SITE_PACKAGES" ] && [ -d "$FOUND_SITE_PACKAGES" ] && [ -n "$WSGIREF_PATH" ] && [ -d "$WSGIREF_PATH" ]; then
+            TARGET_DIR="$FOUND_SITE_PACKAGES/wsgiref"
+            if [ -d "$TARGET_DIR" ]; then
+                rm -rf "$TARGET_DIR"
+            fi
+            cp -r "$WSGIREF_PATH" "$TARGET_DIR"
+            echo -e "${GREEN}  ✓ wsgiref re-inyectado después de reconstrucción${NC}"
+        fi
+        
+        include_assets
+    fi
+    
+    # Verificar que el APK se generó
+    if [ -f "build/apk/app-release.apk" ]; then
+        APK_SIZE=$(du -h build/apk/app-release.apk | cut -f1)
+        echo -e "${GREEN}✓ APK generado exitosamente: build/apk/app-release.apk (${APK_SIZE})${NC}"
+    else
+        echo -e "${YELLOW}⚠ Advertencia: No se encontró el APK en build/apk/app-release.apk${NC}"
+    fi
+}
 
-# Verificar que el APK se generó
-if [ -f "build/apk/app-release.apk" ]; then
-    APK_SIZE=$(du -h build/apk/app-release.apk | cut -f1)
-    echo -e "${GREEN}✓ APK generado exitosamente: build/apk/app-release.apk (${APK_SIZE})${NC}"
-else
-    echo -e "${YELLOW}⚠ Advertencia: No se encontró el APK en build/apk/app-release.apk${NC}"
-fi
-
-# Construir AAB
-echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}Construyendo AAB para Google Play${NC}"
-echo -e "${BLUE}========================================${NC}"
-
-include_assets
-replace_icons
-
-flet build aab \
-    --project "$PROJECT_NAME" \
-    --description "$PROJECT_DESCRIPTION" \
-    --product "$PROJECT_NAME"
-
-include_assets
-replace_icons
-
-if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
-    echo -e "${BLUE}Reconstruyendo AAB con iconos personalizados...${NC}"
+# Función para construir AAB
+build_aab() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}Construyendo AAB para Google Play${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    
+    # Si no existe la estructura de build, construir APK primero para generarla
+    if [ ! -d "build/flutter" ]; then
+        echo -e "${YELLOW}Advertencia: No existe estructura de build. Construyendo APK inicial para generarla...${NC}"
+        flet build apk \
+            --project "$PROJECT_NAME" \
+            --description "$PROJECT_DESCRIPTION" \
+            --product "$PROJECT_NAME"
+    fi
+    
+    # Incluir assets e iconos
+    include_assets
+    replace_icons
+    
+    # Construir AAB
+    echo -e "${BLUE}Ejecutando: flet build aab${NC}"
     flet build aab \
         --project "$PROJECT_NAME" \
         --description "$PROJECT_DESCRIPTION" \
         --product "$PROJECT_NAME"
+    
+    # Re-incluir assets e iconos después del build
+    include_assets
+    replace_icons
+    
+    # Reconstruir si hay iconos personalizados
+    if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
+        echo -e "${BLUE}Reconstruyendo AAB con iconos personalizados...${NC}"
+        flet build aab \
+            --project "$PROJECT_NAME" \
+            --description "$PROJECT_DESCRIPTION" \
+            --product "$PROJECT_NAME"
+    fi
+    
+    # Verificar que el AAB se generó
+    if [ -f "build/aab/app-release.aab" ]; then
+        AAB_SIZE=$(du -h build/aab/app-release.aab | cut -f1)
+        echo -e "${GREEN}✓ AAB generado exitosamente: build/aab/app-release.aab (${AAB_SIZE})${NC}"
+    else
+        echo -e "${YELLOW}⚠ Advertencia: No se encontró el AAB en build/aab/app-release.aab${NC}"
+    fi
+}
+
+# ==================== MAIN ====================
+
+# Parsear argumentos
+parse_arguments "$@"
+
+# Mostrar información del build
+show_build_info
+
+# Leer información del proyecto
+read_project_info
+
+# Verificar dependencias de Google
+verify_google_dependencies
+
+# Construir según los flags
+if [ "$BUILD_APK" = true ]; then
+    build_apk
 fi
 
-# Verificar que el AAB se generó
-if [ -f "build/aab/app-release.aab" ]; then
-    AAB_SIZE=$(du -h build/aab/app-release.aab | cut -f1)
-    echo -e "${GREEN}✓ AAB generado exitosamente: build/aab/app-release.aab (${AAB_SIZE})${NC}"
-else
-    echo -e "${YELLOW}⚠ Advertencia: No se encontró el AAB en build/aab/app-release.aab${NC}"
+if [ "$BUILD_AAB" = true ]; then
+    build_aab
 fi
 
+# Mensaje final
 echo -e "${BLUE}========================================${NC}"
 echo -e "${GREEN}Build completado${NC}"
 echo -e "${BLUE}========================================${NC}"
+
+if [ "$BUILD_APK" = true ] && [ "$BUILD_AAB" = true ]; then
+    echo -e "${GREEN}Artefactos generados:${NC}"
+    [ -f "build/apk/app-release.apk" ] && echo -e "  ${GREEN}✓${NC} APK: build/apk/app-release.apk"
+    [ -f "build/aab/app-release.aab" ] && echo -e "  ${GREEN}✓${NC} AAB: build/aab/app-release.aab"
+elif [ "$BUILD_APK" = true ]; then
+    [ -f "build/apk/app-release.apk" ] && echo -e "${GREEN}APK generado: build/apk/app-release.apk${NC}"
+elif [ "$BUILD_AAB" = true ]; then
+    [ -f "build/aab/app-release.aab" ] && echo -e "${GREEN}AAB generado: build/aab/app-release.aab${NC}"
+fi
