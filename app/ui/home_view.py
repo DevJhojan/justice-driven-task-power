@@ -333,8 +333,8 @@ class HomeView:
                 expand=True,
                 tooltip=colors['text'],
                 constraints=ft.BoxConstraints(
-                    min_width=60,  # Ancho mínimo para legibilidad
-                    max_width=None  # Sin máximo para que se expanda
+                    min_width=60  # Ancho mínimo para legibilidad
+                    # max_width no se especifica para permitir expansión ilimitada
                 )
             )
             buttons.append(button)
@@ -2075,8 +2075,8 @@ class HomeView:
                                     margin=ft.margin.only(right=12 if idx < len(row_tasks) - 1 else 0),
                                     width=None,  # Sin ancho fijo para que sea flexible
                                     constraints=ft.BoxConstraints(
-                                        min_width=300,  # Ancho mínimo para legibilidad
-                                        max_width=None  # Sin máximo para que se expanda
+                                        min_width=300  # Ancho mínimo para legibilidad
+                                        # max_width no se especifica para permitir expansión ilimitada
                                     )
                                 )
                             )
