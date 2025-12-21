@@ -79,7 +79,7 @@ class Task:
     completed: bool
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
-    priority: str  # 'low', 'medium', 'high'
+    priority: str  # 'urgent_important', 'not_urgent_important', 'urgent_not_important', 'not_urgent_not_important'
     subtasks: List[SubTask] = field(default_factory=list)  # Lista de subtareas
     
     def __post_init__(self):
@@ -91,7 +91,7 @@ class Task:
         if self.updated_at is None:
             self.updated_at = datetime.now()
         if not self.priority:
-            self.priority = 'medium'
+            self.priority = 'not_urgent_important'  # Por defecto: No Urgente e Importante
         if self.subtasks is None:
             self.subtasks = []
     
@@ -130,7 +130,7 @@ class Task:
             completed=bool(data.get('completed', False)),
             created_at=created_at,
             updated_at=updated_at,
-            priority=data.get('priority', 'medium'),
+            priority=data.get('priority', 'not_urgent_important'),
             subtasks=subtasks
         )
 

@@ -60,7 +60,14 @@ class HomeView:
             self.firebase_sync_service = None
             print(f"Error al inicializar Firebase: {e}")
         
-        self.current_task_filter: Optional[bool] = None  # None=all, True=completed, False=pending
+        # Filtros por sección de prioridad: {priority: filter_value}
+        self.priority_filters = {
+            'urgent_important': None,  # None=all, True=completed, False=pending
+            'not_urgent_important': None,
+            'urgent_not_important': None,
+            'not_urgent_not_important': None
+        }
+        self.current_priority_section = 'urgent_important'  # Prioridad activa visible
         self.current_habit_filter: Optional[bool] = None  # None=all, True=active, False=inactive
         self.editing_task: Optional[Task] = None
         self.editing_subtask_task_id: Optional[int] = None
@@ -69,8 +76,15 @@ class HomeView:
         # Secciones: "tasks", "habits", "settings"
         self.current_section = "tasks"
         
-        # Contenedores principales
-        self.tasks_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
+        # Contenedores principales para cada prioridad
+        self.priority_containers = {
+            'urgent_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO),
+            'not_urgent_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO),
+            'urgent_not_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO),
+            'not_urgent_not_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO)
+        }
+        self.priority_section_refs = {}  # Referencias a los contenedores de sección para scroll
+        self.main_scroll_container = None  # Contenedor principal con scroll
         self.habits_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
         self.stats_card = None
         self.habit_stats_card = None
@@ -97,8 +111,179 @@ class HomeView:
         self._build_ui()
         self._load_tasks()
     
+    def _get_priority_colors(self, priority: str) -> dict:
+        """Obtiene los colores para una prioridad específica."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        colors = {
+            'urgent_important': {
+                'primary': ft.Colors.RED_600,
+                'light': ft.Colors.RED_50 if not is_dark else ft.Colors.RED_900,
+                'bg': ft.Colors.RED_100 if not is_dark else ft.Colors.RED_900,
+                'text': '🔴 Urgente e Importante'
+            },
+            'not_urgent_important': {
+                'primary': ft.Colors.GREEN_600,
+                'light': ft.Colors.GREEN_50 if not is_dark else ft.Colors.GREEN_900,
+                'bg': ft.Colors.GREEN_100 if not is_dark else ft.Colors.GREEN_900,
+                'text': '🟢 No Urgente e Importante'
+            },
+            'urgent_not_important': {
+                'primary': ft.Colors.ORANGE_600,
+                'light': ft.Colors.ORANGE_50 if not is_dark else ft.Colors.ORANGE_900,
+                'bg': ft.Colors.ORANGE_100 if not is_dark else ft.Colors.ORANGE_900,
+                'text': '🟡 Urgente y No Importante'
+            },
+            'not_urgent_not_important': {
+                'primary': ft.Colors.GREY_500,
+                'light': ft.Colors.GREY_50 if not is_dark else ft.Colors.GREY_800,
+                'bg': ft.Colors.GREY_100 if not is_dark else ft.Colors.GREY_800,
+                'text': '⚪ No Urgente y No Importante'
+            }
+        }
+        return colors.get(priority, colors['not_urgent_important'])
+    
+    def _build_priority_section(self, priority: str) -> ft.Container:
+        """Construye una sección de prioridad con su filtro y tareas."""
+        colors = self._get_priority_colors(priority)
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        current_filter = self.priority_filters[priority]
+        
+        # Título de la sección
+        section_title = ft.Container(
+            content=ft.Text(
+                colors['text'],
+                size=20,
+                weight=ft.FontWeight.BOLD,
+                color=colors['primary']
+            ),
+            padding=ft.padding.symmetric(vertical=12, horizontal=16),
+            bgcolor=colors['light'],
+            border=ft.border.only(bottom=ft.BorderSide(2, colors['primary']))
+        )
+        
+        # Botones de filtro para esta sección
+        active_bg = colors['primary']
+        inactive_bg = ft.Colors.GREY_800 if is_dark else ft.Colors.GREY_100
+        text_color = ft.Colors.WHITE
+        
+        filter_buttons = ft.Row(
+            [
+                ft.ElevatedButton(
+                    text="Todas",
+                    on_click=lambda e, p=priority: self._filter_priority_tasks(p, None),
+                    bgcolor=active_bg if current_filter is None else inactive_bg,
+                    color=text_color,
+                    height=36,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=8)
+                    )
+                ),
+                ft.ElevatedButton(
+                    text="Pendientes",
+                    on_click=lambda e, p=priority: self._filter_priority_tasks(p, False),
+                    bgcolor=active_bg if current_filter is False else inactive_bg,
+                    color=text_color,
+                    height=36,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=8)
+                    )
+                ),
+                ft.ElevatedButton(
+                    text="Completadas",
+                    on_click=lambda e, p=priority: self._filter_priority_tasks(p, True),
+                    bgcolor=active_bg if current_filter is True else inactive_bg,
+                    color=text_color,
+                    height=36,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=8)
+                    )
+                )
+            ],
+            spacing=8,
+            scroll=ft.ScrollMode.AUTO
+        )
+        
+        # Contenedor de tareas para esta prioridad
+        tasks_container = self.priority_containers[priority]
+        
+        # Contenedor completo de la sección
+        section_container = ft.Container(
+            content=ft.Column(
+                [
+                    section_title,
+                    ft.Container(
+                        content=filter_buttons,
+                        padding=ft.padding.symmetric(vertical=8, horizontal=16)
+                    ),
+                    tasks_container
+                ],
+                spacing=0
+            ),
+            key=f"priority_section_{priority}"  # Key para referencia de scroll
+        )
+        
+        # Guardar referencia para scroll
+        self.priority_section_refs[priority] = section_container
+        
+        return section_container
+    
+    def _build_priority_navigation_bar(self) -> ft.Container:
+        """Construye la barra de navegación con 4 botones para las prioridades."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        bgcolor = ft.Colors.BLACK87 if is_dark else ft.Colors.WHITE
+        
+        buttons = []
+        priorities = [
+            ('urgent_important', '🔴'),
+            ('not_urgent_important', '🟢'),
+            ('urgent_not_important', '🟡'),
+            ('not_urgent_not_important', '⚪')
+        ]
+        
+        for priority_key, emoji in priorities:
+            colors = self._get_priority_colors(priority_key)
+            is_active = self.current_priority_section == priority_key
+            
+            button = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(emoji, size=20),
+                        ft.Text(
+                            priority_key.replace('_', '\n').replace('urgent', 'Urgente')
+                            .replace('important', 'Importante').replace('not', 'No'),
+                            size=10,
+                            text_align=ft.TextAlign.CENTER,
+                            max_lines=2,
+                            overflow=ft.TextOverflow.ELLIPSIS
+                        )
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=4,
+                    tight=True
+                ),
+                on_click=lambda e, p=priority_key: self._scroll_to_priority(p),
+                padding=8,
+                bgcolor=colors['primary'] if is_active else bgcolor,
+                border=ft.border.all(2, colors['primary'] if is_active else ft.Colors.TRANSPARENT),
+                border_radius=8,
+                expand=True,
+                tooltip=colors['text']
+            )
+            buttons.append(button)
+        
+        return ft.Container(
+            content=ft.Row(
+                buttons,
+                spacing=8,
+                scroll=ft.ScrollMode.AUTO
+            ),
+            padding=ft.padding.symmetric(vertical=12, horizontal=16),
+            bgcolor=bgcolor,
+            border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700))
+        )
+    
     def _build_ui(self):
-        """Construye la interfaz de usuario."""
+        """Construye la interfaz de usuario con Matriz de Eisenhower."""
         # Barra de título
         scheme = self.page.theme.color_scheme if self.page.theme else None
         title_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_400
@@ -114,6 +299,15 @@ class HomeView:
                         weight=ft.FontWeight.BOLD,
                         color=title_color,
                         expand=True
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.ADD,
+                        on_click=self._show_new_task_form,
+                        bgcolor=title_color,
+                        icon_color=ft.Colors.WHITE,
+                        tooltip="Nueva Tarea",
+                        width=40,
+                        height=40
                     )
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -126,90 +320,41 @@ class HomeView:
         # Crear la barra inferior de navegación
         self._build_bottom_bar()
         
-        # Filtros - colores adaptativos según el tema/acento
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        scheme = self.page.theme.color_scheme if self.page.theme else None
-        primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_700
-        secondary = scheme.secondary if scheme and scheme.secondary else ft.Colors.RED_600
-
-        active_bg = primary
-        inactive_bg = ft.Colors.GREY_800 if is_dark else ft.Colors.GREY_100
-        text_color = ft.Colors.WHITE
+        # Barra de navegación de prioridades
+        priority_nav = self._build_priority_navigation_bar()
         
-        # Botón para agregar nueva tarea - color adaptativo
-        new_task_button_bg = primary
-        
-        # Botones de filtro
-        filter_buttons = [
-                ft.ElevatedButton(
-                    text="Todas",
-                    on_click=lambda e: self._filter_tasks(None),
-                    bgcolor=active_bg if self.current_task_filter is None else inactive_bg,
-                    color=text_color,
-                    height=40
-                ),
-                ft.ElevatedButton(
-                    text="Pendientes",
-                    on_click=lambda e: self._filter_tasks(False),
-                    bgcolor=active_bg if self.current_task_filter is False else inactive_bg,
-                    color=text_color,
-                    height=40
-                ),
-                ft.ElevatedButton(
-                    text="Completadas",
-                    on_click=lambda e: self._filter_tasks(True),
-                    bgcolor=active_bg if self.current_task_filter is True else inactive_bg,
-                    color=text_color,
-                    height=40
-                )
+        # Construir las 4 secciones de prioridad
+        priority_sections = [
+            self._build_priority_section('urgent_important'),
+            self._build_priority_section('not_urgent_important'),
+            self._build_priority_section('urgent_not_important'),
+            self._build_priority_section('not_urgent_not_important')
         ]
         
-        # Botón "+" para la parte superior derecha
-        self.new_task_button = ft.IconButton(
-            icon=ft.Icons.ADD,
-            on_click=self._show_new_task_form,
-            bgcolor=new_task_button_bg,
-            icon_color=ft.Colors.WHITE,
-            tooltip="Nueva Tarea",
-            width=40,
-            height=40
+        # Contenedor principal con scroll
+        main_scroll_content = ft.Column(
+            priority_sections,
+            spacing=16,
+            scroll=ft.ScrollMode.AUTO,
+            expand=True
         )
         
-        # Fila de filtros con botón de nueva tarea a la derecha
-        filter_row = ft.Row(
-            [
-                ft.Row(
-                    filter_buttons,
-                    spacing=8,
-                    scroll=ft.ScrollMode.AUTO,
-                    expand=True
-                ),
-                self.new_task_button
-            ],
-            spacing=8,
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER
+        self.main_scroll_container = ft.Container(
+            content=main_scroll_content,
+            padding=ft.padding.only(bottom=16),
+            expand=True
         )
         
-        # Contenedor de estadísticas
-        stats_container = ft.Container(
-            content=create_statistics_card(self.task_service.get_statistics(), self.page),
-            visible=True
-        )
-        self.stats_container = stats_container
-        
-        # Vista principal (lista de tareas)
+        # Vista principal
         main_view = ft.Container(
             content=ft.Column(
                 [
-                    stats_container,
-                    filter_row,
-                    self.tasks_container
+                    priority_nav,
+                    self.main_scroll_container
                 ],
-                spacing=8,
+                spacing=0,
                 expand=True
             ),
-            padding=16,
             expand=True
         )
         
@@ -1735,56 +1880,65 @@ class HomeView:
         self.page.update()
     
     def _load_tasks(self):
-        """Carga las tareas desde la base de datos."""
-        tasks = self.task_service.get_all_tasks(self.current_task_filter)
+        """Carga las tareas desde la base de datos y las distribuye por prioridad."""
+        # Cargar todas las tareas sin filtro global
+        all_tasks = self.task_service.get_all_tasks(None)
         
-        # Asegurarse de que el contenedor existe
-        if not hasattr(self, 'tasks_container') or self.tasks_container is None:
-            return
+        # Limpiar todos los contenedores de prioridad
+        for priority in self.priority_containers:
+            self.priority_containers[priority].controls.clear()
         
-        self.tasks_container.controls.clear()
+        # Distribuir tareas por prioridad y aplicar filtro de cada sección
+        for priority in ['urgent_important', 'not_urgent_important', 'urgent_not_important', 'not_urgent_not_important']:
+            container = self.priority_containers[priority]
+            filter_value = self.priority_filters[priority]
+            
+            # Filtrar tareas de esta prioridad
+            priority_tasks = [t for t in all_tasks if t.priority == priority]
+            
+            # Aplicar filtro de completado si existe
+            if filter_value is not None:
+                priority_tasks = [t for t in priority_tasks if t.completed == filter_value]
+            
+            # Agregar tareas al contenedor
+            if not priority_tasks:
+                # Mostrar estado vacío solo si hay filtro activo
+                if filter_value is not None:
+                    empty_text = "Completadas" if filter_value else "Pendientes"
+                    container.controls.append(
+                        ft.Container(
+                            content=ft.Text(
+                                f"No hay tareas {empty_text.lower()} en esta prioridad",
+                                size=14,
+                                color=ft.Colors.GREY_500,
+                                text_align=ft.TextAlign.CENTER
+                            ),
+                            padding=20,
+                            alignment=ft.alignment.center
+                        )
+                    )
+            else:
+                for task in priority_tasks:
+                    card = create_task_card(
+                        task,
+                        on_toggle=self._toggle_task,
+                        on_edit=self._edit_task,
+                        on_delete=self._delete_task,
+                        on_toggle_subtask=self._toggle_subtask,
+                        on_add_subtask=self._show_add_subtask_dialog,
+                        on_delete_subtask=self._delete_subtask,
+                        on_edit_subtask=self._edit_subtask,
+                        page=self.page
+                    )
+                    container.controls.append(card)
         
-        if not tasks:
-            self.tasks_container.controls.append(create_empty_state(self.page))
-        else:
-            for task in tasks:
-                card = create_task_card(
-                    task,
-                    on_toggle=self._toggle_task,
-                    on_edit=self._edit_task,
-                    on_delete=self._delete_task,
-                    on_toggle_subtask=self._toggle_subtask,
-                    on_add_subtask=self._show_add_subtask_dialog,
-                    on_delete_subtask=self._delete_subtask,
-                    on_edit_subtask=self._edit_subtask,
-                    page=self.page
-                )
-                self.tasks_container.controls.append(card)
-        
-        # Actualizar estadísticas
-        if hasattr(self, 'stats_container') and self.stats_container:
-            stats = self.task_service.get_statistics()
-            self.stats_container.content = create_statistics_card(stats, self.page)
-            try:
-                self.stats_container.update()
-            except:
-                pass
-        
-        try:
-            self.tasks_container.update()
-        except:
-            pass
         self.page.update()
     
     def _filter_tasks(self, filter_completed: Optional[bool]):
-        """Filtra las tareas por estado."""
-        self.current_task_filter = filter_completed
-        self._load_tasks()
-        self._rebuild_filters()
-    
-    def _rebuild_filters(self):
-        """Reconstruye los botones de filtro con los colores correctos."""
-        # Esta función se puede mejorar para actualizar los colores dinámicamente
+        """Filtra las tareas por estado (mantenido para compatibilidad)."""
+        # Aplicar el filtro a todas las prioridades
+        for priority in self.priority_filters:
+            self.priority_filters[priority] = filter_completed
         self._load_tasks()
     
     def _show_new_task_form(self, e):

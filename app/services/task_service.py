@@ -16,14 +16,18 @@ class TaskService:
         self.db = Database()
         self.repository = TaskRepository(self.db)
     
-    def create_task(self, title: str, description: str = "", priority: str = "medium") -> Task:
+    def create_task(self, title: str, description: str = "", priority: str = "not_urgent_important") -> Task:
         """
         Crea una nueva tarea.
         
         Args:
             title: Título de la tarea.
             description: Descripción de la tarea.
-            priority: Prioridad ('low', 'medium', 'high').
+            priority: Prioridad según Matriz de Eisenhower:
+                     'urgent_important' - Urgente e Importante
+                     'not_urgent_important' - No Urgente e Importante
+                     'urgent_not_important' - Urgente y No Importante
+                     'not_urgent_not_important' - No Urgente y No Importante
             
         Returns:
             Tarea creada.
@@ -31,8 +35,9 @@ class TaskService:
         if not title or not title.strip():
             raise ValueError("El título de la tarea no puede estar vacío")
         
-        if priority not in ['low', 'medium', 'high']:
-            priority = 'medium'
+        valid_priorities = ['urgent_important', 'not_urgent_important', 'urgent_not_important', 'not_urgent_not_important']
+        if priority not in valid_priorities:
+            priority = 'not_urgent_important'
         
         task = Task(
             id=None,
@@ -86,8 +91,9 @@ class TaskService:
         task.title = task.title.strip()
         task.description = task.description.strip()
         
-        if task.priority not in ['low', 'medium', 'high']:
-            task.priority = 'medium'
+        valid_priorities = ['urgent_important', 'not_urgent_important', 'urgent_not_important', 'not_urgent_not_important']
+        if task.priority not in valid_priorities:
+            task.priority = 'not_urgent_important'
         
         return self.repository.update(task)
     

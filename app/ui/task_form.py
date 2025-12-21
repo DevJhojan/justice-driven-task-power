@@ -42,13 +42,14 @@ class TaskForm:
         )
         
         self.priority_dropdown = ft.Dropdown(
-            label="Prioridad",
+            label="Prioridad (Matriz de Eisenhower)",
             options=[
-                ft.dropdown.Option("low", "Baja"),
-                ft.dropdown.Option("medium", "Media"),
-                ft.dropdown.Option("high", "Alta"),
+                ft.dropdown.Option("urgent_important", "🔴 Urgente e Importante"),
+                ft.dropdown.Option("not_urgent_important", "🟢 No Urgente e Importante"),
+                ft.dropdown.Option("urgent_not_important", "🟡 Urgente y No Importante"),
+                ft.dropdown.Option("not_urgent_not_important", "⚪ No Urgente y No Importante"),
             ],
-            value=task.priority if task else "medium",
+            value=task.priority if task else "not_urgent_important",
             expand=True
         )
         
@@ -109,7 +110,7 @@ class TaskForm:
         """Maneja el evento de guardar."""
         title = self.title_field.value
         description = self.description_field.value or ""
-        priority = self.priority_dropdown.value or "medium"
+        priority = self.priority_dropdown.value or "not_urgent_important"
         
         if not title or not title.strip():
             # Mostrar error
@@ -141,6 +142,6 @@ class TaskForm:
         return {
             'title': self.title_field.value or "",
             'description': self.description_field.value or "",
-            'priority': self.priority_dropdown.value or "medium"
+            'priority': self.priority_dropdown.value or "not_urgent_important"
         }
 

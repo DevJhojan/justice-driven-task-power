@@ -140,7 +140,7 @@ class Database:
                 title TEXT NOT NULL,
                 description TEXT,
                 completed INTEGER NOT NULL DEFAULT 0,
-                priority TEXT NOT NULL DEFAULT 'medium',
+                priority TEXT NOT NULL DEFAULT 'not_urgent_important',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
@@ -171,6 +171,23 @@ class Database:
             cursor.execute('ALTER TABLE subtasks ADD COLUMN deadline TEXT')
         except sqlite3.OperationalError:
             pass  # La columna ya existe
+        
+        # Migración: convertir prioridades antiguas a Matriz de Eisenhower
+        # 'high' -> 'urgent_important', 'medium' -> 'not_urgent_important', 'low' -> 'not_urgent_not_important'
+        try:
+            cursor.execute("UPDATE tasks SET priority = 'urgent_important' WHERE priority = 'high'")
+            cursor.execute("UPDATE tasks SET priority = 'not_urgent_important' WHERE priority = 'medium'")
+            cursor.execute("UPDATE tasks SET priority = 'not_urgent_not_important' WHERE priority = 'low'")
+            # Si hay alguna prioridad desconocida, convertirla a 'not_urgent_important'
+            cursor.execute("""
+                UPDATE tasks 
+                SET priority = 'not_urgent_important' 
+                WHERE priority NOT IN ('urgent_important', 'not_urgent_important', 'urgent_not_important', 'not_urgent_not_important')
+            """)
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            print(f"Error en migración de prioridades: {e}")
+            pass
         
         # Crear índice para mejorar las consultas
         cursor.execute('''

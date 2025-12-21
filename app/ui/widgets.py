@@ -32,21 +32,23 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
     )
     description_color = ft.Colors.GREY_500 if is_dark else ft.Colors.GREY_600
     
-    # Color según prioridad (usa el matiz principal)
+    # Color según prioridad de Matriz de Eisenhower
     priority_colors = {
-        'high': primary,
-        'medium': secondary,
-        'low': ft.Colors.GREY_500
+        'urgent_important': ft.Colors.RED_600,  # Rojo para Urgente e Importante
+        'not_urgent_important': ft.Colors.GREEN_600,  # Verde para No Urgente e Importante
+        'urgent_not_important': ft.Colors.ORANGE_600,  # Naranja para Urgente y No Importante
+        'not_urgent_not_important': ft.Colors.GREY_500  # Gris para No Urgente y No Importante
     }
     
     priority_labels = {
-        'high': 'Alta',
-        'medium': 'Media',
-        'low': 'Baja'
+        'urgent_important': 'Urgente e Importante',
+        'not_urgent_important': 'No Urgente e Importante',
+        'urgent_not_important': 'Urgente y No Importante',
+        'not_urgent_not_important': 'No Urgente y No Importante'
     }
     
     priority_color = priority_colors.get(task.priority, ft.Colors.GREY_300)
-    priority_label = priority_labels.get(task.priority, 'Media')
+    priority_label = priority_labels.get(task.priority, 'No Urgente e Importante')
     
     # Icono de estado
     status_icon = ft.Icons.CHECK_CIRCLE if task.completed else ft.Icons.RADIO_BUTTON_UNCHECKED
