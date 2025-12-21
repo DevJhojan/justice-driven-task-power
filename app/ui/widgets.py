@@ -8,7 +8,7 @@ from app.data.models import Task, SubTask
 
 def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtask=None, on_add_subtask=None, on_delete_subtask=None, on_edit_subtask=None, page: ft.Page = None) -> ft.Card:
     """
-    Crea una tarjeta de tarea.
+    Crea una tarjeta de tarea responsive.
     
     Args:
         task: Tarea a mostrar.
@@ -20,11 +20,22 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
     Returns:
         Widget Card con la información de la tarea.
     """
-    # Detectar el tema actual
+    # Detectar el tema actual y plataforma
     is_dark = page.theme_mode == ft.ThemeMode.DARK if page else False
+    is_desktop = page and (page.platform == ft.PagePlatform.WINDOWS or page.platform == ft.PagePlatform.LINUX or page.platform == ft.PagePlatform.MACOS)
+    is_tablet = False  # Se puede detectar por tamaño de pantalla si es necesario
+    
     scheme = page.theme.color_scheme if page and page.theme else None
     primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_600
     secondary = scheme.secondary if scheme and scheme.secondary else ft.Colors.RED_400
+    
+    # Tamaños responsive
+    title_size = 18 if is_desktop else 16
+    description_size = 14 if is_desktop else 12
+    icon_size = 24 if is_desktop else 20
+    button_icon_size = 22 if is_desktop else 20
+    card_padding = 20 if is_desktop else 16
+    card_margin = ft.margin.only(bottom=16 if is_desktop else 12)
     
     # Colores adaptativos según el tema y matiz
     title_color = ft.Colors.GREY_400 if task.completed else (
@@ -63,38 +74,47 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
     # Color de fondo de la tarjeta según el tema
     card_bgcolor = ft.Colors.BLACK87 if is_dark else None
     
-    # Construir lista de controles de la tarjeta
+    # Construir lista de controles de la tarjeta - responsive
     card_controls = [
         ft.Row(
             [
                 ft.IconButton(
                     icon=status_icon,
                     icon_color=status_color,
+                    icon_size=icon_size,
                     on_click=lambda e, task_obj=task: on_toggle(task_obj.id),
-                    tooltip="Marcar como completada" if not task.completed else "Marcar como pendiente"
+                    tooltip="Marcar como completada" if not task.completed else "Marcar como pendiente",
+                    width=icon_size + 8,
+                    height=icon_size + 8
                 ),
                 ft.Column(
                     [
                         ft.Text(
                             task.title,
-                            size=16,
+                            size=title_size,
                             weight=ft.FontWeight.BOLD,
                             style=title_style,
-                            expand=True
+                            expand=True,
+                            max_lines=2 if not is_desktop else None,
+                            overflow=ft.TextOverflow.ELLIPSIS
                         ),
                         ft.Text(
                             task.description if task.description else "Sin descripción",
-                            size=12,
+                            size=description_size,
                             color=description_color,
-                            style=title_style if task.completed else None
+                            style=title_style if task.completed else None,
+                            max_lines=3 if not is_desktop else None,
+                            overflow=ft.TextOverflow.ELLIPSIS
                         ),
                     ],
                     expand=True,
-                    spacing=4
+                    spacing=6 if is_desktop else 4,
+                    tight=False
                 ),
             ],
-            spacing=8,
-            expand=True
+            spacing=12 if is_desktop else 8,
+            expand=True,
+            wrap=False
         )
     ]
     
@@ -272,30 +292,37 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
                     ft.Container(
                         content=ft.Text(
                             priority_label,
-                            size=10,
+                            size=11 if is_desktop else 10,
                             color=ft.Colors.WHITE,
                             weight=ft.FontWeight.BOLD
                         ),
                         bgcolor=priority_color,
-                        padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                        padding=ft.padding.symmetric(
+                            horizontal=10 if is_desktop else 8,
+                            vertical=6 if is_desktop else 4
+                        ),
                         border_radius=12,
                     ),
                 ft.Row(
                     [
-                        ft.IconButton(
-                            icon=ft.Icons.EDIT,
-                            icon_color=secondary,
-                            icon_size=20,
-                            on_click=lambda e, t=task: on_edit(t),
-                            tooltip="Editar"
-                        ),
-                        ft.IconButton(
-                            icon=ft.Icons.DELETE,
-                            icon_color=primary,
-                            icon_size=20,
-                            on_click=lambda e, task_id=task.id: on_delete(task_id),
-                            tooltip="Eliminar"
-                        ),
+                ft.IconButton(
+                    icon=ft.Icons.EDIT,
+                    icon_color=secondary,
+                    icon_size=button_icon_size,
+                    on_click=lambda e, t=task: on_edit(t),
+                    tooltip="Editar",
+                    width=button_icon_size + 12 if is_desktop else button_icon_size + 8,
+                    height=button_icon_size + 12 if is_desktop else button_icon_size + 8
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.DELETE,
+                    icon_color=primary,
+                    icon_size=button_icon_size,
+                    on_click=lambda e, task_id=task.id: on_delete(task_id),
+                    tooltip="Eliminar",
+                    width=button_icon_size + 12 if is_desktop else button_icon_size + 8,
+                    height=button_icon_size + 12 if is_desktop else button_icon_size + 8
+                ),
                     ],
                     spacing=0
                 )
@@ -308,15 +335,15 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
         content=ft.Container(
             content=ft.Column(
                 card_controls,
-                spacing=8,
-                tight=True
+                spacing=10 if is_desktop else 8,
+                tight=False
             ),
-            padding=12,
-            border_radius=8,
+            padding=card_padding,
+            border_radius=10 if is_desktop else 8,
             bgcolor=card_bgcolor,
         ),
-        elevation=2,
-        margin=ft.margin.symmetric(vertical=4)
+        elevation=3 if is_desktop else 2,
+        margin=card_margin
     )
 
 

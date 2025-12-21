@@ -76,7 +76,8 @@ class HomeView:
         # Secciones: "tasks", "habits", "settings"
         self.current_section = "tasks"
         
-        # Contenedores principales para cada prioridad
+        # Contenedores principales para cada prioridad - responsive
+        # En escritorio, las tarjetas se mostrarán en grid; en móvil en columna
         self.priority_containers = {
             'urgent_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO),
             'not_urgent_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO),
@@ -1985,19 +1986,61 @@ class HomeView:
                         )
                     )
             else:
-                for task in priority_tasks:
-                    card = create_task_card(
-                        task,
-                        on_toggle=self._toggle_task,
-                        on_edit=self._edit_task,
-                        on_delete=self._delete_task,
-                        on_toggle_subtask=self._toggle_subtask,
-                        on_add_subtask=self._show_add_subtask_dialog,
-                        on_delete_subtask=self._delete_subtask,
-                        on_edit_subtask=self._edit_subtask,
-                        page=self.page
-                    )
-                    container.controls.append(card)
+                # Detectar si es escritorio para mostrar en grid
+                is_desktop = self.page.platform == ft.PagePlatform.WINDOWS or self.page.platform == ft.PagePlatform.LINUX or self.page.platform == ft.PagePlatform.MACOS
+                
+                if is_desktop and len(priority_tasks) > 0:
+                    # En escritorio, mostrar en grid de 2 columnas si hay suficientes tareas
+                    # Dividir tareas en grupos de 2 para el grid
+                    tasks_per_row = 2
+                    for i in range(0, len(priority_tasks), tasks_per_row):
+                        row_tasks = priority_tasks[i:i + tasks_per_row]
+                        row_cards = []
+                        for idx, task in enumerate(row_tasks):
+                            card = create_task_card(
+                                task,
+                                on_toggle=self._toggle_task,
+                                on_edit=self._edit_task,
+                                on_delete=self._delete_task,
+                                on_toggle_subtask=self._toggle_subtask,
+                                on_add_subtask=self._show_add_subtask_dialog,
+                                on_delete_subtask=self._delete_subtask,
+                                on_edit_subtask=self._edit_subtask,
+                                page=self.page
+                            )
+                            # Agregar margen derecho solo si no es la última tarjeta de la fila
+                            row_cards.append(
+                                ft.Container(
+                                    content=card,
+                                    expand=True,
+                                    margin=ft.margin.only(right=12 if idx < len(row_tasks) - 1 else 0)
+                                )
+                            )
+                        
+                        # Crear fila con las tarjetas
+                        container.controls.append(
+                            ft.Row(
+                                row_cards,
+                                spacing=12,
+                                wrap=False,
+                                expand=True
+                            )
+                        )
+                else:
+                    # En móvil o si hay pocas tareas, mostrar en columna simple
+                    for task in priority_tasks:
+                        card = create_task_card(
+                            task,
+                            on_toggle=self._toggle_task,
+                            on_edit=self._edit_task,
+                            on_delete=self._delete_task,
+                            on_toggle_subtask=self._toggle_subtask,
+                            on_add_subtask=self._show_add_subtask_dialog,
+                            on_delete_subtask=self._delete_subtask,
+                            on_edit_subtask=self._edit_subtask,
+                            page=self.page
+                        )
+                        container.controls.append(card)
         
         self.page.update()
     
