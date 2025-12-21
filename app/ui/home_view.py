@@ -665,7 +665,7 @@ class HomeView:
                         ),
                         ft.Text(
                             "Las dependencias de Firebase no están instaladas. "
-                            "Instala con: pip install pyrebase4 firebase-admin",
+                            "Instala con: pip install pyrebase4",
                             size=12,
                             color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
                         )
