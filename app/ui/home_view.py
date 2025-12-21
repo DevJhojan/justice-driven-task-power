@@ -1259,13 +1259,14 @@ class HomeView:
                                 content=ft.Row(
                                     [
                                         ft.Icon(ft.Icons.INFO_OUTLINE, size=20, color=ft.Colors.ORANGE),
-                                        ft.Expanded(
-                                            child=ft.Text(
+                                        ft.Container(
+                                            content=ft.Text(
                                                 "Subir: Respalda tus datos locales en Firebase.\n"
                                                 "Descargar: Trae datos de Firebase a tu dispositivo.",
                                                 size=12,
                                                 color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
-                                            )
+                                            ),
+                                            expand=True
                                         )
                                     ],
                                     spacing=10
