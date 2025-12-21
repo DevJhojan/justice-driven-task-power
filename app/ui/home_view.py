@@ -148,23 +148,32 @@ class HomeView:
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         current_filter = self.priority_filters[priority]
         
-        # Título de la sección
+        # Detectar si es escritorio o móvil
+        is_desktop = self.page.platform == ft.PagePlatform.WINDOWS or self.page.platform == ft.PagePlatform.LINUX or self.page.platform == ft.PagePlatform.MACOS
+        
+        # Título de la sección - responsive
+        title_size = 24 if is_desktop else 20
         section_title = ft.Container(
             content=ft.Text(
                 colors['text'],
-                size=20,
+                size=title_size,
                 weight=ft.FontWeight.BOLD,
                 color=colors['primary']
             ),
-            padding=ft.padding.symmetric(vertical=12, horizontal=16),
+            padding=ft.padding.symmetric(
+                vertical=16 if is_desktop else 12,
+                horizontal=24 if is_desktop else 16
+            ),
             bgcolor=colors['light'],
             border=ft.border.only(bottom=ft.BorderSide(2, colors['primary']))
         )
         
-        # Botones de filtro para esta sección
+        # Botones de filtro para esta sección - responsive
         active_bg = colors['primary']
         inactive_bg = ft.Colors.GREY_800 if is_dark else ft.Colors.GREY_100
         text_color = ft.Colors.WHITE
+        button_height = 40 if is_desktop else 36
+        button_padding = ft.padding.symmetric(vertical=12 if is_desktop else 8, horizontal=24 if is_desktop else 16)
         
         filter_buttons = ft.Row(
             [
@@ -173,7 +182,7 @@ class HomeView:
                     on_click=lambda e, p=priority: self._filter_priority_tasks(p, None),
                     bgcolor=active_bg if current_filter is None else inactive_bg,
                     color=text_color,
-                    height=36,
+                    height=button_height,
                     style=ft.ButtonStyle(
                         shape=ft.RoundedRectangleBorder(radius=8)
                     )
@@ -183,7 +192,7 @@ class HomeView:
                     on_click=lambda e, p=priority: self._filter_priority_tasks(p, False),
                     bgcolor=active_bg if current_filter is False else inactive_bg,
                     color=text_color,
-                    height=36,
+                    height=button_height,
                     style=ft.ButtonStyle(
                         shape=ft.RoundedRectangleBorder(radius=8)
                     )
@@ -193,33 +202,41 @@ class HomeView:
                     on_click=lambda e, p=priority: self._filter_priority_tasks(p, True),
                     bgcolor=active_bg if current_filter is True else inactive_bg,
                     color=text_color,
-                    height=36,
+                    height=button_height,
                     style=ft.ButtonStyle(
                         shape=ft.RoundedRectangleBorder(radius=8)
                     )
                 )
             ],
-            spacing=8,
-            scroll=ft.ScrollMode.AUTO
+            spacing=12 if is_desktop else 8,
+            scroll=ft.ScrollMode.AUTO if not is_desktop else ft.ScrollMode.DISABLED,
+            wrap=False
         )
         
         # Contenedor de tareas para esta prioridad
         tasks_container = self.priority_containers[priority]
         
-        # Contenedor completo de la sección
+        # Contenedor completo de la sección - responsive
+        section_padding = 24 if is_desktop else 16
         section_container = ft.Container(
             content=ft.Column(
                 [
                     section_title,
                     ft.Container(
                         content=filter_buttons,
-                        padding=ft.padding.symmetric(vertical=8, horizontal=16)
+                        padding=button_padding
                     ),
-                    tasks_container
+                    ft.Container(
+                        content=tasks_container,
+                        padding=ft.padding.symmetric(
+                            horizontal=section_padding
+                        )
+                    )
                 ],
                 spacing=0
             ),
-            key=f"priority_section_{priority}"  # Key para referencia de scroll
+            key=f"priority_section_{priority}",  # Key para referencia de scroll
+            margin=ft.margin.only(bottom=24 if is_desktop else 16)
         )
         
         # Guardar referencia para scroll
@@ -230,39 +247,44 @@ class HomeView:
     def _build_priority_navigation_bar(self) -> ft.Container:
         """Construye la barra de navegación con 4 botones para las prioridades."""
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        is_desktop = self.page.platform == ft.PagePlatform.WINDOWS or self.page.platform == ft.PagePlatform.LINUX or self.page.platform == ft.PagePlatform.MACOS
         bgcolor = ft.Colors.BLACK87 if is_dark else ft.Colors.WHITE
         
         buttons = []
         priorities = [
-            ('urgent_important', '🔴'),
-            ('not_urgent_important', '🟢'),
-            ('urgent_not_important', '🟡'),
-            ('not_urgent_not_important', '⚪')
+            ('urgent_important', '🔴', 'Urgente e\nImportante'),
+            ('not_urgent_important', '🟢', 'No Urgente e\nImportante'),
+            ('urgent_not_important', '🟡', 'Urgente y No\nImportante'),
+            ('not_urgent_not_important', '⚪', 'No Urgente y No\nImportante')
         ]
         
-        for priority_key, emoji in priorities:
+        for priority_key, emoji, label in priorities:
             colors = self._get_priority_colors(priority_key)
             is_active = self.current_priority_section == priority_key
+            
+            # Tamaños responsive
+            emoji_size = 24 if is_desktop else 20
+            text_size = 11 if is_desktop else 10
+            button_padding = 12 if is_desktop else 8
             
             button = ft.Container(
                 content=ft.Column(
                     [
-                        ft.Text(emoji, size=20),
+                        ft.Text(emoji, size=emoji_size),
                         ft.Text(
-                            priority_key.replace('_', '\n').replace('urgent', 'Urgente')
-                            .replace('important', 'Importante').replace('not', 'No'),
-                            size=10,
+                            label,
+                            size=text_size,
                             text_align=ft.TextAlign.CENTER,
                             max_lines=2,
                             overflow=ft.TextOverflow.ELLIPSIS
                         )
                     ],
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=4,
+                    spacing=6 if is_desktop else 4,
                     tight=True
                 ),
                 on_click=lambda e, p=priority_key: self._scroll_to_priority(p),
-                padding=8,
+                padding=button_padding,
                 bgcolor=colors['primary'] if is_active else bgcolor,
                 border=ft.border.all(2, colors['primary'] if is_active else ft.Colors.TRANSPARENT),
                 border_radius=8,
@@ -271,22 +293,39 @@ class HomeView:
             )
             buttons.append(button)
         
+        # Contenedor responsive
+        nav_padding = ft.padding.symmetric(
+            vertical=16 if is_desktop else 12,
+            horizontal=24 if is_desktop else 16
+        )
+        button_spacing = 12 if is_desktop else 8
+        
         return ft.Container(
             content=ft.Row(
                 buttons,
-                spacing=8,
-                scroll=ft.ScrollMode.AUTO
+                spacing=button_spacing,
+                scroll=ft.ScrollMode.AUTO if not is_desktop else ft.ScrollMode.DISABLED,
+                wrap=False
             ),
-            padding=ft.padding.symmetric(vertical=12, horizontal=16),
+            padding=nav_padding,
             bgcolor=bgcolor,
             border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700))
         )
     
     def _build_ui(self):
         """Construye la interfaz de usuario con Matriz de Eisenhower."""
-        # Barra de título
+        # Detectar si es escritorio o móvil para hacer responsive
+        is_desktop = self.page.platform == ft.PagePlatform.WINDOWS or self.page.platform == ft.PagePlatform.LINUX or self.page.platform == ft.PagePlatform.MACOS
+        
+        # Barra de título - responsive
         scheme = self.page.theme.color_scheme if self.page.theme else None
         title_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_400
+        title_size = 32 if is_desktop else 28
+        title_padding = ft.padding.symmetric(
+            vertical=20 if is_desktop else 16,
+            horizontal=32 if is_desktop else 20
+        )
+        button_size = 48 if is_desktop else 40
 
         self.title_bar = ft.Container(
             content=ft.Row(
@@ -295,7 +334,7 @@ class HomeView:
                         "Mis Tareas" if self.current_section == "tasks"
                         else "Mis Hábitos" if self.current_section == "habits"
                         else "Configuración",
-                        size=28,
+                        size=title_size,
                         weight=ft.FontWeight.BOLD,
                         color=title_color,
                         expand=True
@@ -306,14 +345,15 @@ class HomeView:
                         bgcolor=title_color,
                         icon_color=ft.Colors.WHITE,
                         tooltip="Nueva Tarea",
-                        width=40,
-                        height=40
+                        width=button_size,
+                        height=button_size,
+                        icon_size=24 if is_desktop else 20
                     )
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER
             ),
-            padding=ft.padding.symmetric(vertical=16, horizontal=20),
+            padding=title_padding,
             bgcolor=ft.Colors.BLACK87 if self.page.theme_mode == ft.ThemeMode.DARK else ft.Colors.RED_50
         )
         
@@ -331,19 +371,46 @@ class HomeView:
             self._build_priority_section('not_urgent_not_important')
         ]
         
-        # Contenedor principal con scroll
+        # Contenedor principal con scroll - responsive
+        section_spacing = 24 if is_desktop else 16
         main_scroll_content = ft.Column(
             priority_sections,
-            spacing=16,
+            spacing=section_spacing,
             scroll=ft.ScrollMode.AUTO,
             expand=True
         )
         
-        self.main_scroll_container = ft.Container(
-            content=main_scroll_content,
-            padding=ft.padding.only(bottom=16),
-            expand=True
+        # Padding responsive para el contenedor principal
+        main_padding = ft.padding.only(
+            bottom=24 if is_desktop else 16,
+            left=0,
+            right=0
         )
+        
+        # En escritorio, limitar el ancho máximo para mejor legibilidad
+        if is_desktop:
+            self.main_scroll_container = ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Container(width=0, expand=True),  # Espaciador izquierdo
+                        ft.Container(
+                            content=main_scroll_content,
+                            width=1200,  # Ancho máximo para escritorio
+                            expand=False
+                        ),
+                        ft.Container(width=0, expand=True)  # Espaciador derecho
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER
+                ),
+                padding=main_padding,
+                expand=True
+            )
+        else:
+            self.main_scroll_container = ft.Container(
+                content=main_scroll_content,
+                padding=main_padding,
+                expand=True
+            )
         
         # Vista principal
         main_view = ft.Container(
@@ -1940,6 +2007,61 @@ class HomeView:
         for priority in self.priority_filters:
             self.priority_filters[priority] = filter_completed
         self._load_tasks()
+    
+    def _filter_priority_tasks(self, priority: str, filter_completed: Optional[bool]):
+        """Filtra las tareas de una prioridad específica."""
+        self.priority_filters[priority] = filter_completed
+        self._load_tasks()
+        # Reconstruir la sección para actualizar los botones de filtro
+        self._rebuild_priority_section(priority)
+    
+    def _rebuild_priority_section(self, priority: str):
+        """Reconstruye una sección de prioridad específica."""
+        # Encontrar el contenedor principal y reemplazar la sección
+        if self.main_scroll_container and self.main_scroll_container.content:
+            main_column = self.main_scroll_container.content
+            if isinstance(main_column, ft.Column):
+                # Encontrar el índice de la sección
+                priorities_order = ['urgent_important', 'not_urgent_important', 'urgent_not_important', 'not_urgent_not_important']
+                try:
+                    index = priorities_order.index(priority)
+                    # Reconstruir la sección
+                    new_section = self._build_priority_section(priority)
+                    main_column.controls[index] = new_section
+                    self.priority_section_refs[priority] = new_section
+                except ValueError:
+                    pass
+        
+        # Actualizar barra de navegación
+        self._update_priority_navigation()
+        self.page.update()
+    
+    def _update_priority_navigation(self):
+        """Actualiza la barra de navegación de prioridades."""
+        # Reconstruir la barra de navegación con el estado actualizado
+        if self.home_view and len(self.home_view.controls) > 0:
+            main_column = self.home_view.controls[0]
+            if isinstance(main_column, ft.Column) and len(main_column.controls) > 1:
+                main_view = main_column.controls[1]
+                if isinstance(main_view, ft.Container) and main_view.content:
+                    main_content = main_view.content
+                    if isinstance(main_content, ft.Column) and len(main_content.controls) > 0:
+                        # Reemplazar la barra de navegación
+                        new_nav = self._build_priority_navigation_bar()
+                        main_content.controls[0] = new_nav
+    
+    def _scroll_to_priority(self, priority: str):
+        """Hace scroll automático hasta la sección de prioridad especificada."""
+        self.current_priority_section = priority
+        
+        # Actualizar la barra de navegación para reflejar el estado activo
+        self._update_priority_navigation()
+        
+        # Nota: Flet no tiene scroll programático directo en versiones actuales
+        # El scroll manual funcionará correctamente, y los botones sirven como navegación visual
+        # En futuras versiones de Flet se puede implementar scroll programático
+        
+        self.page.update()
     
     def _show_new_task_form(self, e):
         """Navega a la vista del formulario para crear una nueva tarea."""
