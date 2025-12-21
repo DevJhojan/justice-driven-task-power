@@ -1073,87 +1073,303 @@ class HomeView:
             self.page.update()
     
     def _start_firebase_sync(self, e):
-        """Inicia la sincronización con Firebase."""
+        """Inicia la sincronización con Firebase y muestra página de resultados."""
         if not self.firebase_sync_service:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Firebase no está disponible"),
-                bgcolor=ft.Colors.RED,
-                duration=3000
+            self._show_sync_results_page(
+                success=False,
+                error_message="Firebase no está disponible"
             )
-            self.page.snack_bar.open = True
-            self.page.update()
             return
         
         # Verificar autenticación
         if not self.firebase_auth_service.is_authenticated():
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Debes iniciar sesión primero"),
-                bgcolor=ft.Colors.ORANGE,
-                duration=3000
+            self._show_sync_results_page(
+                success=False,
+                error_message="Debes iniciar sesión primero para sincronizar"
             )
-            self.page.snack_bar.open = True
-            self.page.update()
             return
         
-        # Mostrar mensaje de sincronización
-        self.page.snack_bar = ft.SnackBar(
-            content=ft.Text("Sincronizando datos..."),
-            bgcolor=ft.Colors.BLUE,
-            duration=3000
-        )
-        self.page.snack_bar.open = True
-        self.page.update()
+        # Mostrar página de carga mientras sincroniza
+        self._show_sync_loading_page()
         
         try:
             result = self.firebase_sync_service.sync()
             
-            if result.success:
-                msg_parts = ["✓ Sincronización completada"]
-                if result.tasks_uploaded > 0:
-                    msg_parts.append(f"Tareas subidas: {result.tasks_uploaded}")
-                if result.tasks_downloaded > 0:
-                    msg_parts.append(f"Tareas descargadas: {result.tasks_downloaded}")
-                if result.habits_uploaded > 0:
-                    msg_parts.append(f"Hábitos subidos: {result.habits_uploaded}")
-                if result.habits_downloaded > 0:
-                    msg_parts.append(f"Hábitos descargados: {result.habits_downloaded}")
-                
-                if result.errors:
-                    msg_parts.append(f"\n⚠ Advertencias: {len(result.errors)}")
-                
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("\n".join(msg_parts)),
-                    bgcolor=ft.Colors.GREEN if not result.errors else ft.Colors.ORANGE,
-                    duration=5000
-                )
-                self.page.snack_bar.open = True
-                
-                # Refrescar vistas si es necesario
-                if result.tasks_downloaded > 0 and self.current_section == "tasks":
-                    self._load_tasks()
-                if result.habits_downloaded > 0 and self.current_section == "habits":
-                    self._load_habits()
-            else:
-                error_msg = "Error durante la sincronización"
-                if result.errors:
-                    error_msg += f": {result.errors[0]}"
-                
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(error_msg),
-                    bgcolor=ft.Colors.RED,
-                    duration=5000
-                )
-                self.page.snack_bar.open = True
+            # Refrescar vistas si es necesario
+            if result.tasks_downloaded > 0 and self.current_section == "tasks":
+                self._load_tasks()
+            if result.habits_downloaded > 0 and self.current_section == "habits":
+                self._load_habits()
+            
+            # Mostrar página de resultados
+            self._show_sync_results_page(
+                success=result.success,
+                sync_result=result
+            )
         
         except Exception as ex:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error al sincronizar: {str(ex)}"),
-                bgcolor=ft.Colors.RED,
-                duration=5000
+            # Mostrar página de error
+            self._show_sync_results_page(
+                success=False,
+                error_message=str(ex)
             )
-            self.page.snack_bar.open = True
-        finally:
-            self.page.update()
+    
+    def _show_sync_loading_page(self):
+        """Muestra una página de carga durante la sincronización."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        scheme = self.page.theme.color_scheme if self.page.theme else None
+        primary_color = scheme.primary if scheme and scheme.primary else ft.Colors.BLUE_700
+        
+        loading_view = ft.View(
+            route="/sync-loading",
+            appbar=ft.AppBar(
+                title=ft.Text("Sincronizando..."),
+                bgcolor=primary_color
+            ),
+            padding=20,
+            controls=[
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.ProgressRing(width=64, height=64),
+                            ft.Divider(height=30),
+                            ft.Text(
+                                "Sincronizando datos con Firebase...",
+                                size=18,
+                                weight=ft.FontWeight.BOLD,
+                                text_align=ft.TextAlign.CENTER
+                            ),
+                            ft.Text(
+                                "Por favor espera",
+                                size=14,
+                                color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400,
+                                text_align=ft.TextAlign.CENTER
+                            )
+                        ],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=15
+                    ),
+                    padding=40,
+                    alignment=ft.alignment.center
+                )
+            ]
+        )
+        
+        self.page.views.append(loading_view)
+        self.page.go("/sync-loading")
+        self.page.update()
+    
+    def _show_sync_results_page(self, success: bool, sync_result=None, error_message: str = None):
+        """
+        Muestra una página completa con los resultados de la sincronización.
+        
+        Args:
+            success: True si la sincronización fue exitosa
+            sync_result: Objeto SyncResult con los detalles de la sincronización
+            error_message: Mensaje de error si success=False
+        """
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        scheme = self.page.theme.color_scheme if self.page.theme else None
+        primary_color = scheme.primary if scheme and scheme.primary else ft.Colors.BLUE_700
+        
+        # Remover la página de carga si existe
+        if len(self.page.views) > 1 and self.page.views[-1].route == "/sync-loading":
+            self.page.views.pop()
+        
+        # Contenido de la página
+        content_controls = []
+        
+        if success and sync_result:
+            # Página de éxito
+            icon_color = ft.Colors.GREEN
+            title_text = "✓ Sincronización completada"
+            title_color = ft.Colors.GREEN
+            
+            # Estadísticas
+            stats = []
+            
+            if sync_result.tasks_uploaded > 0:
+                stats.append(ft.ListTile(
+                    leading=ft.Icon(ft.Icons.UPLOAD, color=ft.Colors.BLUE),
+                    title=ft.Text(f"Tareas subidas: {sync_result.tasks_uploaded}"),
+                    subtitle=ft.Text("Datos locales respaldados en Firebase")
+                ))
+            
+            if sync_result.tasks_downloaded > 0:
+                stats.append(ft.ListTile(
+                    leading=ft.Icon(ft.Icons.DOWNLOAD, color=ft.Colors.GREEN),
+                    title=ft.Text(f"Tareas descargadas: {sync_result.tasks_downloaded}"),
+                    subtitle=ft.Text("Datos remotos agregados localmente")
+                ))
+            
+            if sync_result.habits_uploaded > 0:
+                stats.append(ft.ListTile(
+                    leading=ft.Icon(ft.Icons.UPLOAD, color=ft.Colors.BLUE),
+                    title=ft.Text(f"Hábitos subidos: {sync_result.habits_uploaded}"),
+                    subtitle=ft.Text("Datos locales respaldados en Firebase")
+                ))
+            
+            if sync_result.habits_downloaded > 0:
+                stats.append(ft.ListTile(
+                    leading=ft.Icon(ft.Icons.DOWNLOAD, color=ft.Colors.GREEN),
+                    title=ft.Text(f"Hábitos descargados: {sync_result.habits_downloaded}"),
+                    subtitle=ft.Text("Datos remotos agregados localmente")
+                ))
+            
+            if not stats:
+                stats.append(ft.Text(
+                    "No hubo cambios que sincronizar. Los datos ya están actualizados.",
+                    size=14,
+                    color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400,
+                    text_align=ft.TextAlign.CENTER
+                ))
+            
+            content_controls.extend(stats)
+            
+            # Advertencias si las hay
+            if sync_result.errors:
+                content_controls.append(ft.Divider(height=20))
+                content_controls.append(ft.Text(
+                    f"⚠ Advertencias ({len(sync_result.errors)}):",
+                    size=16,
+                    weight=ft.FontWeight.BOLD,
+                    color=ft.Colors.ORANGE
+                ))
+                
+                for error in sync_result.errors:
+                    error_text = ft.Text(error, size=12, selectable=True)
+                    copy_button = ft.IconButton(
+                        icon=ft.Icons.COPY,
+                        tooltip="Copiar advertencia",
+                        icon_size=18,
+                        icon_color=ft.Colors.ORANGE,
+                        on_click=lambda e, err=error: self._copy_error_to_clipboard(err, None)
+                    )
+                    
+                    content_controls.append(
+                        ft.Container(
+                            content=ft.Row(
+                                [
+                                    ft.Container(content=error_text, expand=True, padding=ft.padding.only(right=5)),
+                                    copy_button
+                                ],
+                                spacing=5,
+                                alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                            ),
+                            padding=10,
+                            bgcolor=ft.Colors.ORANGE_50 if not is_dark else ft.Colors.ORANGE_900,
+                            border_radius=5,
+                            border=ft.border.all(1, ft.Colors.ORANGE_300 if not is_dark else ft.Colors.ORANGE_700)
+                        )
+                    )
+        
+        else:
+            # Página de error
+            icon_color = ft.Colors.RED
+            title_text = "✗ Error en la sincronización"
+            title_color = ft.Colors.RED
+            
+            error_msg = error_message or "Error desconocido durante la sincronización"
+            if sync_result and sync_result.errors:
+                error_msg = "\n".join(sync_result.errors)
+            
+            # Texto del error (seleccionable)
+            error_text = ft.Text(
+                error_msg,
+                size=14,
+                selectable=True,
+                weight=ft.FontWeight.W_500
+            )
+            
+            # Botón para copiar error
+            copy_button = ft.IconButton(
+                icon=ft.Icons.COPY,
+                tooltip="Copiar error al portapapeles",
+                icon_size=20,
+                icon_color=ft.Colors.RED,
+                on_click=lambda e: self._copy_error_to_clipboard(error_msg, None)
+            )
+            
+            content_controls.append(
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Row(
+                                [
+                                    ft.Container(content=error_text, expand=True, padding=ft.padding.only(right=5)),
+                                    copy_button
+                                ],
+                                spacing=5,
+                                alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                            )
+                        ],
+                        spacing=10
+                    ),
+                    padding=15,
+                    bgcolor=ft.Colors.RED_50 if not is_dark else ft.Colors.RED_900,
+                    border_radius=10,
+                    border=ft.border.all(2, ft.Colors.RED_300 if not is_dark else ft.Colors.RED_700)
+                )
+            )
+        
+        # Botón para volver
+        back_button = ft.ElevatedButton(
+            text="Volver",
+            icon=ft.Icons.ARROW_BACK,
+            on_click=lambda e: self._go_back(),
+            expand=True,
+            height=50,
+            bgcolor=primary_color,
+            color=ft.Colors.WHITE
+        )
+        
+        # Construir la vista
+        results_view = ft.View(
+            route="/sync-results",
+            appbar=ft.AppBar(
+                title=ft.Text("Resultados de sincronización"),
+                leading=ft.IconButton(
+                    icon=ft.Icons.ARROW_BACK,
+                    on_click=lambda e: self._go_back()
+                ),
+                bgcolor=primary_color
+            ),
+            padding=20,
+            scroll=ft.ScrollMode.AUTO,
+            controls=[
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Icon(
+                                ft.Icons.CHECK_CIRCLE if success else ft.Icons.ERROR,
+                                size=64,
+                                color=icon_color
+                            ),
+                            ft.Text(
+                                title_text,
+                                size=24,
+                                weight=ft.FontWeight.BOLD,
+                                color=title_color,
+                                text_align=ft.TextAlign.CENTER
+                            ),
+                            ft.Divider(height=30),
+                            *content_controls,
+                            ft.Divider(height=30),
+                            back_button
+                        ],
+                        spacing=15,
+                        horizontal_alignment=ft.CrossAxisAlignment.STRETCH
+                    ),
+                    padding=20,
+                    border_radius=10,
+                    bgcolor=ft.Colors.GREY_900 if is_dark else ft.Colors.GREY_100
+                )
+            ]
+        )
+        
+        self.page.views.append(results_view)
+        self.page.go("/sync-results")
+        self.page.update()
     
     def _go_back(self, e=None):
         """Vuelve a la vista anterior."""
