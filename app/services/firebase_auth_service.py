@@ -106,13 +106,23 @@ class FirebaseAuthService:
         
         # Configuración de Firebase para pyrebase4
         # pyrebase4 usa Firebase REST API, no requiere configuración completa de Android
+        # IMPORTANTE: El authDomain debe coincidir exactamente con el dominio configurado en Firebase Console
+        # Si usas un dominio personalizado, debes ajustarlo aquí
         firebase_config = {
             "apiKey": api_key,
-            "authDomain": f"{project_id}.firebaseapp.com",
-            "databaseURL": f"https://{project_id}-default-rtdb.firebaseio.com",
+            "authDomain": f"{project_id}.firebaseapp.com",  # Dominio estándar de Firebase
+            "databaseURL": "https://justice-driven-task-power-default-rtdb.firebaseio.com",
             "storageBucket": storage_bucket,
             "projectId": project_id
         }
+        
+        # Validar que tenemos todos los campos necesarios
+        required_fields = ["apiKey", "authDomain", "projectId"]
+        missing_fields = [field for field in required_fields if not firebase_config.get(field)]
+        if missing_fields:
+            raise ValueError(
+                f"Configuración de Firebase incompleta. Faltan: {', '.join(missing_fields)}"
+            )
         
         try:
             self.firebase = pyrebase.initialize_app(firebase_config)
@@ -210,6 +220,15 @@ class FirebaseAuthService:
                     "No hay conexión a internet. La app funciona completamente offline, "
                     "pero el registro requiere conexión a Firebase."
                 )
+            elif 'CONFIGURATION_NOT_FOUND' in error_msg or '400' in error_msg:
+                raise RuntimeError(
+                    "Firebase Authentication no está configurado correctamente. "
+                    "Verifica que:\n"
+                    "1. Firebase Authentication esté habilitado en Firebase Console\n"
+                    "2. El método Email/Password esté habilitado\n"
+                    "3. El API key tenga permisos para Firebase Authentication API\n"
+                    f"Error técnico: {error_msg}"
+                )
             elif 'EMAIL_EXISTS' in error_msg:
                 raise ValueError("Este correo electrónico ya está registrado")
             elif 'INVALID_EMAIL' in error_msg:
@@ -284,14 +303,36 @@ class FirebaseAuthService:
                     "No hay conexión a internet. La app funciona completamente offline, "
                     "pero el inicio de sesión requiere conexión a Firebase."
                 )
+            elif 'CONFIGURATION_NOT_FOUND' in error_msg:
+                raise RuntimeError(
+                    "Firebase Authentication no está configurado correctamente. "
+                    "Verifica que:\n"
+                    "1. Firebase Authentication esté habilitado en Firebase Console\n"
+                    "2. El método Email/Password esté habilitado\n"
+                    "3. El API key tenga permisos para Firebase Authentication API\n"
+                    f"Error técnico: {error_msg}"
+                )
+            elif 'INVALID_LOGIN_CREDENTIALS' in error_msg:
+                # Este error puede significar que el usuario no existe o la contraseña es incorrecta
+                raise ValueError("Correo electrónico o contraseña incorrectos")
             elif 'INVALID_PASSWORD' in error_msg or 'INVALID_EMAIL' in error_msg:
                 raise ValueError("Correo electrónico o contraseña incorrectos")
             elif 'USER_DISABLED' in error_msg:
                 raise ValueError("Esta cuenta ha sido deshabilitada")
             elif 'USER_NOT_FOUND' in error_msg:
                 raise ValueError("No existe una cuenta con este correo electrónico")
+            elif 'EMAIL_NOT_FOUND' in error_msg:
+                raise ValueError("No existe una cuenta con este correo electrónico")
             else:
-                raise RuntimeError(f"Error al iniciar sesión: {error_msg}")
+                # Para otros errores 400, verificar si es un error de configuración o credenciales
+                if '400' in error_msg and 'CONFIGURATION_NOT_FOUND' not in error_msg:
+                    # Podría ser un error de credenciales u otro problema
+                    if 'INVALID' in error_msg.upper():
+                        raise ValueError("Correo electrónico o contraseña incorrectos")
+                    else:
+                        raise RuntimeError(f"Error al iniciar sesión: {error_msg}")
+                else:
+                    raise RuntimeError(f"Error al iniciar sesión: {error_msg}")
     
     def logout(self) -> None:
         """Cierra la sesión del usuario actual."""

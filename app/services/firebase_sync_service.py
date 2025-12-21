@@ -140,7 +140,7 @@ class FirebaseSyncService:
             firebase_config = {
                 "apiKey": api_key,
                 "authDomain": f"{project_id}.firebaseapp.com",
-                "databaseURL": f"https://{project_id}-default-rtdb.firebaseio.com",
+                "databaseURL": "https://justice-driven-task-power-default-rtdb.firebaseio.com",
                 "storageBucket": storage_bucket,
                 "projectId": project_id
             }
