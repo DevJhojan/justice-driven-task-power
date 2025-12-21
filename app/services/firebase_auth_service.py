@@ -389,14 +389,26 @@ class FirebaseAuthService:
             expires_at = datetime.fromisoformat(expires_at_str)
             if datetime.now() >= expires_at - timedelta(minutes=5):  # Refrescar 5 minutos antes de expirar
                 # Token expirado o a punto de expirar, intentar refrescar
-                try:
-                    refreshed_user = self._refresh_token(refresh_token)
-                    if refreshed_user and refreshed_user.get('id_token'):
-                        self._save_auth_token(refreshed_user, self.current_user['email'])
-                        return refreshed_user['id_token']
-                except Exception as e:
-                    print(f"Error al refrescar token: {e}")
-                    self._clear_auth_token()  # Limpiar si el refresh falla
+                if refresh_token and refresh_token.strip():
+                    try:
+                        refreshed_user = self._refresh_token(refresh_token)
+                        if refreshed_user and refreshed_user.get('id_token'):
+                            self._save_auth_token(refreshed_user, self.current_user['email'])
+                            return refreshed_user['id_token']
+                        else:
+                            # Refresh falló, limpiar tokens y requerir nuevo login
+                            self._clear_auth_token()
+                            self.current_user = None
+                            return None
+                    except Exception as e:
+                        # Error inesperado, limpiar y requerir nuevo login
+                        print(f"Error inesperado al refrescar token: {e}")
+                        self._clear_auth_token()
+                        self.current_user = None
+                        return None
+                else:
+                    # No hay refresh_token válido, limpiar y requerir nuevo login
+                    self._clear_auth_token()
                     self.current_user = None
                     return None
         return id_token
@@ -457,16 +469,22 @@ class FirebaseAuthService:
         
         # Verificar si el token ha expirado
         expires_at_str = row['expires_at']
+        refresh_token = row['refresh_token']
+        
         if expires_at_str:
             expires_at = datetime.fromisoformat(expires_at_str)
             if datetime.now() > expires_at:
-                # Token expirado, intentar refrescar
-                try:
-                    refreshed = self._refresh_token(row['refresh_token'])
-                    if refreshed:
-                        return self._load_auth_token()  # Recargar después del refresh
-                except:
-                    pass
+                # Token expirado, intentar refrescar solo si hay refresh_token válido
+                if refresh_token and refresh_token.strip():
+                    try:
+                        refreshed = self._refresh_token(refresh_token)
+                        if refreshed:
+                            return self._load_auth_token()  # Recargar después del refresh
+                    except Exception as e:
+                        # Error al refrescar, retornar None para requerir nuevo login
+                        print(f"Error al refrescar token en _load_auth_token: {e}")
+                        pass
+                # No hay refresh_token o falló el refresh, requerir nuevo login
                 return None
         
         return {
@@ -487,16 +505,34 @@ class FirebaseAuthService:
         if not REQUESTS_AVAILABLE or not self.api_key:
             return None
         
+        # Validar que el refresh_token existe y no está vacío
+        if not refresh_token or not refresh_token.strip():
+            return None
+        
         try:
             url = f"https://securetoken.googleapis.com/v1/token?key={self.api_key}"
             payload = {
                 "grant_type": "refresh_token",
-                "refresh_token": refresh_token
+                "refresh_token": refresh_token.strip()
             }
             
             response = requests.post(url, json=payload, timeout=10)
+            
+            # Manejar errores específicos
+            if response.status_code == 400:
+                # Token inválido o expirado, no intentar más
+                error_data = response.json() if response.text else {}
+                error_message = error_data.get('error', {}).get('message', 'Token inválido o expirado')
+                print(f"Token de refresco inválido o expirado: {error_message}")
+                return None
+            
             response.raise_for_status()
             token_data = response.json()
+            
+            # Validar que la respuesta contiene los campos necesarios
+            if not token_data.get('id_token') or not token_data.get('refresh_token'):
+                print("Respuesta de refresh token incompleta")
+                return None
             
             # Convertir formato de respuesta a formato esperado
             return {
@@ -505,8 +541,24 @@ class FirebaseAuthService:
                 'refreshToken': token_data.get('refresh_token'),
                 'expiresIn': token_data.get('expires_in', '3600')
             }
+        except requests.exceptions.RequestException as e:
+            # Manejar errores de red específicamente
+            if hasattr(e, 'response') and e.response is not None:
+                if e.response.status_code == 400:
+                    # Token inválido, no loguear como error crítico
+                    return None
+                error_data = {}
+                try:
+                    error_data = e.response.json()
+                except:
+                    pass
+                error_message = error_data.get('error', {}).get('message', str(e))
+                print(f"Error al refrescar token (HTTP {e.response.status_code}): {error_message}")
+            else:
+                print(f"Error de red al refrescar token: {e}")
+            return None
         except Exception as e:
-            print(f"Error al refrescar token: {e}")
+            print(f"Error inesperado al refrescar token: {e}")
             return None
     
     def _clear_auth_token(self) -> None:
