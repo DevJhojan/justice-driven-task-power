@@ -767,16 +767,18 @@ class HomeView:
             
             self._show_error_page(
                 "Error: Dependencias no disponibles",
-                "Las dependencias de Google Sheets API no están incluidas en el APK.\n\n"
+                "Las dependencias de Google Sheets API no están incluidas en el APK actual.\n\n"
                 "SOLUCIÓN:\n\n"
-                "1. Las dependencias YA están en pyproject.toml:\n"
+                "Las dependencias están configuradas en pyproject.toml:\n"
                 "   ✓ google-api-python-client>=2.100.0\n"
                 "   ✓ google-auth-httplib2>=0.1.1\n"
-                "   ✓ google-auth-oauthlib>=1.1.0\n"
-                "2. NECESITAS RECONSTRUIR el APK para incluirlas:\n"
+                "   ✓ google-auth-oauthlib>=1.1.0\n\n"
+                "Para incluirlas en el APK, ejecuta:\n"
                 "   ./build_android.sh\n\n"
-                "3. El APK actual se construyó ANTES de agregar estas dependencias.\n"
-                "   Por eso no están disponibles en la aplicación actual."
+                "El script de build incluirá automáticamente:\n"
+                "   - Las dependencias de Google API\n"
+                "   - El módulo wsgiref (necesario para OAuth2)\n"
+                "   - Todos los assets de la aplicación"
                 + error_details
             )
             return
@@ -1370,23 +1372,25 @@ class HomeView:
             
             self._show_error_page(
                 "Error: Dependencias no disponibles",
-                "Las dependencias de Google Sheets API no están incluidas en el APK.\n\n"
+                "Las dependencias de Google Sheets API no están incluidas en el APK actual.\n\n"
                 "SOLUCIÓN:\n\n"
-                "1. Las dependencias YA están en pyproject.toml:\n"
+                "Las dependencias están configuradas en pyproject.toml:\n"
                 "   ✓ google-api-python-client>=2.100.0\n"
                 "   ✓ google-auth-httplib2>=0.1.1\n"
                 "   ✓ google-auth-oauthlib>=1.1.0\n\n"
-                "2. NECESITAS RECONSTRUIR el APK para incluirlas:\n"
+                "Para incluirlas en el APK, ejecuta:\n"
                 "   ./build_android.sh\n\n"
-                "3. El APK actual se construyó ANTES de agregar estas dependencias.\n"
-                "   Por eso no están disponibles en la aplicación actual."
+                "El script de build incluirá automáticamente:\n"
+                "   - Las dependencias de Google API\n"
+                "   - El módulo wsgiref (necesario para OAuth2)\n"
+                "   - Todos los assets de la aplicación"
                 + error_details
             )
             return
         
         if self.google_sheets_service is None:
             try:
-                self.google_sheets_service = GoogleSheetsService()
+                self.google_sheets_service = GoogleSheetsService(page=self.page)
             except Exception as ex:
                 self._show_error_page(
                     "Error: No se pudo inicializar Google Sheets",
@@ -1494,11 +1498,14 @@ class HomeView:
                 self._show_error_page(
                     "Error: Dependencias no disponibles",
                     f"No se pueden importar las dependencias de Google Sheets:\n\n{error_msg}\n\n"
-                    "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
-                    "- google-api-python-client>=2.100.0\n"
-                    "- google-auth-httplib2>=0.1.1\n"
-                    "- google-auth-oauthlib>=1.1.0\n\n"
-                    "Luego reconstruye la aplicación con: ./build_android.sh"
+                    "SOLUCIÓN:\n\n"
+                    "Las dependencias están configuradas en pyproject.toml:\n"
+                    "   ✓ google-api-python-client>=2.100.0\n"
+                    "   ✓ google-auth-httplib2>=0.1.1\n"
+                    "   ✓ google-auth-oauthlib>=1.1.0\n\n"
+                    "Para incluirlas en el APK, ejecuta:\n"
+                    "   ./build_android.sh\n\n"
+                    "El script incluirá automáticamente todas las dependencias y wsgiref."
                 )
         except Exception as ex:
             error_type = type(ex).__name__
@@ -1529,23 +1536,25 @@ class HomeView:
             
             self._show_error_page(
                 "Error: Dependencias no disponibles",
-                "Las dependencias de Google Sheets API no están incluidas en el APK.\n\n"
+                "Las dependencias de Google Sheets API no están incluidas en el APK actual.\n\n"
                 "SOLUCIÓN:\n\n"
-                "1. Las dependencias YA están en pyproject.toml:\n"
+                "Las dependencias están configuradas en pyproject.toml:\n"
                 "   ✓ google-api-python-client>=2.100.0\n"
                 "   ✓ google-auth-httplib2>=0.1.1\n"
                 "   ✓ google-auth-oauthlib>=1.1.0\n\n"
-                "2. NECESITAS RECONSTRUIR el APK para incluirlas:\n"
+                "Para incluirlas en el APK, ejecuta:\n"
                 "   ./build_android.sh\n\n"
-                "3. El APK actual se construyó ANTES de agregar estas dependencias.\n"
-                "   Por eso no están disponibles en la aplicación actual."
+                "El script de build incluirá automáticamente:\n"
+                "   - Las dependencias de Google API\n"
+                "   - El módulo wsgiref (necesario para OAuth2)\n"
+                "   - Todos los assets de la aplicación"
                 + error_details
             )
             return
         
         if self.google_sheets_service is None:
             try:
-                self.google_sheets_service = GoogleSheetsService()
+                self.google_sheets_service = GoogleSheetsService(page=self.page)
             except Exception as ex:
                 self._show_error_page(
                     "Error: No se pudo inicializar Google Sheets",
