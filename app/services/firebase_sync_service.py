@@ -1,5 +1,5 @@
 """
-Servicio de sincronización con Firebase Realtime Database.
+Servicio de sincronización con Firebase Realtime Database usando REST API directamente.
 
 ARQUITECTURA OFFLINE-FIRST:
 - SQLite es la base de datos principal y fuente de verdad local
@@ -16,13 +16,13 @@ Este módulo maneja:
 - Resolución de conflictos usando timestamps (solo actualiza si remoto es más reciente)
 
 Decisiones técnicas:
-- Usa pyrebase4 para operaciones con Realtime Database (compatible con Android)
+- Usa requests para llamar directamente a Firebase Realtime Database REST API
+- Evita dependencias problemáticas como pyrebase4/gcloud
 - Mantiene SQLite como base de datos principal (offline-first)
 - Firebase solo como respaldo y sincronización
 - Usa timestamps para resolución de conflictos (last-write-wins con verificación)
 - Cada usuario tiene su propia estructura de datos en Realtime Database
 - Estructura: /users/{userId}/tasks/{taskId}, /users/{userId}/habits/{habitId}
-- pyrebase4 no soporta Firestore directamente, por lo que usamos Realtime Database
 - Maneja errores de red sin bloquear la app (offline-first)
 """
 
@@ -32,11 +32,11 @@ from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
 
 try:
-    import pyrebase
-    PYREBASE_AVAILABLE = True
+    import requests
+    REQUESTS_AVAILABLE = True
 except ImportError:
-    PYREBASE_AVAILABLE = False
-    _pyrebase_import_error = "pyrebase4 no está instalado"
+    REQUESTS_AVAILABLE = False
+    _requests_import_error = "requests no está instalado"
 
 from app.data.database import Database
 from app.data.models import Task, SubTask, Habit, HabitCompletion
@@ -65,13 +65,13 @@ class FirebaseSyncService:
     Servicio para sincronizar datos entre SQLite local y Firebase Realtime Database.
     
     Decisiones técnicas:
-    - Usa pyrebase4 para operaciones con Realtime Database (compatible con Android)
+    - Usa requests para llamar directamente a Firebase Realtime Database REST API
+    - Evita dependencias problemáticas como pyrebase4/gcloud
     - Mantiene arquitectura offline-first: SQLite es la fuente de verdad local
     - Firebase es solo respaldo y sincronización entre dispositivos
     - Cada usuario tiene su propia estructura: /users/{userId}/tasks/{taskId}, /users/{userId}/habits/{habitId}
     - Resolución de conflictos: last-write-wins usando updated_at timestamp
     - No sobrescribe datos locales sin verificar timestamps
-    - pyrebase4 no soporta Firestore, por lo que usamos Realtime Database
     """
     
     def __init__(
@@ -86,28 +86,26 @@ class FirebaseSyncService:
             auth_service: Servicio de autenticación Firebase
             database: Instancia de Database para acceso local
         """
-        if not PYREBASE_AVAILABLE:
+        if not REQUESTS_AVAILABLE:
             raise ImportError(
-                f"pyrebase4 no está disponible: {_pyrebase_import_error}\n"
-                "Instala con: pip install pyrebase4"
+                f"requests no está disponible: {_requests_import_error}\n"
+                "Instala con: pip install requests"
             )
         
         self.auth_service = auth_service
         self.db = database or Database()
         self.task_service = TaskService()
         self.habit_service = HabitService()
-        self.firebase = None
-        self.db_realtime = None
+        self.database_url = None
         self._initialize_realtime_db()
     
     def _initialize_realtime_db(self) -> None:
         """
-        Inicializa Firebase Realtime Database usando google-services.json.
+        Inicializa la configuración de Firebase Realtime Database.
         
         Decisiones técnicas:
-        - Usa pyrebase4 para Realtime Database (compatible con aplicaciones cliente Android)
-        - firebase-admin requiere credenciales de servicio (server-side), no adecuado para apps cliente
-        - pyrebase4 no soporta Firestore, por lo que usamos Realtime Database
+        - Lee google-services.json para obtener la URL de Realtime Database
+        - Usa requests para operaciones REST API (compatible con Android)
         - Realtime Database es adecuado para sincronización de datos estructurados
         """
         # Buscar google-services.json
@@ -121,35 +119,12 @@ class FirebaseSyncService:
                 "Necesario para inicializar Firebase Realtime Database."
             )
         
-        # Usar pyrebase4 para Realtime Database (compatible con Android)
-        try:
-            import pyrebase
-            with open(google_services_path, 'r', encoding='utf-8') as f:
-                config_data = json.load(f)
-            
-            project_info = config_data.get('project_info', {})
-            client_info = config_data.get('client', [{}])[0]
-            api_key_info = client_info.get('api_key', [{}])[0]
-            
-            project_id = project_info.get('project_id')
-            api_key = api_key_info.get('current_key')
-            storage_bucket = project_info.get('storage_bucket', f"{project_id}.appspot.com")
-            
-            # Configuración de Firebase para pyrebase4
-            # databaseURL es necesario para Realtime Database
-            firebase_config = {
-                "apiKey": api_key,
-                "authDomain": f"{project_id}.firebaseapp.com",
-                "databaseURL": "https://justice-driven-task-power-default-rtdb.firebaseio.com",
-                "storageBucket": storage_bucket,
-                "projectId": project_id
-            }
-            
-            self.firebase = pyrebase.initialize_app(firebase_config)
-            self.db_realtime = self.firebase.database()  # Realtime Database, no Firestore
-            
-        except Exception as e:
-            raise RuntimeError(f"Error al inicializar Firebase Realtime Database: {str(e)}")
+        # Leer configuración
+        with open(google_services_path, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+        
+        # URL de Realtime Database (ya configurada)
+        self.database_url = "https://justice-driven-task-power-default-rtdb.firebaseio.com"
     
     def sync(self) -> SyncResult:
         """
@@ -173,7 +148,7 @@ class FirebaseSyncService:
         result = SyncResult(success=False)
         
         # OFFLINE-FIRST: Verificar que Firebase esté disponible
-        if not self.db_realtime:
+        if not self.database_url:
             result.errors.append(
                 "Firebase no está disponible. La app funciona completamente offline usando SQLite. "
                 "Verifica tu conexión a internet y que google-services.json esté configurado."
@@ -230,7 +205,7 @@ class FirebaseSyncService:
         """
         result = SyncResult(success=False)
         
-        if not self.db_realtime:
+        if not self.database_url:
             result.errors.append(
                 "Firebase no está disponible. Verifica tu conexión a internet."
             )
@@ -273,7 +248,7 @@ class FirebaseSyncService:
         """
         result = SyncResult(success=False)
         
-        if not self.db_realtime:
+        if not self.database_url:
             result.errors.append(
                 "Firebase no está disponible. Verifica tu conexión a internet."
             )
@@ -381,7 +356,7 @@ class FirebaseSyncService:
     
     def _upload_task(self, user_id: str, task: Task, id_token: str) -> None:
         """
-        Sube una tarea a Firebase Realtime Database.
+        Sube una tarea a Firebase Realtime Database usando REST API.
         
         Args:
             user_id: ID del usuario autenticado
@@ -393,18 +368,25 @@ class FirebaseSyncService:
             task_dict['userId'] = user_id
             task_dict['synced_at'] = datetime.now().isoformat()
             
-            # Usar pyrebase4 Realtime Database
-            # Estructura: /users/{userId}/tasks/{taskId}
-            # pyrebase4 requiere el token para operaciones autenticadas
-            path = f"users/{user_id}/tasks/{task.id}"
-            self.db_realtime.child(path).set(task_dict, token=id_token)
+            # Usar Firebase Realtime Database REST API
+            # Estructura: /users/{userId}/tasks/{taskId}.json?auth={id_token}
+            path = f"users/{user_id}/tasks/{task.id}.json"
+            url = f"{self.database_url}/{path}"
+            
+            response = requests.put(
+                url,
+                json=task_dict,
+                params={'auth': id_token},
+                timeout=10
+            )
+            response.raise_for_status()
         
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Error al subir tarea {task.id}: {str(e)}")
     
     def _upload_habit(self, user_id: str, habit: Habit, id_token: str) -> None:
         """
-        Sube un hábito a Firebase Realtime Database.
+        Sube un hábito a Firebase Realtime Database usando REST API.
         
         Args:
             user_id: ID del usuario autenticado
@@ -416,15 +398,23 @@ class FirebaseSyncService:
             habit_dict['userId'] = user_id
             habit_dict['synced_at'] = datetime.now().isoformat()
             
-            path = f"users/{user_id}/habits/{habit.id}"
-            self.db_realtime.child(path).set(habit_dict, token=id_token)
+            path = f"users/{user_id}/habits/{habit.id}.json"
+            url = f"{self.database_url}/{path}"
+            
+            response = requests.put(
+                url,
+                json=habit_dict,
+                params={'auth': id_token},
+                timeout=10
+            )
+            response.raise_for_status()
         
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Error al subir hábito {habit.id}: {str(e)}")
     
     def _download_tasks(self, user_id: str, id_token: str) -> List[Dict[str, Any]]:
         """
-        Descarga todas las tareas del usuario desde Firebase Realtime Database.
+        Descarga todas las tareas del usuario desde Firebase Realtime Database usando REST API.
         
         Args:
             user_id: ID del usuario autenticado
@@ -434,14 +424,21 @@ class FirebaseSyncService:
             Lista de diccionarios con datos de tareas
         """
         try:
-            path = f"users/{user_id}/tasks"
-            snapshot = self.db_realtime.child(path).get(token=id_token)
+            path = f"users/{user_id}/tasks.json"
+            url = f"{self.database_url}/{path}"
             
-            if not snapshot or not snapshot.val():
+            response = requests.get(
+                url,
+                params={'auth': id_token},
+                timeout=10
+            )
+            response.raise_for_status()
+            
+            tasks_data = response.json()
+            if not tasks_data:
                 return []
             
             tasks = []
-            tasks_data = snapshot.val()
             if isinstance(tasks_data, dict):
                 for task_id, task_data in tasks_data.items():
                     if isinstance(task_data, dict):
@@ -449,12 +446,15 @@ class FirebaseSyncService:
             
             return tasks
         
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
+            if hasattr(e, 'response') and e.response is not None and e.response.status_code == 404:
+                # No hay datos aún, retornar lista vacía
+                return []
             raise RuntimeError(f"Error al descargar tareas: {str(e)}")
     
     def _download_habits(self, user_id: str, id_token: str) -> List[Dict[str, Any]]:
         """
-        Descarga todos los hábitos del usuario desde Firebase Realtime Database.
+        Descarga todos los hábitos del usuario desde Firebase Realtime Database usando REST API.
         
         Args:
             user_id: ID del usuario autenticado
@@ -464,14 +464,21 @@ class FirebaseSyncService:
             Lista de diccionarios con datos de hábitos
         """
         try:
-            path = f"users/{user_id}/habits"
-            snapshot = self.db_realtime.child(path).get(token=id_token)
+            path = f"users/{user_id}/habits.json"
+            url = f"{self.database_url}/{path}"
             
-            if not snapshot or not snapshot.val():
+            response = requests.get(
+                url,
+                params={'auth': id_token},
+                timeout=10
+            )
+            response.raise_for_status()
+            
+            habits_data = response.json()
+            if not habits_data:
                 return []
             
             habits = []
-            habits_data = snapshot.val()
             if isinstance(habits_data, dict):
                 for habit_id, habit_data in habits_data.items():
                     if isinstance(habit_data, dict):
@@ -479,7 +486,10 @@ class FirebaseSyncService:
             
             return habits
         
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
+            if hasattr(e, 'response') and e.response is not None and e.response.status_code == 404:
+                # No hay datos aún, retornar lista vacía
+                return []
             raise RuntimeError(f"Error al descargar hábitos: {str(e)}")
     
     def _merge_task(self, remote_task_data: Dict[str, Any]) -> bool:
@@ -578,4 +588,3 @@ class FirebaseSyncService:
         
         except Exception as e:
             return False
-

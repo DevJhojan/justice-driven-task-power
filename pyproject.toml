@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "flet>=0.28.0",
-    "pyrebase4==4.1.0",
+    "requests>=2.31.0",
 ]
 
 [project.optional-dependencies]
@@ -27,4 +27,9 @@ target-version = ['py38']
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+
+[tool.flet]
+# Configuración de icono y splash screen para Android
+icon = "assets/app_icon.png"
+splash = "assets/app_icon.png"
 

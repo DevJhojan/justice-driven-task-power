@@ -131,14 +131,153 @@ parse_arguments() {
 }
 
 ################################################################################
+# Funciones de manejo de iconos y assets
+################################################################################
+
+include_assets() {
+    # Incluye los assets en el build de Flutter.
+    print_info "Incluyendo assets en el build..."
+    
+    # Verificar que existe el directorio de assets
+    if [ ! -d "assets" ]; then
+        print_warning "Directorio assets/ no encontrado. Saltando inclusión de assets."
+        return 0
+    fi
+    
+    # Crear directorio de assets en build/flutter si no existe
+    mkdir -p build/flutter/assets
+    
+    # Copiar todos los archivos de assets
+    if [ -d "assets" ]; then
+        cp -r assets/* build/flutter/assets/ 2>/dev/null || true
+        print_success "Assets copiados a build/flutter/assets/"
+    fi
+    
+    # Actualizar pubspec.yaml para incluir assets
+    if [ -f "build/flutter/pubspec.yaml" ]; then
+        # Usar Python para manipular YAML de forma segura
+        python3 << 'PYTHON_SCRIPT'
+import yaml
+import sys
+from pathlib import Path
+
+pubspec_path = Path("build/flutter/pubspec.yaml")
+if not pubspec_path.exists():
+    sys.exit(0)
+
+with open(pubspec_path, 'r', encoding='utf-8') as f:
+    data = yaml.safe_load(f)
+
+# Asegurar que existe la sección flutter
+if 'flutter' not in data:
+    data['flutter'] = {}
+
+# Asegurar que existe la lista de assets
+if 'assets' not in data['flutter']:
+    data['flutter']['assets'] = []
+
+# Agregar assets si existen
+assets_dir = Path("build/flutter/assets")
+if assets_dir.exists():
+    assets_files = list(assets_dir.glob("*"))
+    for asset_file in assets_files:
+        asset_path = f"assets/{asset_file.name}"
+        if asset_path not in data['flutter']['assets']:
+            data['flutter']['assets'].append(asset_path)
+
+# Guardar el archivo actualizado
+with open(pubspec_path, 'w', encoding='utf-8') as f:
+    yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+PYTHON_SCRIPT
+        
+        if [ $? -eq 0 ]; then
+            print_success "pubspec.yaml actualizado con assets"
+        else
+            print_warning "No se pudo actualizar pubspec.yaml (Python o PyYAML no disponible)"
+        fi
+    fi
+}
+
+replace_icons() {
+    # Reemplaza los iconos de Flet con los iconos personalizados.
+    print_info "Reemplazando iconos personalizados..."
+    
+    # Verificar que existe el icono personalizado
+    ICON_SOURCE="assets/app_icon.png"
+    if [ ! -f "$ICON_SOURCE" ]; then
+        print_warning "Icono personalizado no encontrado en $ICON_SOURCE. Usando icono por defecto de Flet."
+        return 0
+    fi
+    
+    # Verificar que ImageMagick está instalado
+    if ! command -v convert &> /dev/null; then
+        print_warning "ImageMagick no está instalado. No se pueden reemplazar iconos personalizados."
+        print_info "Instala ImageMagick con: sudo apt-get install imagemagick"
+        return 0
+    fi
+    
+    # Directorios de iconos Android
+    ANDROID_RES_DIR="build/flutter/android/app/src/main/res"
+    
+    # Crear directorios si no existen
+    mkdir -p "$ANDROID_RES_DIR/mipmap-mdpi"
+    mkdir -p "$ANDROID_RES_DIR/mipmap-hdpi"
+    mkdir -p "$ANDROID_RES_DIR/mipmap-xhdpi"
+    mkdir -p "$ANDROID_RES_DIR/mipmap-xxhdpi"
+    mkdir -p "$ANDROID_RES_DIR/mipmap-xxxhdpi"
+    mkdir -p "$ANDROID_RES_DIR/drawable-mdpi"
+    mkdir -p "$ANDROID_RES_DIR/drawable-hdpi"
+    mkdir -p "$ANDROID_RES_DIR/drawable-xhdpi"
+    mkdir -p "$ANDROID_RES_DIR/drawable-xxhdpi"
+    mkdir -p "$ANDROID_RES_DIR/drawable-xxxhdpi"
+    
+    # Reemplazar iconos en todas las resoluciones (mipmap para iconos de app)
+    convert "$ICON_SOURCE" -resize 48x48 "$ANDROID_RES_DIR/mipmap-mdpi/ic_launcher.png" 2>/dev/null && print_success "Icono 48x48 en mipmap-mdpi" || true
+    convert "$ICON_SOURCE" -resize 72x72 "$ANDROID_RES_DIR/mipmap-hdpi/ic_launcher.png" 2>/dev/null && print_success "Icono 72x72 en mipmap-hdpi" || true
+    convert "$ICON_SOURCE" -resize 96x96 "$ANDROID_RES_DIR/mipmap-xhdpi/ic_launcher.png" 2>/dev/null && print_success "Icono 96x96 en mipmap-xhdpi" || true
+    convert "$ICON_SOURCE" -resize 144x144 "$ANDROID_RES_DIR/mipmap-xxhdpi/ic_launcher.png" 2>/dev/null && print_success "Icono 144x144 en mipmap-xxhdpi" || true
+    convert "$ICON_SOURCE" -resize 192x192 "$ANDROID_RES_DIR/mipmap-xxxhdpi/ic_launcher.png" 2>/dev/null && print_success "Icono 192x192 en mipmap-xxxhdpi" || true
+    
+    # Reemplazar iconos foreground para adaptive icons (drawable)
+    convert "$ICON_SOURCE" -resize 108x108 "$ANDROID_RES_DIR/drawable-mdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "Icono foreground 108x108 en drawable-mdpi" || true
+    convert "$ICON_SOURCE" -resize 162x162 "$ANDROID_RES_DIR/drawable-hdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "Icono foreground 162x162 en drawable-hdpi" || true
+    convert "$ICON_SOURCE" -resize 216x216 "$ANDROID_RES_DIR/drawable-xhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "Icono foreground 216x216 en drawable-xhdpi" || true
+    convert "$ICON_SOURCE" -resize 324x324 "$ANDROID_RES_DIR/drawable-xxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "Icono foreground 324x324 en drawable-xxhdpi" || true
+    convert "$ICON_SOURCE" -resize 432x432 "$ANDROID_RES_DIR/drawable-xxxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "Icono foreground 432x432 en drawable-xxxhdpi" || true
+    
+    print_success "Iconos personalizados reemplazados"
+}
+
+################################################################################
 # Funciones de construcción
 ################################################################################
 
 build_apk() {
     print_section "Construyendo APK para Android"
     
+    # Incluir assets antes del build
+    include_assets
+    
     print_info "Ejecutando: flet build apk"
     flet build apk
+    
+    # Reemplazar iconos personalizados después del build inicial
+    replace_icons
+    
+    # Si se reemplazaron iconos, reconstruir el APK
+    if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
+        print_info "Reconstruyendo APK con iconos personalizados..."
+        cd build/flutter
+        flutter build apk --release 2>/dev/null || true
+        cd ../..
+        
+        # Copiar el APK reconstruido si existe
+        if [ -f "build/flutter/build/app/outputs/flutter-apk/app-release.apk" ]; then
+            mkdir -p build/apk
+            cp build/flutter/build/app/outputs/flutter-apk/app-release.apk build/apk/app-release.apk
+        fi
+    fi
     
     # Verificar que el APK se generó
     if [ -f "build/apk/app-release.apk" ]; then
@@ -153,8 +292,28 @@ build_apk() {
 build_aab() {
     print_section "Construyendo AAB (Android App Bundle) para Google Play"
     
+    # Incluir assets antes del build
+    include_assets
+    
     print_info "Ejecutando: flet build aab"
     flet build aab
+    
+    # Reemplazar iconos personalizados después del build inicial
+    replace_icons
+    
+    # Si se reemplazaron iconos, reconstruir el AAB
+    if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
+        print_info "Reconstruyendo AAB con iconos personalizados..."
+        cd build/flutter
+        flutter build appbundle --release 2>/dev/null || true
+        cd ../..
+        
+        # Copiar el AAB reconstruido si existe
+        if [ -f "build/flutter/build/app/outputs/bundle/release/app-release.aab" ]; then
+            mkdir -p build/aab
+            cp build/flutter/build/app/outputs/bundle/release/app-release.aab build/aab/app-release.aab
+        fi
+    fi
     
     # Verificar que el AAB se generó
     if [ -f "build/aab/app-release.aab" ]; then

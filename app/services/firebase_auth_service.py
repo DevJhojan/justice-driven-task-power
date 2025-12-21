@@ -1,5 +1,5 @@
 """
-Servicio de autenticación con Firebase Authentication.
+Servicio de autenticación con Firebase Authentication usando REST API directamente.
 
 Este módulo maneja:
 - Registro de nuevos usuarios (email/password)
@@ -9,38 +9,41 @@ Este módulo maneja:
 - Obtención del usuario actual
 
 Decisiones técnicas:
-- Usa pyrebase4 para autenticación con Firebase (compatible con Android)
+- Usa requests para llamar directamente a Firebase REST API (sin dependencias problemáticas)
 - Lee configuración desde google-services.json
 - Maneja tokens de forma segura
 - Persiste el estado de autenticación localmente
 - Maneja errores de red y tokens expirados
+- OFFLINE-FIRST: La app funciona completamente sin Firebase
 """
 
 import json
 import os
 from pathlib import Path
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 try:
-    import pyrebase
-    PYREBASE_AVAILABLE = True
+    import requests
+    REQUESTS_AVAILABLE = True
 except ImportError:
-    PYREBASE_AVAILABLE = False
-    _pyrebase_import_error = "pyrebase4 no está instalado"
+    REQUESTS_AVAILABLE = False
+    _requests_import_error = "requests no está instalado"
 
 from app.data.database import Database
 
 
 class FirebaseAuthService:
     """
-    Servicio para autenticación con Firebase Authentication.
+    Servicio para autenticación con Firebase Authentication usando REST API.
     
     Decisiones técnicas:
-    - Usa pyrebase4 que es compatible con Firebase REST API
+    - Usa requests para llamar directamente a Firebase REST API
+    - Evita dependencias problemáticas como pyrebase4/gcloud
     - Lee configuración desde google-services.json en la raíz del proyecto
     - Almacena el token de autenticación en SQLite para persistencia
     - Maneja refresco automático de tokens cuando sea necesario
+    - OFFLINE-FIRST: La app funciona completamente sin Firebase
     """
     
     def __init__(self, database: Optional[Database] = None):
@@ -51,28 +54,29 @@ class FirebaseAuthService:
             database: Instancia de Database para persistencia local
         """
         self.db = database or Database()
-        self.firebase = None
-        self.auth = None
+        self.api_key = None
+        self.auth_domain = None
+        self.project_id = None
         self.current_user = None
         self._init_firebase()
         self._ensure_auth_table()
+        self._load_current_user_from_local()
     
     def _init_firebase(self) -> None:
         """
-        Inicializa la conexión con Firebase usando google-services.json.
+        Inicializa la configuración de Firebase usando google-services.json.
         
         Decisiones técnicas:
         - Lee google-services.json desde la raíz del proyecto
-        - Construye la configuración de Firebase compatible con pyrebase4
-        - Usa el API key y project_id del archivo de configuración
+        - Extrae API key y project_id necesarios para REST API
         - OFFLINE-FIRST: Si Firebase no está disponible, la app sigue funcionando
           completamente offline usando solo SQLite. Firebase es opcional.
         """
-        if not PYREBASE_AVAILABLE:
+        if not REQUESTS_AVAILABLE:
             # OFFLINE-FIRST: No lanzar excepción, solo marcar como no disponible
-            # La app debe funcionar completamente sin Firebase
-            self.firebase = None
-            self.auth = None
+            self.api_key = None
+            self.auth_domain = None
+            self.project_id = None
             return
         
         # Buscar google-services.json en la raíz del proyecto
@@ -81,9 +85,9 @@ class FirebaseAuthService:
         
         if not google_services_path.exists():
             # OFFLINE-FIRST: No lanzar excepción, solo marcar como no disponible
-            # La app debe funcionar completamente sin Firebase
-            self.firebase = None
-            self.auth = None
+            self.api_key = None
+            self.auth_domain = None
+            self.project_id = None
             return
         
         # Leer configuración de Firebase
@@ -97,42 +101,17 @@ class FirebaseAuthService:
         
         project_id = project_info.get('project_id')
         api_key = api_key_info.get('current_key')
-        storage_bucket = project_info.get('storage_bucket', f"{project_id}.appspot.com")
         
         if not project_id or not api_key:
-            raise ValueError(
-                "google-services.json no contiene project_id o api_key válidos"
-            )
+            # OFFLINE-FIRST: No lanzar excepción, solo marcar como no disponible
+            self.api_key = None
+            self.auth_domain = None
+            self.project_id = None
+            return
         
-        # Configuración de Firebase para pyrebase4
-        # pyrebase4 usa Firebase REST API, no requiere configuración completa de Android
-        # IMPORTANTE: El authDomain debe coincidir exactamente con el dominio configurado en Firebase Console
-        # Si usas un dominio personalizado, debes ajustarlo aquí
-        firebase_config = {
-            "apiKey": api_key,
-            "authDomain": f"{project_id}.firebaseapp.com",  # Dominio estándar de Firebase
-            "databaseURL": "https://justice-driven-task-power-default-rtdb.firebaseio.com",
-            "storageBucket": storage_bucket,
-            "projectId": project_id
-        }
-        
-        # Validar que tenemos todos los campos necesarios
-        required_fields = ["apiKey", "authDomain", "projectId"]
-        missing_fields = [field for field in required_fields if not firebase_config.get(field)]
-        if missing_fields:
-            raise ValueError(
-                f"Configuración de Firebase incompleta. Faltan: {', '.join(missing_fields)}"
-            )
-        
-        try:
-            self.firebase = pyrebase.initialize_app(firebase_config)
-            self.auth = self.firebase.auth()
-        except Exception as e:
-            # OFFLINE-FIRST: Si hay error al inicializar Firebase, no bloquear la app
-            # La app debe funcionar completamente offline usando solo SQLite
-            self.firebase = None
-            self.auth = None
-            print(f"Advertencia: Firebase no disponible (modo offline): {str(e)}")
+        self.api_key = api_key
+        self.project_id = project_id
+        self.auth_domain = f"{project_id}.firebaseapp.com"
     
     def _ensure_auth_table(self) -> None:
         """Crea la tabla para almacenar tokens de autenticación."""
@@ -155,9 +134,15 @@ class FirebaseAuthService:
         conn.commit()
         conn.close()
     
+    def _load_current_user_from_local(self) -> None:
+        """Carga el usuario actual desde almacenamiento local al iniciar."""
+        stored_user = self._load_auth_token()
+        if stored_user:
+            self.current_user = stored_user
+    
     def register(self, email: str, password: str) -> Dict[str, Any]:
         """
-        Registra un nuevo usuario en Firebase.
+        Registra un nuevo usuario en Firebase usando REST API.
         
         OFFLINE-FIRST: Requiere conexión a internet. Si Firebase no está disponible,
         la app sigue funcionando completamente offline usando solo SQLite.
@@ -173,8 +158,7 @@ class FirebaseAuthService:
             ValueError: Si el email o password son inválidos
             RuntimeError: Si hay error en Firebase o no hay conexión
         """
-        # OFFLINE-FIRST: Verificar que Firebase esté disponible
-        if not self.auth:
+        if not REQUESTS_AVAILABLE or not self.api_key:
             raise RuntimeError(
                 "Firebase no está disponible. Verifica tu conexión a internet y "
                 "que google-services.json esté configurado correctamente."
@@ -189,21 +173,26 @@ class FirebaseAuthService:
         try:
             email_clean = email.strip().lower()
             
-            # Registrar usuario en Firebase
-            user = self.auth.create_user_with_email_and_password(
-                email_clean,
-                password
-            )
+            # Registrar usuario usando Firebase REST API
+            url = f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={self.api_key}"
+            payload = {
+                "email": email_clean,
+                "password": password,
+                "returnSecureToken": True
+            }
             
-            # Guardar información del usuario localmente (con email)
-            self._save_auth_token(user, email_clean)
+            response = requests.post(url, json=payload, timeout=10)
+            response.raise_for_status()
+            user_data = response.json()
             
-            # Obtener información del usuario desde el token
-            # pyrebase4 devuelve el email directamente en la respuesta
+            # Guardar información del usuario localmente
+            self._save_auth_token(user_data, email_clean)
+            
+            # Obtener información del usuario
             self.current_user = {
-                'uid': user['localId'],
+                'uid': user_data.get('localId'),
                 'email': email_clean,
-                'emailVerified': False  # pyrebase4 no proporciona este campo directamente
+                'emailVerified': user_data.get('emailVerified', False)
             }
             
             return {
@@ -212,14 +201,22 @@ class FirebaseAuthService:
                 'message': 'Usuario registrado exitosamente'
             }
         
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             error_msg = str(e)
-            # OFFLINE-FIRST: Manejar errores de red específicamente
-            if 'network' in error_msg.lower() or 'connection' in error_msg.lower() or 'timeout' in error_msg.lower():
-                raise RuntimeError(
-                    "No hay conexión a internet. La app funciona completamente offline, "
-                    "pero el registro requiere conexión a Firebase."
-                )
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_msg = error_data.get('error', {}).get('message', error_msg)
+                except:
+                    pass
+            
+            # Manejar errores específicos de Firebase
+            if 'EMAIL_EXISTS' in error_msg:
+                raise ValueError("Este correo electrónico ya está registrado")
+            elif 'INVALID_EMAIL' in error_msg:
+                raise ValueError("El formato del correo electrónico no es válido")
+            elif 'WEAK_PASSWORD' in error_msg:
+                raise ValueError("La contraseña es muy débil")
             elif 'CONFIGURATION_NOT_FOUND' in error_msg or '400' in error_msg:
                 raise RuntimeError(
                     "Firebase Authentication no está configurado correctamente. "
@@ -229,18 +226,19 @@ class FirebaseAuthService:
                     "3. El API key tenga permisos para Firebase Authentication API\n"
                     f"Error técnico: {error_msg}"
                 )
-            elif 'EMAIL_EXISTS' in error_msg:
-                raise ValueError("Este correo electrónico ya está registrado")
-            elif 'INVALID_EMAIL' in error_msg:
-                raise ValueError("El formato del correo electrónico no es válido")
-            elif 'WEAK_PASSWORD' in error_msg:
-                raise ValueError("La contraseña es muy débil")
+            elif 'network' in error_msg.lower() or 'connection' in error_msg.lower() or 'timeout' in error_msg.lower():
+                raise RuntimeError(
+                    "No hay conexión a internet. La app funciona completamente offline, "
+                    "pero el registro requiere conexión a Firebase."
+                )
             else:
                 raise RuntimeError(f"Error al registrar usuario: {error_msg}")
+        except Exception as e:
+            raise RuntimeError(f"Error al registrar usuario: {str(e)}")
     
     def login(self, email: str, password: str) -> Dict[str, Any]:
         """
-        Inicia sesión con email y contraseña.
+        Inicia sesión con email y contraseña usando REST API.
         
         OFFLINE-FIRST: Requiere conexión a internet. Si Firebase no está disponible,
         la app sigue funcionando completamente offline usando solo SQLite.
@@ -256,8 +254,7 @@ class FirebaseAuthService:
             ValueError: Si las credenciales son inválidas
             RuntimeError: Si hay error en Firebase o no hay conexión
         """
-        # OFFLINE-FIRST: Verificar que Firebase esté disponible
-        if not self.auth:
+        if not REQUESTS_AVAILABLE or not self.api_key:
             raise RuntimeError(
                 "Firebase no está disponible. Verifica tu conexión a internet y "
                 "que google-services.json esté configurado correctamente."
@@ -272,21 +269,26 @@ class FirebaseAuthService:
         try:
             email_clean = email.strip().lower()
             
-            # Iniciar sesión en Firebase
-            user = self.auth.sign_in_with_email_and_password(
-                email_clean,
-                password
-            )
+            # Iniciar sesión usando Firebase REST API
+            url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={self.api_key}"
+            payload = {
+                "email": email_clean,
+                "password": password,
+                "returnSecureToken": True
+            }
             
-            # Guardar token localmente (con email)
-            self._save_auth_token(user, email_clean)
+            response = requests.post(url, json=payload, timeout=10)
+            response.raise_for_status()
+            user_data = response.json()
             
-            # Obtener información del usuario desde el token
-            # pyrebase4 devuelve el email directamente en la respuesta
+            # Guardar token localmente
+            self._save_auth_token(user_data, email_clean)
+            
+            # Obtener información del usuario
             self.current_user = {
-                'uid': user['localId'],
+                'uid': user_data.get('localId'),
                 'email': email_clean,
-                'emailVerified': False  # pyrebase4 no proporciona este campo directamente
+                'emailVerified': user_data.get('emailVerified', False)
             }
             
             return {
@@ -295,14 +297,22 @@ class FirebaseAuthService:
                 'message': 'Sesión iniciada exitosamente'
             }
         
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             error_msg = str(e)
-            # OFFLINE-FIRST: Manejar errores de red específicamente
-            if 'network' in error_msg.lower() or 'connection' in error_msg.lower() or 'timeout' in error_msg.lower():
-                raise RuntimeError(
-                    "No hay conexión a internet. La app funciona completamente offline, "
-                    "pero el inicio de sesión requiere conexión a Firebase."
-                )
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    error_msg = error_data.get('error', {}).get('message', error_msg)
+                except:
+                    pass
+            
+            # Manejar errores específicos de Firebase
+            if 'INVALID_LOGIN_CREDENTIALS' in error_msg or 'INVALID_PASSWORD' in error_msg or 'INVALID_EMAIL' in error_msg:
+                raise ValueError("Correo electrónico o contraseña incorrectos")
+            elif 'USER_DISABLED' in error_msg:
+                raise ValueError("Esta cuenta ha sido deshabilitada")
+            elif 'USER_NOT_FOUND' in error_msg or 'EMAIL_NOT_FOUND' in error_msg:
+                raise ValueError("No existe una cuenta con este correo electrónico")
             elif 'CONFIGURATION_NOT_FOUND' in error_msg:
                 raise RuntimeError(
                     "Firebase Authentication no está configurado correctamente. "
@@ -312,27 +322,15 @@ class FirebaseAuthService:
                     "3. El API key tenga permisos para Firebase Authentication API\n"
                     f"Error técnico: {error_msg}"
                 )
-            elif 'INVALID_LOGIN_CREDENTIALS' in error_msg:
-                # Este error puede significar que el usuario no existe o la contraseña es incorrecta
-                raise ValueError("Correo electrónico o contraseña incorrectos")
-            elif 'INVALID_PASSWORD' in error_msg or 'INVALID_EMAIL' in error_msg:
-                raise ValueError("Correo electrónico o contraseña incorrectos")
-            elif 'USER_DISABLED' in error_msg:
-                raise ValueError("Esta cuenta ha sido deshabilitada")
-            elif 'USER_NOT_FOUND' in error_msg:
-                raise ValueError("No existe una cuenta con este correo electrónico")
-            elif 'EMAIL_NOT_FOUND' in error_msg:
-                raise ValueError("No existe una cuenta con este correo electrónico")
+            elif 'network' in error_msg.lower() or 'connection' in error_msg.lower() or 'timeout' in error_msg.lower():
+                raise RuntimeError(
+                    "No hay conexión a internet. La app funciona completamente offline, "
+                    "pero el inicio de sesión requiere conexión a Firebase."
+                )
             else:
-                # Para otros errores 400, verificar si es un error de configuración o credenciales
-                if '400' in error_msg and 'CONFIGURATION_NOT_FOUND' not in error_msg:
-                    # Podría ser un error de credenciales u otro problema
-                    if 'INVALID' in error_msg.upper():
-                        raise ValueError("Correo electrónico o contraseña incorrectos")
-                    else:
-                        raise RuntimeError(f"Error al iniciar sesión: {error_msg}")
-                else:
-                    raise RuntimeError(f"Error al iniciar sesión: {error_msg}")
+                raise RuntimeError(f"Error al iniciar sesión: {error_msg}")
+        except Exception as e:
+            raise RuntimeError(f"Error al iniciar sesión: {str(e)}")
     
     def logout(self) -> None:
         """Cierra la sesión del usuario actual."""
@@ -368,49 +366,40 @@ class FirebaseAuthService:
     
     def get_id_token(self) -> Optional[str]:
         """
-        Obtiene el token de autenticación ID token actual.
+        Obtiene el token de ID actual del usuario autenticado.
+        Si el token ha expirado, intenta refrescarlo.
         
         Returns:
-            ID token como string o None si no hay token válido
+            El token de ID como string o None si no hay token válido.
         """
         conn = self.db.get_connection()
         cur = conn.cursor()
-        
-        cur.execute("""
-            SELECT id_token, refresh_token, expires_at
-            FROM firebase_auth
-            ORDER BY updated_at DESC
-            LIMIT 1
-        """)
-        
+        cur.execute("SELECT id_token, refresh_token, expires_at FROM firebase_auth WHERE user_id = ? LIMIT 1", (self.current_user['uid'],))
         row = cur.fetchone()
         conn.close()
-        
-        if not row or not row['id_token']:
+
+        if not row:
             return None
-        
-        # Verificar si el token ha expirado
+
+        id_token = row['id_token']
+        refresh_token = row['refresh_token']
         expires_at_str = row['expires_at']
+
         if expires_at_str:
             expires_at = datetime.fromisoformat(expires_at_str)
-            if datetime.now() > expires_at:
-                # Token expirado, intentar refrescar
+            if datetime.now() >= expires_at - timedelta(minutes=5):  # Refrescar 5 minutos antes de expirar
+                # Token expirado o a punto de expirar, intentar refrescar
                 try:
-                    if row['refresh_token']:
-                        refreshed = self._refresh_token(row['refresh_token'])
-                        if refreshed:
-                            # Recargar token después del refresh
-                            conn = self.db.get_connection()
-                            cur = conn.cursor()
-                            cur.execute("SELECT id_token FROM firebase_auth ORDER BY updated_at DESC LIMIT 1")
-                            new_row = cur.fetchone()
-                            conn.close()
-                            return new_row['id_token'] if new_row else None
-                except:
-                    pass
-                return None
-        
-        return row['id_token']
+                    refreshed_user = self._refresh_token(refresh_token)
+                    if refreshed_user and refreshed_user.get('id_token'):
+                        self._save_auth_token(refreshed_user, self.current_user['email'])
+                        return refreshed_user['id_token']
+                except Exception as e:
+                    print(f"Error al refrescar token: {e}")
+                    self._clear_auth_token()  # Limpiar si el refresh falla
+                    self.current_user = None
+                    return None
+        return id_token
     
     def _save_auth_token(self, user_data: Dict[str, Any], email: str = '') -> None:
         """
@@ -430,8 +419,8 @@ class FirebaseAuthService:
         expires_in = user_data.get('expiresIn', '3600')  # Por defecto 1 hora
         
         # Calcular fecha de expiración
-        expires_at = datetime.now().timestamp() + int(expires_in)
-        expires_at_str = datetime.fromtimestamp(expires_at).isoformat()
+        expires_at = datetime.now() + timedelta(seconds=int(expires_in))
+        expires_at_str = expires_at.isoformat()
         
         # Insertar o actualizar token
         cur.execute("""
@@ -485,22 +474,40 @@ class FirebaseAuthService:
             'email': row['email']
         }
     
-    def _refresh_token(self, refresh_token: str) -> bool:
+    def _refresh_token(self, refresh_token: str) -> Optional[Dict[str, Any]]:
         """
-        Refresca el token de autenticación.
+        Refresca el token de autenticación usando Firebase REST API.
         
         Args:
             refresh_token: Token de refresco
         
         Returns:
-            True si se refrescó exitosamente, False en caso contrario
+            Diccionario con nuevos tokens o None si falla
         """
+        if not REQUESTS_AVAILABLE or not self.api_key:
+            return None
+        
         try:
-            # pyrebase4 no tiene método directo de refresh, pero podemos usar el token existente
-            # En producción, deberías implementar el refresh usando Firebase REST API
-            return False
-        except:
-            return False
+            url = f"https://securetoken.googleapis.com/v1/token?key={self.api_key}"
+            payload = {
+                "grant_type": "refresh_token",
+                "refresh_token": refresh_token
+            }
+            
+            response = requests.post(url, json=payload, timeout=10)
+            response.raise_for_status()
+            token_data = response.json()
+            
+            # Convertir formato de respuesta a formato esperado
+            return {
+                'localId': token_data.get('user_id'),
+                'idToken': token_data.get('id_token'),
+                'refreshToken': token_data.get('refresh_token'),
+                'expiresIn': token_data.get('expires_in', '3600')
+            }
+        except Exception as e:
+            print(f"Error al refrescar token: {e}")
+            return None
     
     def _clear_auth_token(self) -> None:
         """Elimina el token de autenticación almacenado."""
@@ -511,4 +518,3 @@ class FirebaseAuthService:
         
         conn.commit()
         conn.close()
-
