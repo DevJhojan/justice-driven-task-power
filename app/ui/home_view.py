@@ -154,8 +154,11 @@ class HomeView:
         
         # Título de la sección - responsive y adaptable
         # Usar tamaño de fuente responsive basado en ancho de pantalla
-        screen_width = self.page.width if hasattr(self.page, 'width') and self.page.width else 1024
-        is_wide = screen_width > 600
+        try:
+            screen_width = self.page.width if (hasattr(self.page, 'width') and self.page.width is not None and isinstance(self.page.width, (int, float))) else 1024
+        except (AttributeError, TypeError):
+            screen_width = 1024
+        is_wide = screen_width > 600 if isinstance(screen_width, (int, float)) else False
         
         title_size = 22 if is_wide else 18
         title_padding_vertical = 14 if is_wide else 10
@@ -290,8 +293,11 @@ class HomeView:
         ]
         
         # Detectar ancho de pantalla para ajustar tamaños
-        screen_width = self.page.width if hasattr(self.page, 'width') and self.page.width else 1024
-        is_wide_screen = screen_width > 600
+        try:
+            screen_width = self.page.width if (hasattr(self.page, 'width') and self.page.width is not None and isinstance(self.page.width, (int, float))) else 1024
+        except (AttributeError, TypeError):
+            screen_width = 1024
+        is_wide_screen = screen_width > 600 if isinstance(screen_width, (int, float)) else False
         
         for priority_key, emoji, label in priorities:
             colors = self._get_priority_colors(priority_key)
@@ -430,10 +436,13 @@ class HomeView:
         )
         
         # Detectar ancho de pantalla para layout adaptable
-        screen_width = self.page.width if hasattr(self.page, 'width') and self.page.width else 1024
+        try:
+            screen_width = self.page.width if (hasattr(self.page, 'width') and self.page.width is not None and isinstance(self.page.width, (int, float))) else 1024
+        except (AttributeError, TypeError):
+            screen_width = 1024
         
         # En escritorio con pantalla grande, centrar con ancho máximo; en pantallas pequeñas, usar todo el ancho
-        if is_desktop and screen_width > 1200:
+        if is_desktop and isinstance(screen_width, (int, float)) and screen_width > 1200:
             self.main_scroll_container = ft.Container(
                 content=ft.Row(
                     [
@@ -2034,8 +2043,11 @@ class HomeView:
             else:
                 # Detectar ancho de pantalla para decidir layout
                 is_desktop = self.page.platform == ft.PagePlatform.WINDOWS or self.page.platform == ft.PagePlatform.LINUX or self.page.platform == ft.PagePlatform.MACOS
-                screen_width = self.page.width if hasattr(self.page, 'width') and self.page.width else 1024
-                use_grid = is_desktop and screen_width > 800 and len(priority_tasks) > 1
+                try:
+                    screen_width = self.page.width if (hasattr(self.page, 'width') and self.page.width is not None and isinstance(self.page.width, (int, float))) else 1024
+                except (AttributeError, TypeError):
+                    screen_width = 1024
+                use_grid = is_desktop and isinstance(screen_width, (int, float)) and screen_width > 800 and len(priority_tasks) > 1
                 
                 if use_grid:
                     # En escritorio con suficiente ancho, mostrar en grid de 2 columnas
@@ -2472,7 +2484,10 @@ class HomeView:
             section_controls.append(ft.Divider())
 
         # Contenido scrollable ocupando ~70% del ancho de la pantalla
-        content_width = self.page.width * 0.7 if self.page.width else None
+        try:
+            content_width = self.page.width * 0.7 if (hasattr(self.page, 'width') and self.page.width is not None and isinstance(self.page.width, (int, float))) else None
+        except (AttributeError, TypeError):
+            content_width = None
 
         self.accent_dialog.title = ft.Text("Selecciona un matiz")
         self.accent_dialog.content = ft.Container(
