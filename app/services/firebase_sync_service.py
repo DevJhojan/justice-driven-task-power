@@ -221,6 +221,92 @@ class FirebaseSyncService:
         
         return result
     
+    def upload_to_cloud(self) -> SyncResult:
+        """
+        Sube datos locales (SQLite) a Firebase Realtime Database.
+        
+        Returns:
+            SyncResult con el resultado de la subida
+        """
+        result = SyncResult(success=False)
+        
+        if not self.db_realtime:
+            result.errors.append(
+                "Firebase no está disponible. Verifica tu conexión a internet."
+            )
+            return result
+        
+        user = self.auth_service.get_current_user()
+        if not user:
+            result.errors.append("Usuario no autenticado. Inicia sesión para sincronizar.")
+            return result
+        
+        user_id = user['uid']
+        id_token = self.auth_service.get_id_token()
+        if not id_token:
+            result.errors.append("Token de autenticación no encontrado. Por favor, inicia sesión nuevamente.")
+            return result
+        
+        try:
+            upload_result = self._upload_local_data(user_id, id_token)
+            result.tasks_uploaded = upload_result.get('tasks', 0)
+            result.habits_uploaded = upload_result.get('habits', 0)
+            result.success = True
+        except Exception as e:
+            error_msg = str(e)
+            if 'network' in error_msg.lower() or 'connection' in error_msg.lower() or 'timeout' in error_msg.lower():
+                result.errors.append(
+                    "No hay conexión a internet. Intenta cuando tengas conexión."
+                )
+            else:
+                result.errors.append(f"Error al subir datos: {error_msg}")
+            result.success = False
+        
+        return result
+    
+    def download_from_cloud(self) -> SyncResult:
+        """
+        Descarga datos desde Firebase Realtime Database y los fusiona con datos locales.
+        
+        Returns:
+            SyncResult con el resultado de la descarga
+        """
+        result = SyncResult(success=False)
+        
+        if not self.db_realtime:
+            result.errors.append(
+                "Firebase no está disponible. Verifica tu conexión a internet."
+            )
+            return result
+        
+        user = self.auth_service.get_current_user()
+        if not user:
+            result.errors.append("Usuario no autenticado. Inicia sesión para sincronizar.")
+            return result
+        
+        user_id = user['uid']
+        id_token = self.auth_service.get_id_token()
+        if not id_token:
+            result.errors.append("Token de autenticación no encontrado. Por favor, inicia sesión nuevamente.")
+            return result
+        
+        try:
+            download_result = self._download_remote_data(user_id, id_token)
+            result.tasks_downloaded = download_result.get('tasks', 0)
+            result.habits_downloaded = download_result.get('habits', 0)
+            result.success = True
+        except Exception as e:
+            error_msg = str(e)
+            if 'network' in error_msg.lower() or 'connection' in error_msg.lower() or 'timeout' in error_msg.lower():
+                result.errors.append(
+                    "No hay conexión a internet. Intenta cuando tengas conexión."
+                )
+            else:
+                result.errors.append(f"Error al descargar datos: {error_msg}")
+            result.success = False
+        
+        return result
+    
     def _upload_local_data(self, user_id: str, id_token: str) -> Dict[str, int]:
         """
         Sube todos los datos locales desde SQLite a Firebase.

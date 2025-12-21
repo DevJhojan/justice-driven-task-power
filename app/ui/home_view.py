@@ -1073,7 +1073,7 @@ class HomeView:
             self.page.update()
     
     def _start_firebase_sync(self, e):
-        """Inicia la sincronización con Firebase y muestra página de resultados."""
+        """Muestra página para seleccionar dirección de sincronización."""
         if not self.firebase_sync_service:
             self._show_sync_results_page(
                 success=False,
@@ -1089,30 +1089,205 @@ class HomeView:
             )
             return
         
-        # Mostrar página de carga mientras sincroniza
-        self._show_sync_loading_page()
+        # Mostrar página de selección de dirección
+        self._show_sync_direction_page()
+    
+    def _show_sync_direction_page(self):
+        """Muestra una página para seleccionar la dirección de sincronización."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        scheme = self.page.theme.color_scheme if self.page.theme else None
+        primary_color = scheme.primary if scheme and scheme.primary else ft.Colors.BLUE_700
         
-        try:
-            result = self.firebase_sync_service.sync()
-            
-            # Refrescar vistas si es necesario
-            if result.tasks_downloaded > 0 and self.current_section == "tasks":
-                self._load_tasks()
-            if result.habits_downloaded > 0 and self.current_section == "habits":
-                self._load_habits()
-            
-            # Mostrar página de resultados
-            self._show_sync_results_page(
-                success=result.success,
-                sync_result=result
-            )
+        def upload_to_cloud(e):
+            """Sube datos locales a Firebase."""
+            self._show_sync_loading_page()
+            try:
+                result = self.firebase_sync_service.upload_to_cloud()
+                self._show_sync_results_page(
+                    success=result.success,
+                    sync_result=result
+                )
+            except Exception as ex:
+                self._show_sync_results_page(
+                    success=False,
+                    error_message=str(ex)
+                )
         
-        except Exception as ex:
-            # Mostrar página de error
-            self._show_sync_results_page(
-                success=False,
-                error_message=str(ex)
+        def download_from_cloud(e):
+            """Descarga datos de Firebase al local."""
+            self._show_sync_loading_page()
+            try:
+                result = self.firebase_sync_service.download_from_cloud()
+                
+                # Refrescar vistas si se descargaron datos
+                if result.tasks_downloaded > 0 and self.current_section == "tasks":
+                    self._load_tasks()
+                if result.habits_downloaded > 0 and self.current_section == "habits":
+                    self._load_habits()
+                
+                self._show_sync_results_page(
+                    success=result.success,
+                    sync_result=result
+                )
+            except Exception as ex:
+                self._show_sync_results_page(
+                    success=False,
+                    error_message=str(ex)
+                )
+        
+        # Botones de acción
+        upload_button = ft.ElevatedButton(
+            text="Subir datos locales a la nube",
+            icon=ft.Icons.CLOUD_UPLOAD,
+            on_click=upload_to_cloud,
+            expand=True,
+            height=60,
+            bgcolor=ft.Colors.BLUE,
+            color=ft.Colors.WHITE,
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=10)
             )
+        )
+        
+        download_button = ft.ElevatedButton(
+            text="Descargar datos de la nube al local",
+            icon=ft.Icons.CLOUD_DOWNLOAD,
+            on_click=download_from_cloud,
+            expand=True,
+            height=60,
+            bgcolor=ft.Colors.GREEN,
+            color=ft.Colors.WHITE,
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=10)
+            )
+        )
+        
+        # Construir la vista
+        direction_view = ft.View(
+            route="/sync-direction",
+            appbar=ft.AppBar(
+                title=ft.Text("Sincronización"),
+                leading=ft.IconButton(
+                    icon=ft.Icons.ARROW_BACK,
+                    on_click=lambda e: self._go_back()
+                ),
+                bgcolor=primary_color
+            ),
+            padding=20,
+            scroll=ft.ScrollMode.AUTO,
+            controls=[
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Icon(
+                                ft.Icons.SYNC,
+                                size=64,
+                                color=primary_color
+                            ),
+                            ft.Text(
+                                "Selecciona la dirección de sincronización",
+                                size=22,
+                                weight=ft.FontWeight.BOLD,
+                                text_align=ft.TextAlign.CENTER
+                            ),
+                            ft.Divider(height=30),
+                            ft.Container(
+                                content=ft.Column(
+                                    [
+                                        ft.Row(
+                                            [
+                                                ft.Icon(ft.Icons.PHONE_ANDROID, size=32, color=ft.Colors.BLUE),
+                                                ft.Column(
+                                                    [
+                                                        ft.Text(
+                                                            "Datos locales",
+                                                            size=16,
+                                                            weight=ft.FontWeight.BOLD
+                                                        ),
+                                                        ft.Text(
+                                                            "Tareas y hábitos guardados en tu dispositivo",
+                                                            size=12,
+                                                            color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
+                                                        )
+                                                    ],
+                                                    spacing=5
+                                                )
+                                            ],
+                                            spacing=15
+                                        ),
+                                        ft.Divider(height=20),
+                                        ft.Row(
+                                            [
+                                                ft.Icon(ft.Icons.CLOUD, size=32, color=ft.Colors.GREEN),
+                                                ft.Column(
+                                                    [
+                                                        ft.Text(
+                                                            "Datos en la nube",
+                                                            size=16,
+                                                            weight=ft.FontWeight.BOLD
+                                                        ),
+                                                        ft.Text(
+                                                            "Tareas y hábitos guardados en Firebase",
+                                                            size=12,
+                                                            color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
+                                                        )
+                                                    ],
+                                                    spacing=5
+                                                )
+                                            ],
+                                            spacing=15
+                                        )
+                                    ],
+                                    spacing=10
+                                ),
+                                padding=20,
+                                bgcolor=ft.Colors.BLUE_50 if not is_dark else ft.Colors.BLUE_900,
+                                border_radius=10,
+                                border=ft.border.all(1, ft.Colors.BLUE_200 if not is_dark else ft.Colors.BLUE_700)
+                            ),
+                            ft.Divider(height=30),
+                            ft.Text(
+                                "¿Qué deseas hacer?",
+                                size=18,
+                                weight=ft.FontWeight.BOLD,
+                                text_align=ft.TextAlign.CENTER
+                            ),
+                            upload_button,
+                            download_button,
+                            ft.Divider(height=20),
+                            ft.Container(
+                                content=ft.Row(
+                                    [
+                                        ft.Icon(ft.Icons.INFO_OUTLINE, size=20, color=ft.Colors.ORANGE),
+                                        ft.Expanded(
+                                            child=ft.Text(
+                                                "Subir: Respalda tus datos locales en Firebase.\n"
+                                                "Descargar: Trae datos de Firebase a tu dispositivo.",
+                                                size=12,
+                                                color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
+                                            )
+                                        )
+                                    ],
+                                    spacing=10
+                                ),
+                                padding=15,
+                                bgcolor=ft.Colors.ORANGE_50 if not is_dark else ft.Colors.ORANGE_900,
+                                border_radius=10
+                            )
+                        ],
+                        spacing=20,
+                        horizontal_alignment=ft.CrossAxisAlignment.STRETCH
+                    ),
+                    padding=20,
+                    border_radius=10,
+                    bgcolor=ft.Colors.GREY_900 if is_dark else ft.Colors.GREY_100
+                )
+            ]
+        )
+        
+        self.page.views.append(direction_view)
+        self.page.go("/sync-direction")
+        self.page.update()
     
     def _show_sync_loading_page(self):
         """Muestra una página de carga durante la sincronización."""
