@@ -31,5 +31,4 @@ python_files = "test_*.py"
 [tool.flet]
 # Configuración de icono y splash screen para Android
 icon = "assets/app_icon.png"
-splash = "assets/app_icon.png"
 
