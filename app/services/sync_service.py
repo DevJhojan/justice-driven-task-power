@@ -50,6 +50,7 @@ class SyncService:
         conn = self.db.get_connection()
         cur = conn.cursor()
 
+        # Crear tabla si no existe
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS sync_settings (
@@ -61,6 +62,18 @@ class SyncService:
             """
         )
 
+        # Migración: Agregar columna user_id si no existe (para bases de datos antiguas)
+        try:
+            cur.execute("SELECT user_id FROM sync_settings LIMIT 1")
+        except Exception:
+            # La columna no existe, agregarla
+            try:
+                cur.execute("ALTER TABLE sync_settings ADD COLUMN user_id TEXT")
+            except Exception:
+                # Si falla, la columna ya existe o hay otro problema
+                pass
+
+        # Garantizar que existe la fila de configuración
         cur.execute("SELECT key FROM sync_settings WHERE key = 'firebase'")
         if not cur.fetchone():
             cur.execute(

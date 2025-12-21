@@ -5,21 +5,8 @@ import sys
 import os
 from pathlib import Path
 
-# Parche de compatibilidad para Python 3.10+
-# collections.MutableMapping fue movido a collections.abc.MutableMapping
-# pero algunas dependencias antiguas (como pyrebase4) aún lo usan
-try:
-    import collections.abc
-    if not hasattr(collections, 'MutableMapping'):
-        collections.MutableMapping = collections.abc.MutableMapping
-    if not hasattr(collections, 'Mapping'):
-        collections.Mapping = collections.abc.Mapping
-    if not hasattr(collections, 'Sequence'):
-        collections.Sequence = collections.abc.Sequence
-    if not hasattr(collections, 'Iterable'):
-        collections.Iterable = collections.abc.Iterable
-except ImportError:
-    pass
+# El parche de compatibilidad ya se aplicó al importar app (via __init__.py)
+# No es necesario aplicarlo nuevamente aquí
 
 # Agregar el directorio raíz al PYTHONPATH para que las importaciones funcionen
 # tanto ejecutando como módulo como directamente
