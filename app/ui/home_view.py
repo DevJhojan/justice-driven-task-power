@@ -898,27 +898,6 @@ class HomeView:
             if self.current_section == "settings":
                 self._build_settings_view()
             
-        except FileNotFoundError as ex:
-            self._show_error_page(
-                "Error: Archivo de credenciales no encontrado",
-                f"No se encontró el archivo de credenciales de Google:\n\n{str(ex)}\n\n"
-                "Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto.\n\n"
-                "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
-            )
-        except Exception as ex:
-            # Si hay un error relacionado con wsgiref, mostrar mensaje específico
-            error_msg = str(ex)
-            if 'wsgiref' in error_msg.lower():
-                self._show_error_page(
-                    "Error: wsgiref no disponible",
-                    f"{error_msg}\n\n"
-                    "wsgiref es necesario para la autenticación OAuth2.\n\n"
-                    "SOLUCIÓN:\n"
-                    "Por favor, reconstruye el APK con: ./build_android.sh\n"
-                    "El script de build inyectará wsgiref automáticamente."
-                )
-            else:
-                raise
         except ImportError as ex:
             error_msg = str(ex)
             if 'wsgiref' in error_msg.lower():
@@ -941,20 +920,39 @@ class HomeView:
                     "- google-auth-oauthlib>=1.1.0\n"
                     "Luego reconstruye la aplicación con: ./build_android.sh"
                 )
-        except Exception as ex:
-            error_type = type(ex).__name__
-            error_details = str(ex)
-            
+        except FileNotFoundError as ex:
             self._show_error_page(
-                "Error al sincronizar con Google",
-                f"Ocurrió un error durante la sincronización:\n\n"
-                f"Tipo: {error_type}\n"
-                f"Detalle: {error_details}\n\n"
-                f"Por favor, verifica:\n"
-                f"- Tu conexión a internet\n"
-                f"- Las credenciales de Google\n"
-                f"- Que Google Sheets API esté habilitada en Google Cloud Console"
+                "Error: Archivo de credenciales no encontrado",
+                f"No se encontró el archivo de credenciales de Google:\n\n{str(ex)}\n\n"
+                "Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto.\n\n"
+                "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
             )
+        except Exception as ex:
+            # Si hay un error relacionado con wsgiref, mostrar mensaje específico
+            error_msg = str(ex)
+            if 'wsgiref' in error_msg.lower():
+                self._show_error_page(
+                    "Error: wsgiref no disponible",
+                    f"{error_msg}\n\n"
+                    "wsgiref es necesario para la autenticación OAuth2.\n\n"
+                    "SOLUCIÓN:\n"
+                    "Por favor, reconstruye el APK con: ./build_android.sh\n"
+                    "El script de build inyectará wsgiref automáticamente."
+                )
+            else:
+                error_type = type(ex).__name__
+                error_details = str(ex)
+                
+                self._show_error_page(
+                    "Error al sincronizar con Google",
+                    f"Ocurrió un error durante la sincronización:\n\n"
+                    f"Tipo: {error_type}\n"
+                    f"Detalle: {error_details}\n\n"
+                    f"Por favor, verifica:\n"
+                    f"- Tu conexión a internet\n"
+                    f"- Las credenciales de Google\n"
+                    f"- Que Google Sheets API esté habilitada en Google Cloud Console"
+                )
         finally:
             self.page.update()
 
