@@ -5,6 +5,7 @@ import os
 import flet as ft
 from typing import Optional
 from datetime import date, datetime
+from pathlib import Path
 from app.data.models import Task, SubTask, Habit
 from app.services.task_service import TaskService
 from app.services.habit_service import HabitService
@@ -634,6 +635,52 @@ class HomeView:
                     ft.Row(
                         [import_sheets_button],
                         alignment=ft.MainAxisAlignment.START
+                    ),
+
+                    ft.Divider(),
+
+                    # ==================== Sección 5: Información de la aplicación ====================
+                    ft.Text(
+                        "Información de la aplicación",
+                        size=18,
+                        weight=ft.FontWeight.BOLD,
+                        color=preview_color
+                    ),
+                    ft.Text(
+                        "Información sobre la versión y el estado de la aplicación.",
+                        size=14,
+                        color=ft.Colors.GREY_600
+                    ),
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(
+                                    ft.Icons.INFO_OUTLINE,
+                                    color=preview_color,
+                                    size=20
+                                ),
+                                ft.Column(
+                                    [
+                                        ft.Text(
+                                            "Versión",
+                                            size=12,
+                                            color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400,
+                                            weight=ft.FontWeight.BOLD
+                                        ),
+                                        ft.Text(
+                                            self._get_app_version(),
+                                            size=16,
+                                            color=preview_color,
+                                            weight=ft.FontWeight.BOLD
+                                        )
+                                    ],
+                                    spacing=4
+                                )
+                            ],
+                            spacing=12,
+                            alignment=ft.MainAxisAlignment.START
+                        ),
+                        padding=ft.padding.symmetric(vertical=8, horizontal=0)
                     )
                 ],
                 spacing=16,
@@ -723,6 +770,29 @@ class HomeView:
                 ],
                 spacing=8
             )
+
+    def _get_app_version(self) -> str:
+        """
+        Obtiene la versión de la aplicación desde pyproject.toml.
+        
+        Returns:
+            Versión de la aplicación o "Desconocida" si no se puede obtener.
+        """
+        try:
+            root_dir = Path(__file__).parent.parent.parent
+            pyproject_path = root_dir / 'pyproject.toml'
+            
+            if pyproject_path.exists():
+                with open(pyproject_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        if line.strip().startswith('version'):
+                            # Extraer la versión del formato: version = "0.2.5"
+                            version = line.split('=')[1].strip().strip('"').strip("'")
+                            return version
+            
+            return "Desconocida"
+        except Exception:
+            return "Desconocida"
 
     def _copy_spreadsheet_id_to_clipboard(self, spreadsheet_id: Optional[str]):
         """Copia el ID del spreadsheet al portapapeles."""
