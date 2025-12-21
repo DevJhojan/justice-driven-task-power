@@ -331,11 +331,7 @@ class HomeView:
                 border=ft.border.all(2, colors['primary'] if is_active else ft.Colors.TRANSPARENT),
                 border_radius=8,
                 expand=True,
-                tooltip=colors['text'],
-                constraints=ft.BoxConstraints(
-                    min_width=60  # Ancho mínimo para legibilidad
-                    # max_width no se especifica para permitir expansión ilimitada
-                )
+                tooltip=colors['text']
             )
             buttons.append(button)
         
@@ -2072,12 +2068,7 @@ class HomeView:
                                 ft.Container(
                                     content=card,
                                     expand=True,
-                                    margin=ft.margin.only(right=12 if idx < len(row_tasks) - 1 else 0),
-                                    width=None,  # Sin ancho fijo para que sea flexible
-                                    constraints=ft.BoxConstraints(
-                                        min_width=300  # Ancho mínimo para legibilidad
-                                        # max_width no se especifica para permitir expansión ilimitada
-                                    )
+                                    margin=ft.margin.only(right=12 if idx < len(row_tasks) - 1 else 0)
                                 )
                             )
                         
