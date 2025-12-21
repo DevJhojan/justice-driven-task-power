@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "46129291924",
+    "project_id": "justice-driven-task-power",
+    "storage_bucket": "justice-driven-task-power.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:46129291924:android:bdc872a0eb397d21ec8a81",
+        "android_client_info": {
+          "package_name": "com.justicedriventaskpower"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDwgD194XcXeIxIJSyH3nwSzzf3x1xXS0s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

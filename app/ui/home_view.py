@@ -12,18 +12,17 @@ from app.services.habit_service import HabitService
 from app.services.settings_service import SettingsService, apply_theme_to_page
 from app.services.sync_service import SyncService
 
-# Importación de Google Sheets - si falla, se manejará en tiempo de ejecución
+# Importación de Firebase - si falla, se manejará en tiempo de ejecución
 try:
-    # Intentar importar las dependencias de Google API
-    import google.oauth2.credentials
-    import google_auth_oauthlib.flow
-    from googleapiclient.discovery import build
-    # Si las dependencias están disponibles, importar el servicio
-    from app.services.google_sheets_service import GoogleSheetsService
+    from app.services.firebase_auth_service import FirebaseAuthService
+    from app.services.firebase_sync_service import FirebaseSyncService
+    FIREBASE_AVAILABLE = True
 except (ImportError, ModuleNotFoundError) as e:
-    # Si falla la importación, el servicio no está disponible
-    GoogleSheetsService = None
-    _google_sheets_import_error = str(e)
+    # Si falla la importación, Firebase no está disponible
+    FirebaseAuthService = None
+    FirebaseSyncService = None
+    FIREBASE_AVAILABLE = False
+    _firebase_import_error = str(e)
 from app.ui.widgets import (
     create_task_card, create_empty_state, create_statistics_card,
     create_habit_card, create_habit_empty_state, create_habit_statistics_card
@@ -45,13 +44,22 @@ class HomeView:
         self.page = page
         self.task_service = TaskService()
         self.habit_service = HabitService()
-        # Intentar inicializar Google Sheets Service
-        try:
-            self.google_sheets_service = GoogleSheetsService(page=self.page) if GoogleSheetsService else None
-        except Exception:
-            self.google_sheets_service = None
         self.settings_service = SettingsService()
         self.sync_service = SyncService()
+        
+        # Inicializar servicios de Firebase
+        try:
+            if FIREBASE_AVAILABLE and FirebaseAuthService:
+                self.firebase_auth_service = FirebaseAuthService()
+                self.firebase_sync_service = FirebaseSyncService(self.firebase_auth_service)
+            else:
+                self.firebase_auth_service = None
+                self.firebase_sync_service = None
+        except Exception as e:
+            self.firebase_auth_service = None
+            self.firebase_sync_service = None
+            print(f"Error al inicializar Firebase: {e}")
+        
         self.current_task_filter: Optional[bool] = None  # None=all, True=completed, False=pending
         self.current_habit_filter: Optional[bool] = None  # None=all, True=active, False=inactive
         self.editing_task: Optional[Task] = None
@@ -60,8 +68,6 @@ class HomeView:
         self.editing_habit: Optional[Habit] = None
         # Secciones: "tasks", "habits", "settings"
         self.current_section = "tasks"
-        # Variable para guardar el spreadsheet_id durante autenticación manual de importación
-        self._pending_import_spreadsheet_id = None
         
         # Contenedores principales
         self.tasks_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
@@ -499,31 +505,9 @@ class HomeView:
             on_click=self._toggle_theme,
         )
 
-        # ==================== Sección 2: Copia de seguridad con Google Sheets ====================
-        # Botones de importación/exportación desde/hacia Google Sheets
-        # Estos botones se deshabilitarán si no hay sincronización activa
+        # ==================== Sección 2: Autenticación y Sincronización con Firebase ====================
         sync_settings = self.sync_service.get_sync_settings()
-        is_synced = sync_settings.is_authenticated
-        
-        export_sheets_button = ft.ElevatedButton(
-            text="Exportar a Google Sheets",
-            icon=ft.Icons.CLOUD_UPLOAD,
-            on_click=self._start_export_to_sheets,
-            bgcolor=preview_color if is_synced else ft.Colors.GREY_400,
-            color=ft.Colors.WHITE,
-            disabled=not is_synced,
-            tooltip="Primero debes sincronizar con Google" if not is_synced else "Exportar datos a Google Sheets"
-        )
-
-        import_sheets_button = ft.ElevatedButton(
-            text="Importar desde Google Sheets",
-            icon=ft.Icons.CLOUD_DOWNLOAD,
-            on_click=self._start_import_from_sheets,
-            bgcolor=preview_color if is_synced else ft.Colors.GREY_400,
-            color=ft.Colors.WHITE,
-            disabled=not is_synced,
-            tooltip="Primero debes sincronizar con Google" if not is_synced else "Importar datos desde Google Sheets"
-        )
+        is_authenticated = sync_settings.is_authenticated
 
         settings_content = ft.Container(
             content=ft.Column(
@@ -580,62 +564,20 @@ class HomeView:
 
                     ft.Divider(),
 
-                    # ==================== Sección 2: Sincronización con Google Sheets ====================
+                    # ==================== Sección 2: Autenticación y Sincronización con Firebase ====================
                     ft.Text(
-                        "Sincronización",
+                        "Autenticación y Sincronización",
                         size=18,
                         weight=ft.FontWeight.BOLD,
                         color=preview_color
                     ),
                     ft.Text(
-                        "Conecta tu cuenta de Google para sincronizar tus datos con Google Sheets. "
-                        "Solo necesitas autenticarte una vez.",
+                        "Autentícate con Firebase para sincronizar tus datos en la nube. "
+                        "Tus datos se guardan localmente y se sincronizan cuando lo solicites.",
                         size=14,
                         color=ft.Colors.GREY_600
                     ),
-                    self._build_sync_section(preview_color, is_dark),
-
-                    ft.Divider(),
-
-                    # ==================== Sección 3: Exportación a Google Sheets ====================
-                    ft.Text(
-                        "Exportación a Google Sheets",
-                        size=18,
-                        weight=ft.FontWeight.BOLD,
-                        color=preview_color
-                    ),
-                    ft.Text(
-                        "Exporta todos tus datos a Google Sheets. Se creará un nuevo spreadsheet "
-                        "con hojas separadas para tareas, subtareas, hábitos y cumplimientos. "
-                        "Los datos se sincronizan en la nube y puedes acceder desde cualquier dispositivo.",
-                        size=14,
-                        color=ft.Colors.GREY_600
-                    ),
-                    ft.Row(
-                        [export_sheets_button],
-                        alignment=ft.MainAxisAlignment.START
-                    ),
-
-                    ft.Divider(),
-
-                    # ==================== Sección 4: Importación desde Google Sheets ====================
-                    ft.Text(
-                        "Importación desde Google Sheets",
-                        size=18,
-                        weight=ft.FontWeight.BOLD,
-                        color=preview_color
-                    ),
-                    ft.Text(
-                        "Importa datos desde un Google Sheets existente. Necesitarás el ID del spreadsheet "
-                        "(se encuentra en la URL del documento). Los datos se agregan sin reemplazar "
-                        "tu base actual, evitando duplicados y manteniendo la integridad de relaciones.",
-                        size=14,
-                        color=ft.Colors.GREY_600
-                    ),
-                    ft.Row(
-                        [import_sheets_button],
-                        alignment=ft.MainAxisAlignment.START
-                    ),
+                    self._build_firebase_auth_section(preview_color, is_dark),
 
                     ft.Divider(),
 
@@ -706,63 +648,98 @@ class HomeView:
         self.home_view.bgcolor = bgcolor
         self.page.update()
 
-    def _build_sync_section(self, preview_color, is_dark):
-        """Construye la sección de sincronización con Google Sheets."""
+    def _build_firebase_auth_section(self, preview_color, is_dark):
+        """Construye la sección de autenticación y sincronización con Firebase."""
         sync_settings = self.sync_service.get_sync_settings()
-        is_synced = sync_settings.is_authenticated
+        is_authenticated = sync_settings.is_authenticated
         
-        if is_synced:
-            # Mostrar estado de sincronización
-            email_text = ft.Text(
-                f"✓ Conectado como: {sync_settings.email or 'Usuario de Google'}",
-                size=14,
-                color=ft.Colors.GREEN if not is_dark else ft.Colors.GREEN_300,
-                weight=ft.FontWeight.BOLD
+        if not FIREBASE_AVAILABLE or not self.firebase_auth_service:
+            return ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "Firebase no está disponible",
+                            size=14,
+                            color=ft.Colors.RED,
+                            weight=ft.FontWeight.BOLD
+                        ),
+                        ft.Text(
+                            "Las dependencias de Firebase no están instaladas. "
+                            "Instala con: pip install pyrebase4 firebase-admin",
+                            size=12,
+                            color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
+                        )
+                    ],
+                    spacing=8
+                )
+            )
+        
+        if is_authenticated:
+            # Usuario autenticado: mostrar información y botón de sincronización
+            user_email = sync_settings.email or "Usuario"
+            
+            sync_button = ft.ElevatedButton(
+                text="Sincronizar",
+                icon=ft.Icons.CLOUD_SYNC,
+                on_click=self._start_firebase_sync,
+                bgcolor=preview_color,
+                color=ft.Colors.WHITE,
             )
             
-            spreadsheet_id_text = ft.Text(
-                f"ID del Sheet: {sync_settings.spreadsheet_id or 'No vinculado'}",
-                size=12,
-                color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
-            )
-            
-            copy_id_button = ft.IconButton(
-                icon=ft.Icons.COPY,
-                tooltip="Copiar ID al portapapeles",
-                on_click=lambda e: self._copy_spreadsheet_id_to_clipboard(sync_settings.spreadsheet_id),
-                icon_color=preview_color,
-                disabled=not sync_settings.spreadsheet_id
+            logout_button = ft.OutlinedButton(
+                text="Cerrar sesión",
+                icon=ft.Icons.LOGOUT,
+                on_click=self._logout_firebase,
+                color=ft.Colors.RED
             )
             
             return ft.Column(
                 [
-                    email_text,
+                    ft.Text(
+                        f"✓ Conectado como: {user_email}",
+                        size=14,
+                        color=ft.Colors.GREEN if not is_dark else ft.Colors.GREEN_300,
+                        weight=ft.FontWeight.BOLD
+                    ),
+                    ft.Text(
+                        "Tus datos se guardan localmente y se sincronizan en la nube cuando lo solicites.",
+                        size=12,
+                        color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
+                    ),
                     ft.Row(
-                        [
-                            spreadsheet_id_text,
-                            copy_id_button
-                        ],
+                        [sync_button, logout_button],
                         spacing=8,
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                        alignment=ft.MainAxisAlignment.START
                     )
                 ],
                 spacing=8
             )
         else:
-            # Mostrar botón de sincronización
-            sync_button = ft.ElevatedButton(
-                text="Sincronizar con Google",
-                icon=ft.Icons.SYNC,
-                on_click=self._start_sync_with_google,
+            # Usuario no autenticado: mostrar botones de login y registro
+            login_button = ft.ElevatedButton(
+                text="Iniciar sesión",
+                icon=ft.Icons.LOGIN,
+                on_click=self._show_login_dialog,
                 bgcolor=preview_color,
                 color=ft.Colors.WHITE,
             )
             
+            register_button = ft.OutlinedButton(
+                text="Registrarse",
+                icon=ft.Icons.PERSON_ADD,
+                on_click=self._show_register_dialog,
+                color=preview_color
+            )
+            
             return ft.Column(
                 [
-                    sync_button,
+                    ft.Row(
+                        [login_button, register_button],
+                        spacing=8,
+                        alignment=ft.MainAxisAlignment.START
+                    ),
                     ft.Text(
-                        "Autentícate con Google para habilitar la exportación e importación de datos.",
+                        "Crea una cuenta o inicia sesión para sincronizar tus datos en la nube.",
                         size=12,
                         color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400,
                         italic=True
@@ -794,239 +771,355 @@ class HomeView:
         except Exception:
             return "Desconocida"
 
-    def _copy_spreadsheet_id_to_clipboard(self, spreadsheet_id: Optional[str]):
-        """Copia el ID del spreadsheet al portapapeles."""
-        if not spreadsheet_id:
+    # ==================== FUNCIONES DE FIREBASE ====================
+    
+    def _show_login_dialog(self, e):
+        """Muestra el diálogo de inicio de sesión."""
+        email_field = ft.TextField(
+            label="Correo electrónico",
+            hint_text="tu@email.com",
+            autofocus=True,
+            keyboard_type=ft.KeyboardType.EMAIL
+        )
+        
+        password_field = ft.TextField(
+            label="Contraseña",
+            hint_text="Mínimo 6 caracteres",
+            password=True,
+            can_reveal_password=True
+        )
+        
+        error_text = ft.Text("", color=ft.Colors.RED, size=12)
+        
+        def do_login(dialog_e):
+            email = email_field.value.strip()
+            password = password_field.value
+            
+            if not email:
+                error_text.value = "El correo electrónico es requerido"
+                error_text.update()
+                return
+            
+            if not password:
+                error_text.value = "La contraseña es requerida"
+                error_text.update()
+                return
+            
+            # Cerrar diálogo
+            login_dialog.open = False
+            self.page.dialog = None
+            self.page.update()
+            
+            # Mostrar mensaje de carga
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("No hay un ID de spreadsheet para copiar"),
-                bgcolor=ft.Colors.ORANGE,
+                content=ft.Text("Iniciando sesión..."),
+                bgcolor=ft.Colors.BLUE,
                 duration=2000
             )
             self.page.snack_bar.open = True
             self.page.update()
-            return
+            
+            try:
+                if not self.firebase_auth_service:
+                    raise RuntimeError("Firebase no está disponible")
+                
+                result = self.firebase_auth_service.login(email, password)
+                
+                # Guardar estado de sincronización
+                user = result.get('user', {})
+                self.sync_service.update_sync_settings(
+                    is_authenticated=True,
+                    email=user.get('email'),
+                    user_id=user.get('uid')
+                )
+                
+                # Mostrar éxito
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"✓ Sesión iniciada: {user.get('email')}"),
+                    bgcolor=ft.Colors.GREEN,
+                    duration=3000
+                )
+                self.page.snack_bar.open = True
+                
+                # Refrescar vista de configuración
+                if self.current_section == "settings":
+                    self._build_settings_view()
+                
+            except ValueError as ve:
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(str(ve)),
+                    bgcolor=ft.Colors.RED,
+                    duration=4000
+                )
+                self.page.snack_bar.open = True
+            except Exception as ex:
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"Error al iniciar sesión: {str(ex)}"),
+                    bgcolor=ft.Colors.RED,
+                    duration=4000
+                )
+                self.page.snack_bar.open = True
+            finally:
+                self.page.update()
         
-        try:
-            # En Flet, podemos usar set_clipboard para copiar al portapapeles
-            self.page.set_clipboard(spreadsheet_id)
+        login_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Iniciar sesión"),
+            content=ft.Column(
+                [email_field, password_field, error_text],
+                tight=True,
+                width=400
+            ),
+            actions=[
+                ft.TextButton("Cancelar", on_click=lambda e: setattr(login_dialog, 'open', False) or self.page.update()),
+                ft.ElevatedButton("Iniciar sesión", on_click=do_login)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        self.page.dialog = login_dialog
+        login_dialog.open = True
+        self.page.update()
+    
+    def _show_register_dialog(self, e):
+        """Muestra el diálogo de registro."""
+        email_field = ft.TextField(
+            label="Correo electrónico",
+            hint_text="tu@email.com",
+            autofocus=True,
+            keyboard_type=ft.KeyboardType.EMAIL
+        )
+        
+        password_field = ft.TextField(
+            label="Contraseña",
+            hint_text="Mínimo 6 caracteres",
+            password=True,
+            can_reveal_password=True
+        )
+        
+        confirm_password_field = ft.TextField(
+            label="Confirmar contraseña",
+            hint_text="Repite la contraseña",
+            password=True,
+            can_reveal_password=True
+        )
+        
+        error_text = ft.Text("", color=ft.Colors.RED, size=12)
+        
+        def do_register(dialog_e):
+            email = email_field.value.strip()
+            password = password_field.value
+            confirm_password = confirm_password_field.value
+            
+            if not email:
+                error_text.value = "El correo electrónico es requerido"
+                error_text.update()
+                return
+            
+            if not password:
+                error_text.value = "La contraseña es requerida"
+                error_text.update()
+                return
+            
+            if len(password) < 6:
+                error_text.value = "La contraseña debe tener al menos 6 caracteres"
+                error_text.update()
+                return
+            
+            if password != confirm_password:
+                error_text.value = "Las contraseñas no coinciden"
+                error_text.update()
+                return
+            
+            # Cerrar diálogo
+            register_dialog.open = False
+            self.page.dialog = None
+            self.page.update()
+            
+            # Mostrar mensaje de carga
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"✓ ID copiado al portapapeles: {spreadsheet_id}"),
+                content=ft.Text("Registrando usuario..."),
+                bgcolor=ft.Colors.BLUE,
+                duration=2000
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            
+            try:
+                if not self.firebase_auth_service:
+                    raise RuntimeError("Firebase no está disponible")
+                
+                result = self.firebase_auth_service.register(email, password)
+                
+                # Guardar estado de sincronización
+                user = result.get('user', {})
+                self.sync_service.update_sync_settings(
+                    is_authenticated=True,
+                    email=user.get('email'),
+                    user_id=user.get('uid')
+                )
+                
+                # Mostrar éxito
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"✓ Usuario registrado: {user.get('email')}"),
+                    bgcolor=ft.Colors.GREEN,
+                    duration=3000
+                )
+                self.page.snack_bar.open = True
+                
+                # Refrescar vista de configuración
+                if self.current_section == "settings":
+                    self._build_settings_view()
+                
+            except ValueError as ve:
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(str(ve)),
+                    bgcolor=ft.Colors.RED,
+                    duration=4000
+                )
+                self.page.snack_bar.open = True
+            except Exception as ex:
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"Error al registrar: {str(ex)}"),
+                    bgcolor=ft.Colors.RED,
+                    duration=4000
+                )
+                self.page.snack_bar.open = True
+            finally:
+                self.page.update()
+        
+        register_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Registrarse"),
+            content=ft.Column(
+                [email_field, password_field, confirm_password_field, error_text],
+                tight=True,
+                width=400
+            ),
+            actions=[
+                ft.TextButton("Cancelar", on_click=lambda e: setattr(register_dialog, 'open', False) or self.page.update()),
+                ft.ElevatedButton("Registrarse", on_click=do_register)
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        self.page.dialog = register_dialog
+        register_dialog.open = True
+        self.page.update()
+    
+    def _logout_firebase(self, e):
+        """Cierra la sesión de Firebase."""
+        try:
+            if self.firebase_auth_service:
+                self.firebase_auth_service.logout()
+            
+            # Limpiar configuración de sincronización
+            self.sync_service.clear_sync_settings()
+            
+            # Mostrar mensaje
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("✓ Sesión cerrada"),
                 bgcolor=ft.Colors.GREEN,
                 duration=2000
             )
             self.page.snack_bar.open = True
-        except Exception as e:
+            
+            # Refrescar vista de configuración
+            if self.current_section == "settings":
+                self._build_settings_view()
+            
+        except Exception as ex:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error al copiar: {str(e)}"),
+                content=ft.Text(f"Error al cerrar sesión: {str(ex)}"),
                 bgcolor=ft.Colors.RED,
                 duration=3000
             )
             self.page.snack_bar.open = True
         finally:
             self.page.update()
-
-    def _start_sync_with_google(self, e):
-        """Inicia el proceso de sincronización con Google (OAuth2)."""
-        # Verificar si Google Sheets está disponible
-        if GoogleSheetsService is None:
-            error_details = ""
-            try:
-                error_details = f"\n\nDetalle técnico: {_google_sheets_import_error}"
-            except NameError:
-                pass
-            
-            self._show_error_page(
-                "Error: Dependencias no disponibles",
-                "Las dependencias de Google Sheets API no están incluidas en el APK actual.\n\n"
-                "SOLUCIÓN:\n\n"
-                "Las dependencias están configuradas en pyproject.toml:\n"
-                "   ✓ google-api-python-client>=2.100.0\n"
-                "   ✓ google-auth-httplib2>=0.1.1\n"
-                "   ✓ google-auth-oauthlib>=1.1.0\n\n"
-                "Para incluirlas en el APK, ejecuta:\n"
-                "   ./build_android.sh\n\n"
-                "El script de build incluirá automáticamente:\n"
-                "   - Las dependencias de Google API\n"
-                "   - El módulo wsgiref (necesario para OAuth2)\n"
-                "   - Todos los assets de la aplicación"
-                + error_details
+    
+    def _start_firebase_sync(self, e):
+        """Inicia la sincronización con Firebase."""
+        if not self.firebase_sync_service:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Firebase no está disponible"),
+                bgcolor=ft.Colors.RED,
+                duration=3000
             )
+            self.page.snack_bar.open = True
+            self.page.update()
             return
         
-        if self.google_sheets_service is None:
-            try:
-                self.google_sheets_service = GoogleSheetsService(page=self.page)
-            except Exception as ex:
-                self._show_error_page(
-                    "Error al inicializar Google Sheets",
-                    f"No se pudo inicializar el servicio de Google Sheets:\n\n{str(ex)}"
-                )
-                return
+        # Verificar autenticación
+        if not self.firebase_auth_service.is_authenticated():
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Debes iniciar sesión primero"),
+                bgcolor=ft.Colors.ORANGE,
+                duration=3000
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
         
-        # Mostrar mensaje de inicio
+        # Mostrar mensaje de sincronización
         self.page.snack_bar = ft.SnackBar(
-            content=ft.Text("Iniciando autenticación con Google..."),
+            content=ft.Text("Sincronizando datos..."),
             bgcolor=ft.Colors.BLUE,
-            duration=2000,
+            duration=3000
         )
         self.page.snack_bar.open = True
         self.page.update()
         
         try:
-            # Autenticar con Google
-            if not self.google_sheets_service.authenticate():
-                raise Exception("No se pudo autenticar con Google. Verifica las credenciales.")
+            result = self.firebase_sync_service.sync()
             
-            # Obtener email del usuario
-            user_email = self.google_sheets_service.get_user_email()
-            
-            # Guardar estado de sincronización
-            self.sync_service.update_sync_settings(
-                is_authenticated=True,
-                email=user_email
-            )
-            
-            # Mostrar éxito y actualizar la vista
+            if result.success:
+                msg_parts = ["✓ Sincronización completada"]
+                if result.tasks_uploaded > 0:
+                    msg_parts.append(f"Tareas subidas: {result.tasks_uploaded}")
+                if result.tasks_downloaded > 0:
+                    msg_parts.append(f"Tareas descargadas: {result.tasks_downloaded}")
+                if result.habits_uploaded > 0:
+                    msg_parts.append(f"Hábitos subidos: {result.habits_uploaded}")
+                if result.habits_downloaded > 0:
+                    msg_parts.append(f"Hábitos descargados: {result.habits_downloaded}")
+                
+                if result.errors:
+                    msg_parts.append(f"\n⚠ Advertencias: {len(result.errors)}")
+                
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text("\n".join(msg_parts)),
+                    bgcolor=ft.Colors.GREEN if not result.errors else ft.Colors.ORANGE,
+                    duration=5000
+                )
+                self.page.snack_bar.open = True
+                
+                # Refrescar vistas si es necesario
+                if result.tasks_downloaded > 0 and self.current_section == "tasks":
+                    self._load_tasks()
+                if result.habits_downloaded > 0 and self.current_section == "habits":
+                    self._load_habits()
+            else:
+                error_msg = "Error durante la sincronización"
+                if result.errors:
+                    error_msg += f": {result.errors[0]}"
+                
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(error_msg),
+                    bgcolor=ft.Colors.RED,
+                    duration=5000
+                )
+                self.page.snack_bar.open = True
+        
+        except Exception as ex:
             self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"✓ Sincronización exitosa con {user_email or 'Google'}"),
-                bgcolor=ft.Colors.GREEN,
-                duration=3000,
+                content=ft.Text(f"Error al sincronizar: {str(ex)}"),
+                bgcolor=ft.Colors.RED,
+                duration=5000
             )
             self.page.snack_bar.open = True
-            
-            # Refrescar la vista de configuración
-            if self.current_section == "settings":
-                self._build_settings_view()
-            
-        except ImportError as ex:
-            error_msg = str(ex)
-            if 'wsgiref' in error_msg.lower():
-                self._show_error_page(
-                    "Error: Módulo wsgiref no disponible",
-                    f"{error_msg}\n\n"
-                    "Este es un problema conocido con builds de Android.\n\n"
-                    "SOLUCIÓN:\n"
-                    "El módulo wsgiref es parte de la biblioteca estándar de Python pero "
-                    "puede no estar incluido en el build de Android.\n\n"
-                    "Por favor, reconstruye el APK con: ./build_android.sh"
-                )
-            else:
-                self._show_error_page(
-                    "Error: Dependencias no disponibles",
-                    f"No se pueden importar las dependencias de Google Sheets:\n\n{error_msg}\n\n"
-                    "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
-                    "- google-api-python-client>=2.100.0\n"
-                    "- google-auth-httplib2>=0.1.1\n"
-                    "- google-auth-oauthlib>=1.1.0\n"
-                    "Luego reconstruye la aplicación con: ./build_android.sh"
-                )
-        except FileNotFoundError as ex:
-            self._show_error_page(
-                "Error: Archivo de credenciales no encontrado",
-                f"No se encontró el archivo de credenciales de Google:\n\n{str(ex)}\n\n"
-                "Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto.\n\n"
-                "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
-            )
-        except Exception as ex:
-            # Si hay un error relacionado con wsgiref, mostrar mensaje específico
-            error_msg = str(ex)
-            if 'wsgiref' in error_msg.lower():
-                self._show_error_page(
-                    "Error: wsgiref no disponible",
-                    f"{error_msg}\n\n"
-                    "wsgiref es necesario para la autenticación OAuth2.\n\n"
-                    "SOLUCIÓN:\n"
-                    "Por favor, reconstruye el APK con: ./build_android.sh\n"
-                    "El script de build inyectará wsgiref automáticamente."
-                )
-            else:
-                error_type = type(ex).__name__
-                error_details = str(ex)
-                
-                self._show_error_page(
-                    "Error al sincronizar con Google",
-                    f"Ocurrió un error durante la sincronización:\n\n"
-                    f"Tipo: {error_type}\n"
-                    f"Detalle: {error_details}\n\n"
-                    f"Por favor, verifica:\n"
-                    f"- Tu conexión a internet\n"
-                    f"- Las credenciales de Google\n"
-                    f"- Que Google Sheets API esté habilitada en Google Cloud Console"
-                )
         finally:
             self.page.update()
-
-    # ==================== IMPORT / EXPORT GOOGLE SHEETS ====================
-
-    def _show_error_page(self, title: str, message: str):
-        """Muestra una página de error con el mensaje especificado."""
-        # Obtener color del tema
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        scheme = self.page.theme.color_scheme if self.page.theme else None
-        preview_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_700
-        
-        # Crear contenido de la página de error
-        error_content = ft.Container(
-            content=ft.Column(
-                [
-                    # Header con título
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Icon(ft.Icons.ERROR_OUTLINE, color=ft.Colors.RED, size=40),
-                                ft.Text(
-                                    title,
-                                    size=24,
-                                    weight=ft.FontWeight.BOLD,
-                                    color=ft.Colors.RED,
-                                ),
-                            ],
-                            spacing=12,
-                        ),
-                        padding=ft.padding.only(bottom=20),
-                    ),
-                    
-                    # Mensaje de error
-                    ft.Container(
-                        content=ft.Text(
-                            message,
-                            size=14,
-                            color=ft.Colors.GREY_700 if not is_dark else ft.Colors.GREY_300,
-                        ),
-                        padding=ft.padding.only(bottom=30),
-                    ),
-                    
-                    # Botón para volver
-                    ft.ElevatedButton(
-                        text="Volver",
-                        icon=ft.Icons.ARROW_BACK,
-                        on_click=self._go_back,
-                        bgcolor=preview_color,
-                        color=ft.Colors.WHITE,
-                    ),
-                ],
-                scroll=ft.ScrollMode.AUTO,
-                expand=True,
-            ),
-            padding=20,
-            expand=True,
-        )
-        
-        # Crear la vista de error
-        error_view = ft.View(
-            route="/error",
-            controls=[error_content],
-            appbar=ft.AppBar(
-                title=ft.Text("Error"),
-                bgcolor=preview_color,
-                color=ft.Colors.WHITE,
-            ),
-        )
-        
-        # Agregar la vista y navegar a ella
-        self.page.views.append(error_view)
-        self.page.go("/error")
-        self.page.update()
     
     def _go_back(self, e=None):
         """Vuelve a la vista anterior."""
@@ -1039,814 +1132,6 @@ class HomeView:
             self.page.go("/")
         self.page.update()
     
-    def _open_auth_url(self, url: str):
-        """Abre una URL en el navegador externo, con múltiples métodos de respaldo para Android."""
-        opened = False
-        
-        # Método 1: Intentar con launch_url de Flet
-        try:
-            self.page.launch_url(url, web_window_name="_blank")
-            opened = True
-        except Exception as e1:
-            # Método 2: Intentar con subprocess (Android)
-            try:
-                import subprocess
-                import platform
-                
-                # En Android, usar am start
-                if self.page.platform == ft.PagePlatform.ANDROID:
-                    try:
-                        # Intentar usar el método de Android
-                        subprocess.run(
-                            ["am", "start", "-a", "android.intent.action.VIEW", "-d", url],
-                            check=False,
-                            timeout=2,
-                            stderr=subprocess.DEVNULL,
-                            stdout=subprocess.DEVNULL
-                        )
-                        opened = True
-                    except Exception:
-                        pass
-                
-                # Método 3: webbrowser (fallback)
-                if not opened:
-                    import webbrowser
-                    webbrowser.open(url)
-                    opened = True
-            except Exception as e2:
-                # Si todo falla, mostrar mensaje
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(
-                        f"No se pudo abrir el navegador automáticamente.\n\n"
-                        f"Por favor, copia esta URL y ábrela manualmente:\n{url}"
-                    ),
-                    bgcolor=ft.Colors.ORANGE,
-                    duration=10000,
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
-                return
-        
-        if opened:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Abriendo navegador..."),
-                bgcolor=ft.Colors.BLUE,
-                duration=2000,
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-    
-    def _show_manual_auth_page_removed(self, auth_url: str, is_import: bool = False, is_sync: bool = False):
-        """Muestra una página para autenticación manual (sin wsgiref).
-        
-        Args:
-            auth_url: URL de autorización de Google OAuth2
-            is_import: Si es True, después de autenticar continuará con la importación
-            is_sync: Si es True, después de autenticar guardará el estado de sincronización
-        """
-        # Obtener color del tema
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        scheme = self.page.theme.color_scheme if self.page.theme else None
-        preview_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_700
-        
-        # Campo para pegar la URL de redirección
-        redirect_url_field = ft.TextField(
-            label="URL de redirección",
-            hint_text="Pega aquí la URL completa después de autorizar",
-            multiline=True,
-            min_lines=3,
-            max_lines=5,
-            expand=True,
-        )
-        
-        def complete_auth(e):
-            redirect_url = redirect_url_field.value.strip()
-            
-            if not redirect_url:
-                redirect_url_field.error_text = "La URL de redirección es requerida"
-                redirect_url_field.update()
-                return
-            
-            # Volver a la vista anterior
-            self._go_back(e)
-            
-            # Mostrar mensaje de procesamiento
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Procesando autenticación..."),
-                bgcolor=ft.Colors.BLUE,
-                duration=2000,
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-            
-            try:
-                # Completar la autenticación manual
-                creds = self.google_sheets_service.complete_manual_auth(redirect_url)
-                
-                # Si es sincronización, guardar el estado
-                if is_sync:
-                    # Obtener email del usuario
-                    user_email = self.google_sheets_service.get_user_email()
-                    
-                    # Guardar estado de sincronización
-                    self.sync_service.update_sync_settings(
-                        is_authenticated=True,
-                        email=user_email
-                    )
-                    
-                    # Mostrar éxito
-                    self.page.snack_bar = ft.SnackBar(
-                        content=ft.Text(f"✓ Sincronización exitosa con {user_email or 'Google'}"),
-                        bgcolor=ft.Colors.GREEN,
-                        duration=3000,
-                    )
-                    self.page.snack_bar.open = True
-                    
-                    # Refrescar la vista de configuración
-                    if self.current_section == "settings":
-                        self._build_settings_view()
-                    
-                    return
-                
-                # Continuar con la exportación o importación según corresponda
-                if is_import and self._pending_import_spreadsheet_id:
-                    # Continuar con la importación
-                    self.page.snack_bar = ft.SnackBar(
-                        content=ft.Text("✓ Autenticación completada. Importando datos..."),
-                        bgcolor=ft.Colors.GREEN,
-                        duration=3000,
-                    )
-                    self.page.snack_bar.open = True
-                    self.page.update()
-                    
-                    # Forzar recreación del servicio con las nuevas credenciales
-                    self.google_sheets_service.service = None
-                    self.google_sheets_service.credentials = creds
-                    
-                    # Esperar un momento para que se actualice el cliente
-                    import time
-                    time.sleep(0.5)
-                    
-                    # Importar desde Google Sheets
-                    spreadsheet_id = self._pending_import_spreadsheet_id
-                    self._pending_import_spreadsheet_id = None
-                    result = self.google_sheets_service.import_from_sheets(spreadsheet_id)
-                    
-                    # Construir mensaje de éxito
-                    msg_parts = [f"✓ Importación completada desde Google Sheets."]
-                    if result.tasks_imported > 0:
-                        msg_parts.append(f"Tareas nuevas: {result.tasks_imported}")
-                    if result.subtasks_imported > 0:
-                        msg_parts.append(f"Subtareas nuevas: {result.subtasks_imported}")
-                    if result.habits_imported > 0:
-                        msg_parts.append(f"Hábitos nuevos: {result.habits_imported}")
-                    if result.habit_completions_imported > 0:
-                        msg_parts.append(f"Cumplimientos nuevos: {result.habit_completions_imported}")
-                    
-                    if result.errors:
-                        msg_parts.append(f"\n⚠ Advertencias: {len(result.errors)}")
-                        for error in result.errors[:3]:
-                            msg_parts.append(f"  - {error}")
-                        if len(result.errors) > 3:
-                            msg_parts.append(f"  ... y {len(result.errors) - 3} más")
-                    
-                    msg = "\n".join(msg_parts)
-                    bg_color = ft.Colors.GREEN if not result.errors else ft.Colors.ORANGE
-                    
-                    self.page.snack_bar = ft.SnackBar(
-                        content=ft.Text(msg),
-                        bgcolor=bg_color,
-                        duration=10000,
-                    )
-                    self.page.snack_bar.open = True
-                    
-                    # Refrescar vistas
-                    if self.current_section == "tasks":
-                        self._load_tasks()
-                    elif self.current_section == "habits":
-                        self._load_habits()
-                else:
-                    # Continuar con la exportación
-                    self.page.snack_bar = ft.SnackBar(
-                        content=ft.Text("✓ Autenticación completada. Exportando datos..."),
-                        bgcolor=ft.Colors.GREEN,
-                        duration=3000,
-                    )
-                    self.page.snack_bar.open = True
-                    self.page.update()
-                    
-                    # Ahora que tenemos credenciales, exportar a Google Sheets
-                    # Forzar recreación del servicio con las nuevas credenciales
-                    self.google_sheets_service.service = None
-                    self.google_sheets_service.credentials = creds
-                    
-                    # Esperar un momento para que se actualice el cliente
-                    import time
-                    time.sleep(0.5)
-                    
-                    # Exportar a Google Sheets
-                    result = self.google_sheets_service.export_to_sheets()
-                    
-                    # Guardar el ID del spreadsheet en la configuración de sincronización
-                    if result.get('spreadsheet_id'):
-                        self.sync_service.update_sync_settings(
-                            spreadsheet_id=result['spreadsheet_id']
-                        )
-                    
-                    # Mostrar éxito
-                    success_msg = (
-                        f"✓ Datos exportados correctamente a Google Sheets!\n\n"
-                        f"Título: {result.get('title', 'Sin título')}\n"
-                        f"ID: {result['spreadsheet_id']}\n\n"
-                        f"Puedes acceder al spreadsheet desde:\n"
-                        f"{result['url']}"
-                    )
-                    
-                    self.page.snack_bar = ft.SnackBar(
-                        content=ft.Text(success_msg),
-                        bgcolor=ft.Colors.GREEN,
-                        duration=12000,
-                    )
-                    self.page.snack_bar.open = True
-                    
-                    # Refrescar la vista de configuración para mostrar el nuevo ID
-                    if self.current_section == "settings":
-                        self._build_settings_view()
-                
-            except ValueError as ve:
-                self._show_error_page(
-                    "Error en la autenticación",
-                    f"{str(ve)}\n\n"
-                    "Por favor, verifica que hayas copiado la URL completa después de autorizar."
-                )
-            except Exception as ex:
-                self._show_error_page(
-                    "Error al completar la autenticación",
-                    f"Ocurrió un error: {str(ex)}\n\n"
-                    "Por favor, intenta nuevamente."
-                )
-            finally:
-                self.page.update()
-        
-        # Crear contenido de la página de autenticación manual
-        auth_content = ft.Container(
-            content=ft.Column(
-                [
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Icon(ft.Icons.LOCK, color=ft.Colors.ORANGE, size=40),
-                                ft.Text(
-                                    "Autenticación Manual",
-                                    size=24,
-                                    weight=ft.FontWeight.BOLD,
-                                    color=preview_color,
-                                ),
-                            ],
-                            spacing=12,
-                        ),
-                        padding=ft.padding.only(bottom=20),
-                    ),
-                    
-                    ft.Text(
-                        "El módulo wsgiref no está disponible en Android, por lo que necesitamos "
-                        "completar la autenticación manualmente.",
-                        size=14,
-                        color=ft.Colors.GREY_700 if not is_dark else ft.Colors.GREY_300,
-                    ),
-                    
-                    ft.Divider(),
-                    
-                    ft.Text(
-                        "Instrucciones:",
-                        size=16,
-                        weight=ft.FontWeight.BOLD,
-                        color=preview_color,
-                    ),
-                    
-                    ft.Text(
-                        "Pasos para autenticarse:",
-                        size=16,
-                        weight=ft.FontWeight.BOLD,
-                        color=preview_color,
-                    ),
-                    ft.Text(
-                        "1. Presiona el botón 'Abrir URL de autorización' para abrir el navegador.\n"
-                        "2. Si el botón no funciona, copia la URL de abajo y ábrela manualmente.\n"
-                        "3. Autoriza la aplicación en el navegador.\n"
-                        "4. Después de autorizar, Google te redirigirá a una URL.\n"
-                        "5. Copia esa URL completa (debe comenzar con http://localhost o similar).\n"
-                        "6. Pega la URL en el campo de abajo y presiona 'Completar Autenticación'.",
-                        size=14,
-                        color=ft.Colors.GREY_700 if not is_dark else ft.Colors.GREY_300,
-                    ),
-                    
-                    ft.Container(
-                        content=ft.Column(
-                            [
-                                ft.ElevatedButton(
-                                    "Abrir URL de autorización",
-                                    icon=ft.Icons.OPEN_IN_BROWSER,
-                                    on_click=lambda e: self._open_auth_url(auth_url),
-                                    bgcolor=preview_color,
-                                    color=ft.Colors.WHITE,
-                                    width=300,
-                                ),
-                                ft.Container(
-                                    content=ft.Column(
-                                        [
-                                            ft.Text(
-                                                "URL de autorización (copia si el botón no funciona):",
-                                                size=12,
-                                                weight=ft.FontWeight.BOLD,
-                                            ),
-                                            ft.Container(
-                                                content=ft.Text(
-                                                    auth_url,
-                                                    size=11,
-                                                    color=ft.Colors.BLUE,
-                                                    selectable=True,
-                                                ),
-                                                bgcolor=ft.Colors.GREY_100 if not is_dark else ft.Colors.GREY_800,
-                                                padding=8,
-                                                border_radius=4,
-                                            ),
-                                        ],
-                                        spacing=4,
-                                    ),
-                                    padding=ft.padding.only(top=10, bottom=10),
-                                ),
-                            ],
-                            spacing=8,
-                        ),
-                        padding=ft.padding.only(bottom=10),
-                    ),
-                    
-                    redirect_url_field,
-                    
-                    ft.Row(
-                        [
-                            ft.ElevatedButton(
-                                "Cancelar",
-                                icon=ft.Icons.CANCEL,
-                                on_click=self._go_back,
-                                bgcolor=ft.Colors.GREY,
-                                color=ft.Colors.WHITE,
-                            ),
-                            ft.ElevatedButton(
-                                "Completar Autenticación",
-                                icon=ft.Icons.CHECK,
-                                on_click=complete_auth,
-                                bgcolor=preview_color,
-                                color=ft.Colors.WHITE,
-                            ),
-                        ],
-                        spacing=12,
-                    ),
-                ],
-                scroll=ft.ScrollMode.AUTO,
-                spacing=16,
-                expand=True,
-            ),
-            padding=20,
-            expand=True,
-        )
-        
-        # Crear la vista de autenticación manual
-        auth_view = ft.View(
-            route="/manual_auth",
-            controls=[auth_content],
-            appbar=ft.AppBar(
-                title=ft.Text("Autenticación Manual"),
-                bgcolor=preview_color,
-                color=ft.Colors.WHITE,
-            ),
-        )
-        
-        # Agregar la vista y navegar a ella
-        self.page.views.append(auth_view)
-        self.page.go("/manual_auth")
-        self.page.update()
-
-    def _start_export_to_sheets(self, e):
-        """Inicia el proceso de exportación a Google Sheets."""
-        # Verificar si Google Sheets está disponible
-        if GoogleSheetsService is None:
-            error_details = ""
-            try:
-                error_details = f"\n\nDetalle técnico: {_google_sheets_import_error}"
-            except NameError:
-                pass
-            
-            self._show_error_page(
-                "Error: Dependencias no disponibles",
-                "Las dependencias de Google Sheets API no están incluidas en el APK actual.\n\n"
-                "SOLUCIÓN:\n\n"
-                "Las dependencias están configuradas en pyproject.toml:\n"
-                "   ✓ google-api-python-client>=2.100.0\n"
-                "   ✓ google-auth-httplib2>=0.1.1\n"
-                "   ✓ google-auth-oauthlib>=1.1.0\n\n"
-                "Para incluirlas en el APK, ejecuta:\n"
-                "   ./build_android.sh\n\n"
-                "El script de build incluirá automáticamente:\n"
-                "   - Las dependencias de Google API\n"
-                "   - El módulo wsgiref (necesario para OAuth2)\n"
-                "   - Todos los assets de la aplicación"
-                + error_details
-            )
-            return
-        
-        if self.google_sheets_service is None:
-            try:
-                self.google_sheets_service = GoogleSheetsService(page=self.page)
-            except Exception as ex:
-                self._show_error_page(
-                    "Error: No se pudo inicializar Google Sheets",
-                    f"No se pudo inicializar el servicio de Google Sheets:\n\n{str(ex)}\n\n"
-                    "Verifica que el archivo 'credenciales_android.json' esté en la raíz del proyecto."
-                )
-                return
-        
-        is_mobile = (
-            self.page.platform == ft.PagePlatform.ANDROID 
-            or self.page.platform == ft.PagePlatform.IOS
-        )
-        
-        # Mostrar mensaje de inicio
-        self.page.snack_bar = ft.SnackBar(
-            content=ft.Text("Autenticando con Google..."),
-            bgcolor=ft.Colors.BLUE,
-            duration=2000,
-        )
-        self.page.snack_bar.open = True
-        self.page.update()
-        
-        try:
-            # Autenticar con Google
-            if not self.google_sheets_service.authenticate():
-                raise Exception("No se pudo autenticar con Google. Verifica las credenciales.")
-            
-            # Mostrar mensaje de exportación
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Exportando datos a Google Sheets..."),
-                bgcolor=ft.Colors.BLUE,
-                duration=3000,
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-            
-            # Exportar a Google Sheets
-            result = self.google_sheets_service.export_to_sheets()
-            
-            # Guardar el ID del spreadsheet en la configuración de sincronización
-            if result.get('spreadsheet_id'):
-                self.sync_service.update_sync_settings(
-                    spreadsheet_id=result['spreadsheet_id']
-                )
-            
-            # Mostrar éxito con URL
-            success_msg = (
-                f"✓ Datos exportados correctamente a Google Sheets!\n\n"
-                f"Título: {result.get('title', 'Sin título')}\n"
-                f"ID: {result['spreadsheet_id']}\n\n"
-                f"Puedes acceder al spreadsheet desde:\n"
-                f"{result['url']}"
-            )
-            
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(success_msg),
-                bgcolor=ft.Colors.GREEN,
-                duration=12000,
-            )
-            self.page.snack_bar.open = True
-            
-            # Refrescar la vista de configuración para mostrar el nuevo ID
-            if self.current_section == "settings":
-                self._build_settings_view()
-            
-        except FileNotFoundError as ex:
-            self._show_error_page(
-                "Error: Archivo de credenciales no encontrado",
-                f"No se encontró el archivo de credenciales de Google:\n\n{str(ex)}\n\n"
-                "Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto.\n\n"
-                "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
-            )
-        except Exception as ex:
-            # Si hay un error relacionado con wsgiref, mostrar mensaje específico
-            error_msg = str(ex)
-            if 'wsgiref' in error_msg.lower():
-                self._show_error_page(
-                    "Error: wsgiref no disponible",
-                    f"{error_msg}\n\n"
-                    "wsgiref es necesario para la autenticación OAuth2.\n\n"
-                    "SOLUCIÓN:\n"
-                    "Por favor, reconstruye el APK con: ./build_android.sh\n"
-                    "El script de build inyectará wsgiref automáticamente."
-                )
-            else:
-                raise
-        except ImportError as ex:
-            error_msg = str(ex)
-            # Detectar si es el error de wsgiref
-            if 'wsgiref' in error_msg.lower():
-                self._show_error_page(
-                    "Error: Módulo wsgiref no disponible",
-                    f"{error_msg}\n\n"
-                    "Este es un problema conocido con builds de Android.\n\n"
-                    "SOLUCIÓN TEMPORAL:\n"
-                    "El módulo wsgiref es parte de la biblioteca estándar de Python pero "
-                    "puede no estar incluido en el build de Android.\n\n"
-                    "OPCIONES:\n"
-                    "1. Reconstruir el APK puede ayudar si Flet actualiza su build.\n"
-                    "2. Usar un método de autenticación alternativo (requiere cambios en el código).\n\n"
-                    "Por ahora, la autenticación OAuth2 no funcionará en Android hasta que "
-                    "se resuelva este problema con wsgiref."
-                )
-            else:
-                self._show_error_page(
-                    "Error: Dependencias no disponibles",
-                    f"No se pueden importar las dependencias de Google Sheets:\n\n{error_msg}\n\n"
-                    "SOLUCIÓN:\n\n"
-                    "Las dependencias están configuradas en pyproject.toml:\n"
-                    "   ✓ google-api-python-client>=2.100.0\n"
-                    "   ✓ google-auth-httplib2>=0.1.1\n"
-                    "   ✓ google-auth-oauthlib>=1.1.0\n\n"
-                    "Para incluirlas en el APK, ejecuta:\n"
-                    "   ./build_android.sh\n\n"
-                    "El script incluirá automáticamente todas las dependencias y wsgiref."
-                )
-        except Exception as ex:
-            error_type = type(ex).__name__
-            error_details = str(ex)
-            
-            self._show_error_page(
-                "Error al exportar a Google Sheets",
-                f"Ocurrió un error durante la exportación:\n\n"
-                f"Tipo: {error_type}\n"
-                f"Detalle: {error_details}\n\n"
-                f"Por favor, verifica:\n"
-                f"- Tu conexión a internet\n"
-                f"- Las credenciales de Google\n"
-                f"- Que Google Sheets API esté habilitada en Google Cloud Console"
-            )
-        finally:
-            self.page.update()
-    
-    def _start_import_from_sheets(self, e):
-        """Inicia el proceso de importación desde Google Sheets."""
-        # Verificar si Google Sheets está disponible
-        if GoogleSheetsService is None:
-            error_details = ""
-            try:
-                error_details = f"\n\nDetalle técnico: {_google_sheets_import_error}"
-            except NameError:
-                pass
-            
-            self._show_error_page(
-                "Error: Dependencias no disponibles",
-                "Las dependencias de Google Sheets API no están incluidas en el APK actual.\n\n"
-                "SOLUCIÓN:\n\n"
-                "Las dependencias están configuradas en pyproject.toml:\n"
-                "   ✓ google-api-python-client>=2.100.0\n"
-                "   ✓ google-auth-httplib2>=0.1.1\n"
-                "   ✓ google-auth-oauthlib>=1.1.0\n\n"
-                "Para incluirlas en el APK, ejecuta:\n"
-                "   ./build_android.sh\n\n"
-                "El script de build incluirá automáticamente:\n"
-                "   - Las dependencias de Google API\n"
-                "   - El módulo wsgiref (necesario para OAuth2)\n"
-                "   - Todos los assets de la aplicación"
-                + error_details
-            )
-            return
-        
-        if self.google_sheets_service is None:
-            try:
-                self.google_sheets_service = GoogleSheetsService(page=self.page)
-            except Exception as ex:
-                self._show_error_page(
-                    "Error: No se pudo inicializar Google Sheets",
-                    f"No se pudo inicializar el servicio de Google Sheets:\n\n{str(ex)}\n\n"
-                    "Verifica que el archivo 'credenciales_android.json' esté en la raíz del proyecto."
-                )
-                return
-        
-        is_mobile = (
-            self.page.platform == ft.PagePlatform.ANDROID 
-            or self.page.platform == ft.PagePlatform.IOS
-        )
-        
-        # Crear página para ingresar el ID del spreadsheet
-        spreadsheet_id_field = ft.TextField(
-            label="ID del Google Sheets",
-            hint_text="Pega el ID del spreadsheet aquí",
-            autofocus=True,
-            expand=True,
-        )
-        
-        def do_import(e):
-            spreadsheet_id = spreadsheet_id_field.value.strip()
-            
-            if not spreadsheet_id:
-                spreadsheet_id_field.error_text = "El ID del spreadsheet es requerido"
-                spreadsheet_id_field.update()
-                return
-            
-            # Volver a la vista anterior
-            self._go_back(e)
-            
-            # Mostrar mensaje de autenticación
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Autenticando con Google..."),
-                bgcolor=ft.Colors.BLUE,
-                duration=2000,
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-            
-            try:
-                # Autenticar con Google
-                if not self.google_sheets_service.authenticate():
-                    raise Exception("No se pudo autenticar con Google. Verifica las credenciales.")
-                
-                # Mostrar mensaje de importación
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Importando datos desde Google Sheets..."),
-                    bgcolor=ft.Colors.BLUE,
-                    duration=3000,
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
-                
-                # Importar desde Google Sheets
-                result = self.google_sheets_service.import_from_sheets(spreadsheet_id)
-                
-                # Construir mensaje de éxito
-                msg_parts = [f"✓ Importación completada desde Google Sheets."]
-                if result.tasks_imported > 0:
-                    msg_parts.append(f"Tareas nuevas: {result.tasks_imported}")
-                if result.subtasks_imported > 0:
-                    msg_parts.append(f"Subtareas nuevas: {result.subtasks_imported}")
-                if result.habits_imported > 0:
-                    msg_parts.append(f"Hábitos nuevos: {result.habits_imported}")
-                if result.habit_completions_imported > 0:
-                    msg_parts.append(f"Cumplimientos nuevos: {result.habit_completions_imported}")
-                
-                if result.errors:
-                    msg_parts.append(f"\n⚠ Advertencias: {len(result.errors)}")
-                    for error in result.errors[:3]:
-                        msg_parts.append(f"  - {error}")
-                    if len(result.errors) > 3:
-                        msg_parts.append(f"  ... y {len(result.errors) - 3} más")
-                
-                msg = "\n".join(msg_parts)
-                
-                bg_color = ft.Colors.GREEN if not result.errors else ft.Colors.ORANGE
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(msg),
-                    bgcolor=bg_color,
-                    duration=10000 if is_mobile else 8000,
-                )
-                self.page.snack_bar.open = True
-                
-                # Refrescar vistas
-                if self.current_section == "tasks":
-                    self._load_tasks()
-                elif self.current_section == "habits":
-                    self._load_habits()
-                
-            except FileNotFoundError as ex:
-                self._show_error_page(
-                    "Error: Archivo de credenciales no encontrado",
-                    f"No se encontró el archivo de credenciales de Google:\n\n{str(ex)}\n\n"
-                    "Asegúrate de que 'credenciales_android.json' esté en la raíz del proyecto.\n\n"
-                    "Este archivo se obtiene desde Google Cloud Console al configurar OAuth 2.0."
-                )
-            except Exception as ex:
-                # Si hay un error relacionado con wsgiref, mostrar mensaje específico
-                error_msg = str(ex)
-                if 'wsgiref' in error_msg.lower():
-                    self._show_error_page(
-                        "Error: wsgiref no disponible",
-                        f"{error_msg}\n\n"
-                        "wsgiref es necesario para la autenticación OAuth2.\n\n"
-                        "SOLUCIÓN:\n"
-                        "Por favor, reconstruye el APK con: ./build_android.sh\n"
-                        "El script de build inyectará wsgiref automáticamente."
-                    )
-                else:
-                    raise
-            except ImportError as ex:
-                error_msg = str(ex)
-                # Detectar si es el error de wsgiref
-                if 'wsgiref' in error_msg.lower():
-                    self._show_error_page(
-                        "Error: Módulo wsgiref no disponible",
-                        f"{error_msg}\n\n"
-                        "Este es un problema conocido con builds de Android.\n\n"
-                        "SOLUCIÓN TEMPORAL:\n"
-                        "El módulo wsgiref es parte de la biblioteca estándar de Python pero "
-                        "puede no estar incluido en el build de Android.\n\n"
-                        "OPCIONES:\n"
-                        "1. Reconstruir el APK puede ayudar si Flet actualiza su build.\n"
-                        "2. Usar un método de autenticación alternativo (requiere cambios en el código).\n\n"
-                        "Por ahora, la autenticación OAuth2 no funcionará en Android hasta que "
-                        "se resuelva este problema con wsgiref."
-                    )
-                else:
-                    self._show_error_page(
-                        "Error: Dependencias no disponibles",
-                        f"No se pueden importar las dependencias de Google Sheets:\n\n{error_msg}\n\n"
-                        "Por favor, asegúrate de que las siguientes dependencias estén en pyproject.toml:\n"
-                        "- google-api-python-client>=2.100.0\n"
-                        "- google-auth-httplib2>=0.1.1\n"
-                        "- google-auth-oauthlib>=1.1.0\n\n"
-                        "Luego reconstruye la aplicación con: ./build_android.sh"
-                    )
-            except Exception as ex:
-                error_type = type(ex).__name__
-                error_details = str(ex)
-                
-                self._show_error_page(
-                    "Error al importar desde Google Sheets",
-                    f"Ocurrió un error durante la importación:\n\n"
-                    f"Tipo: {error_type}\n"
-                    f"Detalle: {error_details}\n\n"
-                    f"Por favor, verifica:\n"
-                    f"- El ID del spreadsheet sea correcto\n"
-                    f"- Que tengas acceso al spreadsheet\n"
-                    f"- Tu conexión a internet\n"
-                    f"- Las credenciales de Google"
-                )
-            finally:
-                self.page.update()
-        
-        # Obtener color del tema
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        scheme = self.page.theme.color_scheme if self.page.theme else None
-        preview_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_700
-        
-        # Crear contenido de la página de importación
-        import_content = ft.Container(
-            content=ft.Column(
-                [
-                    ft.Text(
-                        "Importar desde Google Sheets",
-                        size=24,
-                        weight=ft.FontWeight.BOLD,
-                        color=preview_color,
-                    ),
-                    ft.Text(
-                        "Ingresa el ID del Google Sheets que quieres importar.\n\n"
-                        "El ID se encuentra en la URL del documento:\n"
-                        "https://docs.google.com/spreadsheets/d/[ID_AQUI]/edit",
-                        size=14,
-                        color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_300,
-                    ),
-                    spreadsheet_id_field,
-                    ft.Row(
-                        [
-                            ft.ElevatedButton(
-                                "Cancelar",
-                                icon=ft.Icons.CANCEL,
-                                on_click=self._go_back,
-                                bgcolor=ft.Colors.GREY,
-                                color=ft.Colors.WHITE,
-                            ),
-                            ft.ElevatedButton(
-                                "Importar",
-                                icon=ft.Icons.UPLOAD,
-                                on_click=do_import,
-                                bgcolor=preview_color,
-                                color=ft.Colors.WHITE,
-                            ),
-                        ],
-                        spacing=12,
-                    ),
-                ],
-                scroll=ft.ScrollMode.AUTO,
-                spacing=16,
-                expand=True,
-            ),
-            padding=20,
-            expand=True,
-        )
-        
-        # Crear la vista de importación
-        import_view = ft.View(
-            route="/import_sheets",
-            controls=[import_content],
-            appbar=ft.AppBar(
-                title=ft.Text("Importar desde Google Sheets"),
-                bgcolor=preview_color,
-                color=ft.Colors.WHITE,
-            ),
-        )
-        
-        # Agregar la vista y navegar a ella
-        self.page.views.append(import_view)
-        self.page.go("/import_sheets")
-        self.page.update()
 
     def _show_storage_permission_dialog(self):
         """Muestra un diálogo informativo sobre permisos de almacenamiento en Android/iOS."""

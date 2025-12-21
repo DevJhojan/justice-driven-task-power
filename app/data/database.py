@@ -1,6 +1,13 @@
 """
 Configuración y gestión de la base de datos SQLite.
 
+ARQUITECTURA OFFLINE-FIRST:
+- SQLite es la base de datos principal y fuente de verdad local
+- La app funciona completamente offline sin necesidad de conexión a internet
+- Todos los datos (tareas, hábitos, configuraciones) se almacenan localmente en SQLite
+- Firebase es opcional y solo se usa para respaldo y sincronización entre dispositivos
+- La sincronización es completamente bajo demanda del usuario
+
 IMPORTANTE para Android:
 - En Android, la base de datos debe guardarse en un directorio persistente
 - que NO se borre al actualizar o reinstalar la aplicación.

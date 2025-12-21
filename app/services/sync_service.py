@@ -1,16 +1,15 @@
 """
-Servicio de sincronización con Google Sheets.
+Servicio de sincronización con Firebase.
 
 Responsabilidades:
-- Guardar y leer el estado de autenticación OAuth2 con Google Sheets
-- Persistir el ID del Google Sheet vinculado
+- Guardar y leer el estado de autenticación con Firebase
 - Persistir el correo electrónico de la cuenta autenticada
 - Proporcionar una API sencilla para verificar si hay sincronización activa
 
 Decisiones técnicas:
 - Usa la misma base de datos SQLite (tasks.db) para persistencia
-- Tabla `sync_settings` con una sola fila (key='google_sheets') para configuración de sincronización
-- Almacena el estado de autenticación, email y spreadsheet_id de forma segura
+- Tabla `sync_settings` con una sola fila (key='firebase') para configuración de sincronización
+- Almacena el estado de autenticación y email de forma segura
 """
 
 from __future__ import annotations
@@ -23,21 +22,21 @@ from app.data.database import Database
 
 @dataclass
 class SyncSettings:
-    """Modelo de configuración de sincronización con Google Sheets."""
+    """Modelo de configuración de sincronización con Firebase."""
 
     is_authenticated: bool = False
     email: Optional[str] = None
-    spreadsheet_id: Optional[str] = None
+    user_id: Optional[str] = None
 
 
 class SyncService:
     """
-    Servicio para persistir y recuperar configuración de sincronización con Google Sheets.
+    Servicio para persistir y recuperar configuración de sincronización con Firebase.
 
     Decisiones técnicas:
     - Se usa la misma base de datos SQLite (`tasks.db`) para no depender
       de almacenamiento adicional.
-    - Tabla `sync_settings` con una sola fila (key='google_sheets') para ajustes
+    - Tabla `sync_settings` con una sola fila (key='firebase') para ajustes
       de sincronización.
     - Los valores se almacenan como texto y se convierten a tipos apropiados.
     """
@@ -57,17 +56,17 @@ class SyncService:
                 key TEXT PRIMARY KEY,
                 is_authenticated INTEGER NOT NULL DEFAULT 0,
                 email TEXT,
-                spreadsheet_id TEXT
+                user_id TEXT
             )
             """
         )
 
-        cur.execute("SELECT key FROM sync_settings WHERE key = 'google_sheets'")
+        cur.execute("SELECT key FROM sync_settings WHERE key = 'firebase'")
         if not cur.fetchone():
             cur.execute(
                 """
-                INSERT INTO sync_settings (key, is_authenticated, email, spreadsheet_id)
-                VALUES ('google_sheets', 0, NULL, NULL)
+                INSERT INTO sync_settings (key, is_authenticated, email, user_id)
+                VALUES ('firebase', 0, NULL, NULL)
                 """
             )
 
@@ -80,9 +79,9 @@ class SyncService:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT is_authenticated, email, spreadsheet_id 
+            SELECT is_authenticated, email, user_id 
             FROM sync_settings 
-            WHERE key = 'google_sheets'
+            WHERE key = 'firebase'
             """
         )
         row = cur.fetchone()
@@ -94,22 +93,22 @@ class SyncService:
         return SyncSettings(
             is_authenticated=bool(row["is_authenticated"]),
             email=row["email"] if row["email"] else None,
-            spreadsheet_id=row["spreadsheet_id"] if row["spreadsheet_id"] else None,
+            user_id=row["user_id"] if row["user_id"] else None,
         )
 
     def update_sync_settings(
         self,
         is_authenticated: Optional[bool] = None,
         email: Optional[str] = None,
-        spreadsheet_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> SyncSettings:
         """
         Actualiza la configuración de sincronización.
 
         Args:
-            is_authenticated: Estado de autenticación OAuth2
+            is_authenticated: Estado de autenticación Firebase
             email: Correo electrónico de la cuenta autenticada
-            spreadsheet_id: ID del Google Sheet vinculado
+            user_id: ID del usuario en Firebase
 
         Returns:
             Configuración de sincronización actualizada
@@ -119,8 +118,8 @@ class SyncService:
             is_authenticated if is_authenticated is not None else current.is_authenticated
         )
         new_email = email if email is not None else current.email
-        new_spreadsheet_id = (
-            spreadsheet_id if spreadsheet_id is not None else current.spreadsheet_id
+        new_user_id = (
+            user_id if user_id is not None else current.user_id
         )
 
         conn = self.db.get_connection()
@@ -128,13 +127,13 @@ class SyncService:
         cur.execute(
             """
             UPDATE sync_settings
-            SET is_authenticated = ?, email = ?, spreadsheet_id = ?
-            WHERE key = 'google_sheets'
+            SET is_authenticated = ?, email = ?, user_id = ?
+            WHERE key = 'firebase'
             """,
             (
                 1 if new_authenticated else 0,
                 new_email,
-                new_spreadsheet_id,
+                new_user_id,
             ),
         )
         conn.commit()
@@ -143,7 +142,7 @@ class SyncService:
         return SyncSettings(
             is_authenticated=new_authenticated,
             email=new_email,
-            spreadsheet_id=new_spreadsheet_id,
+            user_id=new_user_id,
         )
 
     def clear_sync_settings(self) -> None:
@@ -153,15 +152,15 @@ class SyncService:
         cur.execute(
             """
             UPDATE sync_settings
-            SET is_authenticated = 0, email = NULL, spreadsheet_id = NULL
-            WHERE key = 'google_sheets'
+            SET is_authenticated = 0, email = NULL, user_id = NULL
+            WHERE key = 'firebase'
             """
         )
         conn.commit()
         conn.close()
 
     def is_synced(self) -> bool:
-        """Verifica si hay una sincronización activa con Google Sheets."""
+        """Verifica si hay una sincronización activa con Firebase."""
         settings = self.get_sync_settings()
         return settings.is_authenticated and settings.email is not None
 
