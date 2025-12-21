@@ -209,7 +209,7 @@ class HomeView:
                 )
             ],
             spacing=12 if is_desktop else 8,
-            scroll=ft.ScrollMode.AUTO if not is_desktop else ft.ScrollMode.DISABLED,
+            scroll=ft.ScrollMode.AUTO if not is_desktop else ft.ScrollMode.HIDDEN,
             wrap=False
         )
         
@@ -304,7 +304,7 @@ class HomeView:
             content=ft.Row(
                 buttons,
                 spacing=button_spacing,
-                scroll=ft.ScrollMode.AUTO if not is_desktop else ft.ScrollMode.DISABLED,
+                scroll=ft.ScrollMode.AUTO if not is_desktop else ft.ScrollMode.HIDDEN,
                 wrap=False
             ),
             padding=nav_padding,
