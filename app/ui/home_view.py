@@ -209,8 +209,7 @@ class HomeView:
                     style=ft.ButtonStyle(
                         shape=ft.RoundedRectangleBorder(radius=8)
                     ),
-                    expand=True if is_desktop else False,
-                    min_width=80 if not is_desktop else None
+                    expand=True if is_desktop else False
                 ),
                 ft.ElevatedButton(
                     text="Pendientes",
@@ -221,8 +220,7 @@ class HomeView:
                     style=ft.ButtonStyle(
                         shape=ft.RoundedRectangleBorder(radius=8)
                     ),
-                    expand=True if is_desktop else False,
-                    min_width=100 if not is_desktop else None
+                    expand=True if is_desktop else False
                 ),
                 ft.ElevatedButton(
                     text="Completadas",
@@ -233,8 +231,7 @@ class HomeView:
                     style=ft.ButtonStyle(
                         shape=ft.RoundedRectangleBorder(radius=8)
                     ),
-                    expand=True if is_desktop else False,
-                    min_width=110 if not is_desktop else None
+                    expand=True if is_desktop else False
                 )
             ],
             spacing=12 if is_desktop else 8,

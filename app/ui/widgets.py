@@ -85,8 +85,7 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
                     on_click=lambda e, task_obj=task: on_toggle(task_obj.id),
                     tooltip="Marcar como completada" if not task.completed else "Marcar como pendiente",
                     width=icon_size + 8,
-                    height=icon_size + 8,
-                    tight=True
+                    height=icon_size + 8
                 ),
                 ft.Container(
                     content=ft.Column(
