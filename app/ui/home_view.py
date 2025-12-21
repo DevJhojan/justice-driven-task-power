@@ -88,8 +88,6 @@ class HomeView:
         if self.accent_dialog not in self.page.overlay:
             self.page.overlay.append(self.accent_dialog)
 
-        # Diálogo de permisos de almacenamiento (solo móvil)
-        self.storage_permission_dialog = None
         
         # Variable para almacenar bytes del ZIP durante la exportación
         self._export_zip_bytes = None
@@ -1170,81 +1168,179 @@ class HomeView:
     
 
     def _show_storage_permission_dialog(self):
-        """Muestra un diálogo informativo sobre permisos de almacenamiento en Android/iOS."""
+        """Muestra una página informativa sobre permisos de almacenamiento en Android/iOS."""
         if self.page.platform != ft.PagePlatform.ANDROID and self.page.platform != ft.PagePlatform.IOS:
             return  # Solo en móvil
 
-        # Crear diálogo informativo
-        permission_dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Permisos de almacenamiento"),
-            content=ft.Column(
-                [
-                    ft.Text(
-                        "Para usar las funciones de importar y exportar datos, "
-                        "la aplicación necesita acceso al almacenamiento.",
-                        size=14,
-                    ),
-                    ft.Divider(),
-                    ft.Text(
-                        "Los permisos se solicitarán automáticamente cuando uses "
-                        "las funciones de importar o exportar por primera vez.",
-                        size=14,
-                        weight=ft.FontWeight.BOLD,
-                    ),
-                    ft.Text(
-                        "Recomendación: Guarda los backups en la carpeta 'Descargas' "
-                        "para mayor compatibilidad.",
-                        size=12,
-                        color=ft.Colors.GREY_600,
-                    ),
-                ],
-                tight=True,
-                spacing=12,
-            ),
-            actions=[
-                ft.TextButton(
-                    "Entendido",
-                    on_click=lambda e: self._close_permission_dialog(),
-                ),
-                ft.ElevatedButton(
-                    "Probar ahora",
-                    on_click=lambda e: self._test_storage_permission(),
-                ),
-            ],
-        )
-
-        self.storage_permission_dialog = permission_dialog
-        self.page.dialog = permission_dialog
-        permission_dialog.open = True
-        self.page.update()
-
-    def _close_permission_dialog(self):
-        """Cierra el diálogo de permisos."""
-        if self.storage_permission_dialog:
-            self.storage_permission_dialog.open = False
-            self.page.dialog = None
-            self.page.update()
-
-    def _test_storage_permission(self):
-        """Intenta activar el FilePicker para solicitar permisos."""
-        self._close_permission_dialog()
+        # Crear página de permisos
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        scheme = self.page.theme.color_scheme if self.page.theme else None
+        primary_color = scheme.primary if scheme and scheme.primary else ft.Colors.BLUE_700
         
-        # Intentar abrir el FilePicker para activar la solicitud de permisos
-        try:
-            # Usar el export_file_picker para activar permisos
-            # Esto debería mostrar el diálogo de permisos de Android
-            self.export_file_picker.save_file(file_name="test_permission.zip")
-            
-            # Si el usuario cancela, no hacemos nada
-            # Si acepta, el _handle_export_result manejará el resultado
-        except Exception as ex:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error al solicitar permisos: {str(ex)}"),
-                bgcolor=ft.Colors.RED,
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
+        def test_permission(e):
+            """Intenta activar el FilePicker para solicitar permisos."""
+            try:
+                # Usar el export_file_picker para activar permisos
+                # Esto debería mostrar el diálogo de permisos de Android
+                self.export_file_picker.save_file(file_name="test_permission.zip")
+                
+                # Mostrar mensaje informativo
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Si aparece un diálogo de permisos, acepta para continuar."),
+                    bgcolor=ft.Colors.BLUE,
+                    duration=3000
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+            except Exception as ex:
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"Error al solicitar permisos: {str(ex)}"),
+                    bgcolor=ft.Colors.RED,
+                    duration=4000
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+        
+        def close_permission_page(e):
+            """Cierra la página de permisos y vuelve a la vista principal."""
+            self._go_back()
+        
+        # Botones
+        test_button = ft.ElevatedButton(
+            text="Probar permisos ahora",
+            icon=ft.Icons.STORAGE,
+            on_click=test_permission,
+            expand=True,
+            height=50,
+            bgcolor=primary_color,
+            color=ft.Colors.WHITE
+        )
+        
+        understood_button = ft.OutlinedButton(
+            text="Entendido",
+            icon=ft.Icons.CHECK,
+            on_click=close_permission_page,
+            expand=True,
+            height=50,
+            style=ft.ButtonStyle(color=primary_color)
+        )
+        
+        # Construir la página
+        permission_view = ft.View(
+            route="/storage-permissions",
+            appbar=ft.AppBar(
+                title=ft.Text("Permisos de almacenamiento"),
+                leading=ft.IconButton(
+                    icon=ft.Icons.ARROW_BACK,
+                    on_click=close_permission_page
+                ),
+                bgcolor=primary_color
+            ),
+            padding=20,
+            scroll=ft.ScrollMode.AUTO,
+            controls=[
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Icon(
+                                ft.Icons.STORAGE,
+                                size=64,
+                                color=primary_color
+                            ),
+                            ft.Text(
+                                "Permisos de almacenamiento",
+                                size=24,
+                                weight=ft.FontWeight.BOLD,
+                                text_align=ft.TextAlign.CENTER
+                            ),
+                            ft.Divider(height=20),
+                            ft.Text(
+                                "Para usar las funciones de importar y exportar datos, "
+                                "la aplicación necesita acceso al almacenamiento de tu dispositivo.",
+                                size=16,
+                                text_align=ft.TextAlign.CENTER
+                            ),
+                            ft.Divider(height=20),
+                            ft.Container(
+                                content=ft.Column(
+                                    [
+                                        ft.Row(
+                                            [
+                                                ft.Icon(ft.Icons.INFO_OUTLINE, color=ft.Colors.BLUE),
+                                                ft.Text(
+                                                    "¿Cuándo se solicitan?",
+                                                    size=16,
+                                                    weight=ft.FontWeight.BOLD
+                                                )
+                                            ],
+                                            spacing=10
+                                        ),
+                                        ft.Text(
+                                            "Los permisos se solicitarán automáticamente cuando uses "
+                                            "las funciones de importar o exportar por primera vez.",
+                                            size=14,
+                                            color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
+                                        )
+                                    ],
+                                    spacing=10
+                                ),
+                                padding=15,
+                                bgcolor=ft.Colors.BLUE_50 if not is_dark else ft.Colors.BLUE_900,
+                                border_radius=10,
+                                border=ft.border.all(1, ft.Colors.BLUE_200 if not is_dark else ft.Colors.BLUE_700)
+                            ),
+                            ft.Divider(height=20),
+                            ft.Container(
+                                content=ft.Column(
+                                    [
+                                        ft.Row(
+                                            [
+                                                ft.Icon(ft.Icons.LIGHTBULB_OUTLINE, color=ft.Colors.ORANGE),
+                                                ft.Text(
+                                                    "Recomendación",
+                                                    size=16,
+                                                    weight=ft.FontWeight.BOLD
+                                                )
+                                            ],
+                                            spacing=10
+                                        ),
+                                        ft.Text(
+                                            "Guarda los backups en la carpeta 'Descargas' "
+                                            "para mayor compatibilidad con diferentes dispositivos Android.",
+                                            size=14,
+                                            color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
+                                        )
+                                    ],
+                                    spacing=10
+                                ),
+                                padding=15,
+                                bgcolor=ft.Colors.ORANGE_50 if not is_dark else ft.Colors.ORANGE_900,
+                                border_radius=10,
+                                border=ft.border.all(1, ft.Colors.ORANGE_200 if not is_dark else ft.Colors.ORANGE_700)
+                            ),
+                            ft.Divider(height=30),
+                            ft.Column(
+                                [
+                                    test_button,
+                                    understood_button
+                                ],
+                                spacing=10,
+                                horizontal_alignment=ft.CrossAxisAlignment.STRETCH
+                            )
+                        ],
+                        spacing=15,
+                        horizontal_alignment=ft.CrossAxisAlignment.STRETCH
+                    ),
+                    padding=20,
+                    border_radius=10,
+                    bgcolor=ft.Colors.GREY_900 if is_dark else ft.Colors.GREY_100
+                )
+            ]
+        )
+        
+        self.page.views.append(permission_view)
+        self.page.go("/storage-permissions")
+        self.page.update()
     
     def _load_tasks(self):
         """Carga las tareas desde la base de datos."""

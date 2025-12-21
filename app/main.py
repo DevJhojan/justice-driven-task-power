@@ -46,9 +46,9 @@ def main(page: ft.Page):
     # Inicializar la vista principal
     home_view = HomeView(page)
     
-    # Solicitar permisos de almacenamiento en Android/iOS después de inicializar la UI
+    # Mostrar página informativa sobre permisos de almacenamiento en Android/iOS
     if page.platform == ft.PagePlatform.ANDROID or page.platform == ft.PagePlatform.IOS:
-        # Mostrar diálogo informativo sobre permisos
+        # Mostrar página completa con información sobre permisos de almacenamiento
         home_view._show_storage_permission_dialog()
 
 
