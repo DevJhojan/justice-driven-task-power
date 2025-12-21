@@ -774,182 +774,139 @@ class HomeView:
     # ==================== FUNCIONES DE FIREBASE ====================
     
     def _show_login_dialog(self, e):
-        """Muestra el diálogo de inicio de sesión."""
-        email_field = ft.TextField(
-            label="Correo electrónico",
-            hint_text="tu@email.com",
-            autofocus=True,
-            keyboard_type=ft.KeyboardType.EMAIL
-        )
-        
-        password_field = ft.TextField(
-            label="Contraseña",
-            hint_text="Mínimo 6 caracteres",
-            password=True,
-            can_reveal_password=True
-        )
-        
-        error_text = ft.Text("", color=ft.Colors.RED, size=12)
-        
-        def do_login(dialog_e):
-            email = email_field.value.strip()
-            password = password_field.value
-            
-            if not email:
-                error_text.value = "El correo electrónico es requerido"
-                error_text.update()
-                return
-            
-            if not password:
-                error_text.value = "La contraseña es requerida"
-                error_text.update()
-                return
-            
-            # Cerrar diálogo
-            login_dialog.open = False
-            self.page.dialog = None
-            self.page.update()
-            
-            # Mostrar mensaje de carga
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Iniciando sesión..."),
-                bgcolor=ft.Colors.BLUE,
-                duration=2000
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
-            
-            try:
-                if not self.firebase_auth_service:
-                    raise RuntimeError("Firebase no está disponible")
-                
-                result = self.firebase_auth_service.login(email, password)
-                
-                # Guardar estado de sincronización
-                user = result.get('user', {})
-                self.sync_service.update_sync_settings(
-                    is_authenticated=True,
-                    email=user.get('email'),
-                    user_id=user.get('uid')
-                )
-                
-                # Mostrar éxito
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"✓ Sesión iniciada: {user.get('email')}"),
-                    bgcolor=ft.Colors.GREEN,
-                    duration=3000
-                )
-                self.page.snack_bar.open = True
-                
-                # Refrescar vista de configuración
-                if self.current_section == "settings":
-                    self._build_settings_view()
-                
-            except ValueError as ve:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(str(ve)),
-                    bgcolor=ft.Colors.RED,
-                    duration=4000
-                )
-                self.page.snack_bar.open = True
-            except Exception as ex:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Error al iniciar sesión: {str(ex)}"),
-                    bgcolor=ft.Colors.RED,
-                    duration=4000
-                )
-                self.page.snack_bar.open = True
-            finally:
-                self.page.update()
-        
-        login_dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Iniciar sesión"),
-            content=ft.Column(
-                [email_field, password_field, error_text],
-                tight=True,
-                width=400
-            ),
-            actions=[
-                ft.TextButton("Cancelar", on_click=lambda e: setattr(login_dialog, 'open', False) or self.page.update()),
-                ft.ElevatedButton("Iniciar sesión", on_click=do_login)
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
-        )
-        
-        self.page.dialog = login_dialog
-        login_dialog.open = True
-        self.page.update()
+        """Navega a la página de inicio de sesión."""
+        self._show_auth_page(mode="login")
     
-    def _show_register_dialog(self, e):
-        """Muestra el diálogo de registro."""
+    def _show_auth_page(self, mode="login"):
+        """
+        Muestra una página completa de autenticación (login o registro).
+        
+        Args:
+            mode: "login" o "register"
+        """
+        is_login = mode == "login"
+        
+        # Campos del formulario
         email_field = ft.TextField(
             label="Correo electrónico",
             hint_text="tu@email.com",
             autofocus=True,
-            keyboard_type=ft.KeyboardType.EMAIL
+            keyboard_type=ft.KeyboardType.EMAIL,
+            expand=True
         )
         
         password_field = ft.TextField(
             label="Contraseña",
             hint_text="Mínimo 6 caracteres",
             password=True,
-            can_reveal_password=True
+            can_reveal_password=True,
+            expand=True
         )
         
         confirm_password_field = ft.TextField(
             label="Confirmar contraseña",
             hint_text="Repite la contraseña",
             password=True,
-            can_reveal_password=True
+            can_reveal_password=True,
+            expand=True,
+            visible=not is_login  # Solo visible en modo registro
         )
         
-        error_text = ft.Text("", color=ft.Colors.RED, size=12)
+        error_text = ft.Text("", color=ft.Colors.RED, size=12, selectable=True, weight=ft.FontWeight.W_500)
+        loading_indicator = ft.ProgressRing(visible=False)
         
-        def do_register(dialog_e):
+        # Botón para copiar el error al portapapeles
+        copy_error_button = ft.IconButton(
+            icon=ft.Icons.COPY,
+            tooltip="Copiar error al portapapeles",
+            icon_size=18,
+            icon_color=ft.Colors.RED,
+            on_click=lambda e: self._copy_error_to_clipboard(error_text.value, error_text)
+        )
+        
+        # Contenedor del error (se mostrará cuando haya error)
+        error_container = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Container(
+                        content=error_text,
+                        expand=True,
+                        padding=ft.padding.only(right=5)
+                    ),
+                    copy_error_button
+                ],
+                spacing=5,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER
+            ),
+            visible=False,
+            bgcolor=ft.Colors.RED_50 if self.page.theme_mode != ft.ThemeMode.DARK else ft.Colors.RED_900,
+            padding=10,
+            border_radius=5,
+            border=ft.border.all(1, ft.Colors.RED_300 if self.page.theme_mode != ft.ThemeMode.DARK else ft.Colors.RED_700)
+        )
+        
+        # Botón de submit (se define antes para poder usarlo en submit_auth)
+        submit_button = ft.ElevatedButton(
+            text="Iniciar sesión" if is_login else "Registrarse",
+            icon=ft.Icons.LOGIN if is_login else ft.Icons.PERSON_ADD,
+            expand=True,
+            height=50
+        )
+        
+        def submit_auth(e):
+            """Procesa el inicio de sesión o registro."""
             email = email_field.value.strip()
             password = password_field.value
-            confirm_password = confirm_password_field.value
+            confirm_password = confirm_password_field.value if not is_login else ""
             
+            # Validaciones
             if not email:
                 error_text.value = "El correo electrónico es requerido"
+                error_container.visible = True
                 error_text.update()
+                error_container.update()
                 return
             
             if not password:
                 error_text.value = "La contraseña es requerida"
+                error_container.visible = True
                 error_text.update()
+                error_container.update()
                 return
             
-            if len(password) < 6:
-                error_text.value = "La contraseña debe tener al menos 6 caracteres"
-                error_text.update()
-                return
+            if not is_login:
+                if len(password) < 6:
+                    error_text.value = "La contraseña debe tener al menos 6 caracteres"
+                    error_container.visible = True
+                    error_text.update()
+                    error_container.update()
+                    return
+                
+                if password != confirm_password:
+                    error_text.value = "Las contraseñas no coinciden"
+                    error_container.visible = True
+                    error_text.update()
+                    error_container.update()
+                    return
             
-            if password != confirm_password:
-                error_text.value = "Las contraseñas no coinciden"
-                error_text.update()
-                return
-            
-            # Cerrar diálogo
-            register_dialog.open = False
-            self.page.dialog = None
-            self.page.update()
-            
-            # Mostrar mensaje de carga
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text("Registrando usuario..."),
-                bgcolor=ft.Colors.BLUE,
-                duration=2000
-            )
-            self.page.snack_bar.open = True
+            # Mostrar indicador de carga
+            error_container.visible = False
+            loading_indicator.visible = True
+            submit_button.disabled = True
             self.page.update()
             
             try:
                 if not self.firebase_auth_service:
                     raise RuntimeError("Firebase no está disponible")
                 
-                result = self.firebase_auth_service.register(email, password)
+                # Ejecutar login o registro
+                if is_login:
+                    result = self.firebase_auth_service.login(email, password)
+                    success_message = f"✓ Sesión iniciada: {result.get('user', {}).get('email')}"
+                else:
+                    result = self.firebase_auth_service.register(email, password)
+                    success_message = f"✓ Usuario registrado: {result.get('user', {}).get('email')}"
                 
                 # Guardar estado de sincronización
                 user = result.get('user', {})
@@ -959,9 +916,12 @@ class HomeView:
                     user_id=user.get('uid')
                 )
                 
+                # Volver a configuración
+                self._go_back()
+                
                 # Mostrar éxito
                 self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"✓ Usuario registrado: {user.get('email')}"),
+                    content=ft.Text(success_message),
                     bgcolor=ft.Colors.GREEN,
                     duration=3000
                 )
@@ -970,42 +930,118 @@ class HomeView:
                 # Refrescar vista de configuración
                 if self.current_section == "settings":
                     self._build_settings_view()
+                    self.page.update()
                 
             except ValueError as ve:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(str(ve)),
-                    bgcolor=ft.Colors.RED,
-                    duration=4000
-                )
-                self.page.snack_bar.open = True
+                error_text.value = str(ve)
+                error_container.visible = True
+                loading_indicator.visible = False
+                submit_button.disabled = False
+                error_text.update()
+                error_container.update()
+                self.page.update()
             except Exception as ex:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Error al registrar: {str(ex)}"),
-                    bgcolor=ft.Colors.RED,
-                    duration=4000
-                )
-                self.page.snack_bar.open = True
-            finally:
+                error_text.value = f"Error: {str(ex)}"
+                error_container.visible = True
+                loading_indicator.visible = False
+                submit_button.disabled = False
+                error_text.update()
+                error_container.update()
                 self.page.update()
         
-        register_dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Registrarse"),
-            content=ft.Column(
-                [email_field, password_field, confirm_password_field, error_text],
-                tight=True,
-                width=400
-            ),
-            actions=[
-                ft.TextButton("Cancelar", on_click=lambda e: setattr(register_dialog, 'open', False) or self.page.update()),
-                ft.ElevatedButton("Registrarse", on_click=do_register)
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
+        # Asignar el handler al botón
+        submit_button.on_click = submit_auth
+        
+        switch_button = ft.TextButton(
+            text="¿No tienes cuenta? Regístrate" if is_login else "¿Ya tienes cuenta? Inicia sesión",
+            on_click=lambda e: self._show_auth_page("register" if is_login else "login")
         )
         
-        self.page.dialog = register_dialog
-        register_dialog.open = True
+        # Construir la vista
+        auth_view = ft.View(
+            route="/auth",
+            appbar=ft.AppBar(
+                title=ft.Text("Iniciar sesión" if is_login else "Registrarse"),
+                leading=ft.IconButton(
+                    icon=ft.Icons.ARROW_BACK,
+                    on_click=lambda e: self._go_back()
+                ),
+                bgcolor=self.page.theme.primary_color if self.page.theme else ft.Colors.BLUE_700
+            ),
+            padding=20,
+            scroll=ft.ScrollMode.AUTO,
+            controls=[
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                "Inicia sesión para sincronizar tus datos" if is_login else "Crea una cuenta para sincronizar tus datos",
+                                size=16,
+                                weight=ft.FontWeight.BOLD,
+                                text_align=ft.TextAlign.CENTER
+                            ),
+                            ft.Divider(height=20),
+                            email_field,
+                            password_field,
+                            confirm_password_field,
+                            error_container,
+                            ft.Row(
+                                [loading_indicator, submit_button],
+                                spacing=10,
+                                alignment=ft.MainAxisAlignment.CENTER
+                            ),
+                            ft.Divider(height=20),
+                            switch_button
+                        ],
+                        spacing=15,
+                        horizontal_alignment=ft.CrossAxisAlignment.STRETCH
+                    ),
+                    padding=20,
+                    border_radius=10,
+                    bgcolor=ft.Colors.GREY_900 if self.page.theme_mode == ft.ThemeMode.DARK else ft.Colors.GREY_100
+                )
+            ]
+        )
+        
+        self.page.views.append(auth_view)
+        self.page.go("/auth")
         self.page.update()
+    
+    def _show_register_dialog(self, e):
+        """Navega a la página de registro."""
+        self._show_auth_page(mode="register")
+    
+    def _copy_error_to_clipboard(self, error_message: str, error_text_widget=None):
+        """
+        Copia el mensaje de error al portapapeles.
+        
+        Args:
+            error_message: Mensaje de error a copiar
+            error_text_widget: Widget de texto del error (opcional, para compatibilidad)
+        """
+        try:
+            if not error_message:
+                return
+            
+            self.page.set_clipboard(error_message)
+            
+            # Mostrar confirmación
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("✓ Error copiado al portapapeles"),
+                bgcolor=ft.Colors.GREEN,
+                duration=2000
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+        except Exception as ex:
+            # Si falla, mostrar error
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"No se pudo copiar: {str(ex)}"),
+                bgcolor=ft.Colors.RED,
+                duration=3000
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
     
     def _logout_firebase(self, e):
         """Cierra la sesión de Firebase."""
