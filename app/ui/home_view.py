@@ -152,21 +152,39 @@ class HomeView:
         # Detectar si es escritorio o móvil
         is_desktop = self.page.platform == ft.PagePlatform.WINDOWS or self.page.platform == ft.PagePlatform.LINUX or self.page.platform == ft.PagePlatform.MACOS
         
-        # Título de la sección - responsive
-        title_size = 24 if is_desktop else 20
+        # Título de la sección - responsive y adaptable
+        # Usar tamaño de fuente responsive basado en ancho de pantalla
+        screen_width = self.page.width if hasattr(self.page, 'width') and self.page.width else 1024
+        is_wide = screen_width > 600
+        
+        title_size = 22 if is_wide else 18
+        title_padding_vertical = 14 if is_wide else 10
+        title_padding_horizontal = 20 if is_wide else 12
+        
         section_title = ft.Container(
-            content=ft.Text(
-                colors['text'],
-                size=title_size,
-                weight=ft.FontWeight.BOLD,
-                color=colors['primary']
+            content=ft.Row(
+                [
+                    ft.Text(
+                        colors['text'],
+                        size=title_size,
+                        weight=ft.FontWeight.BOLD,
+                        color=colors['primary'],
+                        expand=True,
+                        max_lines=2,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                        selectable=False
+                    )
+                ],
+                expand=True,
+                wrap=False
             ),
             padding=ft.padding.symmetric(
-                vertical=16 if is_desktop else 12,
-                horizontal=24 if is_desktop else 16
+                vertical=title_padding_vertical,
+                horizontal=title_padding_horizontal
             ),
             bgcolor=colors['light'],
-            border=ft.border.only(bottom=ft.BorderSide(2, colors['primary']))
+            border=ft.border.only(bottom=ft.BorderSide(2, colors['primary'])),
+            expand=True
         )
         
         # Botones de filtro para esta sección - responsive
@@ -176,6 +194,7 @@ class HomeView:
         button_height = 40 if is_desktop else 36
         button_padding = ft.padding.symmetric(vertical=12 if is_desktop else 8, horizontal=24 if is_desktop else 16)
         
+        # Botones de filtro responsive - se adaptan al ancho disponible
         filter_buttons = ft.Row(
             [
                 ft.ElevatedButton(
@@ -186,7 +205,9 @@ class HomeView:
                     height=button_height,
                     style=ft.ButtonStyle(
                         shape=ft.RoundedRectangleBorder(radius=8)
-                    )
+                    ),
+                    expand=True if is_desktop else False,
+                    min_width=80 if not is_desktop else None
                 ),
                 ft.ElevatedButton(
                     text="Pendientes",
@@ -196,7 +217,9 @@ class HomeView:
                     height=button_height,
                     style=ft.ButtonStyle(
                         shape=ft.RoundedRectangleBorder(radius=8)
-                    )
+                    ),
+                    expand=True if is_desktop else False,
+                    min_width=100 if not is_desktop else None
                 ),
                 ft.ElevatedButton(
                     text="Completadas",
@@ -206,38 +229,45 @@ class HomeView:
                     height=button_height,
                     style=ft.ButtonStyle(
                         shape=ft.RoundedRectangleBorder(radius=8)
-                    )
+                    ),
+                    expand=True if is_desktop else False,
+                    min_width=110 if not is_desktop else None
                 )
             ],
             spacing=12 if is_desktop else 8,
             scroll=ft.ScrollMode.AUTO if not is_desktop else ft.ScrollMode.HIDDEN,
-            wrap=False
+            wrap=False,
+            expand=True
         )
         
         # Contenedor de tareas para esta prioridad
         tasks_container = self.priority_containers[priority]
         
-        # Contenedor completo de la sección - responsive
-        section_padding = 24 if is_desktop else 16
+        # Contenedor completo de la sección - responsive y adaptable
+        section_padding = 20 if is_desktop else 12
         section_container = ft.Container(
             content=ft.Column(
                 [
                     section_title,
                     ft.Container(
                         content=filter_buttons,
-                        padding=button_padding
+                        padding=button_padding,
+                        expand=True
                     ),
                     ft.Container(
                         content=tasks_container,
                         padding=ft.padding.symmetric(
                             horizontal=section_padding
-                        )
+                        ),
+                        expand=True
                     )
                 ],
-                spacing=0
+                spacing=0,
+                expand=True
             ),
             key=f"priority_section_{priority}",  # Key para referencia de scroll
-            margin=ft.margin.only(bottom=24 if is_desktop else 16)
+            margin=ft.margin.only(bottom=24 if is_desktop else 16),
+            expand=True
         )
         
         # Guardar referencia para scroll
@@ -259,14 +289,18 @@ class HomeView:
             ('not_urgent_not_important', '⚪', 'No Urgente y No\nImportante')
         ]
         
+        # Detectar ancho de pantalla para ajustar tamaños
+        screen_width = self.page.width if hasattr(self.page, 'width') and self.page.width else 1024
+        is_wide_screen = screen_width > 600
+        
         for priority_key, emoji, label in priorities:
             colors = self._get_priority_colors(priority_key)
             is_active = self.current_priority_section == priority_key
             
-            # Tamaños responsive
-            emoji_size = 24 if is_desktop else 20
-            text_size = 11 if is_desktop else 10
-            button_padding = 12 if is_desktop else 8
+            # Tamaños responsive basados en ancho de pantalla
+            emoji_size = 22 if is_wide_screen else 18
+            text_size = 10 if is_wide_screen else 9
+            button_padding = 10 if is_wide_screen else 6
             
             button = ft.Container(
                 content=ft.Column(
@@ -277,11 +311,12 @@ class HomeView:
                             size=text_size,
                             text_align=ft.TextAlign.CENTER,
                             max_lines=2,
-                            overflow=ft.TextOverflow.ELLIPSIS
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                            selectable=False
                         )
                     ],
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=6 if is_desktop else 4,
+                    spacing=4,
                     tight=True
                 ),
                 on_click=lambda e, p=priority_key: self._scroll_to_priority(p),
@@ -290,27 +325,33 @@ class HomeView:
                 border=ft.border.all(2, colors['primary'] if is_active else ft.Colors.TRANSPARENT),
                 border_radius=8,
                 expand=True,
-                tooltip=colors['text']
+                tooltip=colors['text'],
+                constraints=ft.BoxConstraints(
+                    min_width=60,  # Ancho mínimo para legibilidad
+                    max_width=None  # Sin máximo para que se expanda
+                )
             )
             buttons.append(button)
         
         # Contenedor responsive
         nav_padding = ft.padding.symmetric(
-            vertical=16 if is_desktop else 12,
-            horizontal=24 if is_desktop else 16
+            vertical=14 if is_wide_screen else 10,
+            horizontal=20 if is_wide_screen else 12
         )
-        button_spacing = 12 if is_desktop else 8
+        button_spacing = 10 if is_wide_screen else 6
         
         return ft.Container(
             content=ft.Row(
                 buttons,
                 spacing=button_spacing,
-                scroll=ft.ScrollMode.AUTO if not is_desktop else ft.ScrollMode.HIDDEN,
-                wrap=False
+                scroll=ft.ScrollMode.AUTO if not is_wide_screen else ft.ScrollMode.HIDDEN,
+                wrap=False,
+                expand=True
             ),
             padding=nav_padding,
             bgcolor=bgcolor,
-            border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700))
+            border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700)),
+            expand=True
         )
     
     def _build_ui(self):
@@ -388,15 +429,18 @@ class HomeView:
             right=0
         )
         
-        # En escritorio, limitar el ancho máximo para mejor legibilidad
-        if is_desktop:
+        # Detectar ancho de pantalla para layout adaptable
+        screen_width = self.page.width if hasattr(self.page, 'width') and self.page.width else 1024
+        
+        # En escritorio con pantalla grande, centrar con ancho máximo; en pantallas pequeñas, usar todo el ancho
+        if is_desktop and screen_width > 1200:
             self.main_scroll_container = ft.Container(
                 content=ft.Row(
                     [
                         ft.Container(width=0, expand=True),  # Espaciador izquierdo
                         ft.Container(
                             content=main_scroll_content,
-                            width=1200,  # Ancho máximo para escritorio
+                            width=1200,  # Ancho máximo para legibilidad en pantallas grandes
                             expand=False
                         ),
                         ft.Container(width=0, expand=True)  # Espaciador derecho
@@ -407,10 +451,12 @@ class HomeView:
                 expand=True
             )
         else:
+            # En pantallas pequeñas o medianas, usar todo el ancho disponible
             self.main_scroll_container = ft.Container(
                 content=main_scroll_content,
                 padding=main_padding,
-                expand=True
+                expand=True,
+                width=None  # Sin ancho fijo para que se adapte
             )
         
         # Vista principal
@@ -1986,12 +2032,13 @@ class HomeView:
                         )
                     )
             else:
-                # Detectar si es escritorio para mostrar en grid
+                # Detectar ancho de pantalla para decidir layout
                 is_desktop = self.page.platform == ft.PagePlatform.WINDOWS or self.page.platform == ft.PagePlatform.LINUX or self.page.platform == ft.PagePlatform.MACOS
+                screen_width = self.page.width if hasattr(self.page, 'width') and self.page.width else 1024
+                use_grid = is_desktop and screen_width > 800 and len(priority_tasks) > 1
                 
-                if is_desktop and len(priority_tasks) > 0:
-                    # En escritorio, mostrar en grid de 2 columnas si hay suficientes tareas
-                    # Dividir tareas en grupos de 2 para el grid
+                if use_grid:
+                    # En escritorio con suficiente ancho, mostrar en grid de 2 columnas
                     tasks_per_row = 2
                     for i in range(0, len(priority_tasks), tasks_per_row):
                         row_tasks = priority_tasks[i:i + tasks_per_row]
@@ -2008,26 +2055,32 @@ class HomeView:
                                 on_edit_subtask=self._edit_subtask,
                                 page=self.page
                             )
-                            # Agregar margen derecho solo si no es la última tarjeta de la fila
+                            # Contenedor flexible que se adapta al ancho disponible
                             row_cards.append(
                                 ft.Container(
                                     content=card,
                                     expand=True,
-                                    margin=ft.margin.only(right=12 if idx < len(row_tasks) - 1 else 0)
+                                    margin=ft.margin.only(right=12 if idx < len(row_tasks) - 1 else 0),
+                                    width=None,  # Sin ancho fijo para que sea flexible
+                                    constraints=ft.BoxConstraints(
+                                        min_width=300,  # Ancho mínimo para legibilidad
+                                        max_width=None  # Sin máximo para que se expanda
+                                    )
                                 )
                             )
                         
-                        # Crear fila con las tarjetas
+                        # Crear fila con las tarjetas - adaptable
                         container.controls.append(
                             ft.Row(
                                 row_cards,
                                 spacing=12,
                                 wrap=False,
-                                expand=True
+                                expand=True,
+                                scroll=ft.ScrollMode.AUTO if not is_desktop else ft.ScrollMode.HIDDEN
                             )
                         )
                 else:
-                    # En móvil o si hay pocas tareas, mostrar en columna simple
+                    # En móvil, tablet pequeña o pantallas estrechas, mostrar en columna simple
                     for task in priority_tasks:
                         card = create_task_card(
                             task,
@@ -2040,7 +2093,14 @@ class HomeView:
                             on_edit_subtask=self._edit_subtask,
                             page=self.page
                         )
-                        container.controls.append(card)
+                        # Asegurar que la tarjeta use todo el ancho disponible
+                        container.controls.append(
+                            ft.Container(
+                                content=card,
+                                expand=True,
+                                width=None  # Sin ancho fijo
+                            )
+                        )
         
         self.page.update()
     

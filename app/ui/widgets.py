@@ -74,7 +74,7 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
     # Color de fondo de la tarjeta según el tema
     card_bgcolor = ft.Colors.BLACK87 if is_dark else None
     
-    # Construir lista de controles de la tarjeta - responsive
+    # Construir lista de controles de la tarjeta - responsive y adaptable
     card_controls = [
         ft.Row(
             [
@@ -85,36 +85,44 @@ def create_task_card(task: Task, on_toggle, on_edit, on_delete, on_toggle_subtas
                     on_click=lambda e, task_obj=task: on_toggle(task_obj.id),
                     tooltip="Marcar como completada" if not task.completed else "Marcar como pendiente",
                     width=icon_size + 8,
-                    height=icon_size + 8
+                    height=icon_size + 8,
+                    tight=True
                 ),
-                ft.Column(
-                    [
-                        ft.Text(
-                            task.title,
-                            size=title_size,
-                            weight=ft.FontWeight.BOLD,
-                            style=title_style,
-                            expand=True,
-                            max_lines=2 if not is_desktop else None,
-                            overflow=ft.TextOverflow.ELLIPSIS
-                        ),
-                        ft.Text(
-                            task.description if task.description else "Sin descripción",
-                            size=description_size,
-                            color=description_color,
-                            style=title_style if task.completed else None,
-                            max_lines=3 if not is_desktop else None,
-                            overflow=ft.TextOverflow.ELLIPSIS
-                        ),
-                    ],
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                task.title,
+                                size=title_size,
+                                weight=ft.FontWeight.BOLD,
+                                style=title_style,
+                                expand=True,
+                                max_lines=3,
+                                overflow=ft.TextOverflow.ELLIPSIS,
+                                selectable=True
+                            ),
+                            ft.Text(
+                                task.description if task.description else "Sin descripción",
+                                size=description_size,
+                                color=description_color,
+                                style=title_style if task.completed else None,
+                                max_lines=4,
+                                overflow=ft.TextOverflow.ELLIPSIS,
+                                selectable=True
+                            ),
+                        ],
+                        expand=True,
+                        spacing=6 if is_desktop else 4,
+                        tight=False
+                    ),
                     expand=True,
-                    spacing=6 if is_desktop else 4,
-                    tight=False
+                    padding=0
                 ),
             ],
             spacing=12 if is_desktop else 8,
             expand=True,
-            wrap=False
+            wrap=False,
+            vertical_alignment=ft.CrossAxisAlignment.START
         )
     ]
     
