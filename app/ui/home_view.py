@@ -268,7 +268,10 @@ class HomeView:
                 expand=True
             ),
             key=f"priority_section_{priority}",  # Key para referencia de scroll
-            margin=ft.margin.only(bottom=24 if is_desktop else 16),
+            margin=ft.margin.only(
+                bottom=16 if is_desktop else 12,  # Reducido de 24/16 a 16/12
+                top=0  # Sin margen superior para acercar más
+            ),
             expand=True
         )
         
