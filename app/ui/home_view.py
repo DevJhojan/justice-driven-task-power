@@ -60,7 +60,14 @@ class HomeView:
             self.firebase_sync_service = None
             print(f"Error al inicializar Firebase: {e}")
         
-        self.current_task_filter: Optional[bool] = None  # None=all, True=completed, False=pending
+        # Filtros por sección de prioridad: {priority: filter_value}
+        self.priority_filters = {
+            'urgent_important': None,  # None=all, True=completed, False=pending
+            'not_urgent_important': None,
+            'urgent_not_important': None,
+            'not_urgent_not_important': None
+        }
+        self.current_priority_section = 'urgent_important'  # Prioridad activa visible
         self.current_habit_filter: Optional[bool] = None  # None=all, True=active, False=inactive
         self.editing_task: Optional[Task] = None
         self.editing_subtask_task_id: Optional[int] = None
@@ -69,8 +76,17 @@ class HomeView:
         # Secciones: "tasks", "habits", "settings"
         self.current_section = "tasks"
         
-        # Contenedores principales
-        self.tasks_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
+        # Contenedores principales para cada prioridad - responsive
+        # En escritorio, las tarjetas se mostrarán en grid; en móvil en columna
+        self.priority_containers = {
+            'urgent_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO),
+            'not_urgent_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO),
+            'urgent_not_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO),
+            'not_urgent_not_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO)
+        }
+        self.priority_section_refs = {}  # Referencias a los contenedores de sección para scroll
+        self.main_scroll_container = None  # Contenedor principal con scroll
+        self.main_scroll_listview = None  # Referencia directa al ListView para scroll programático
         self.habits_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
         self.stats_card = None
         self.habit_stats_card = None
@@ -97,11 +113,290 @@ class HomeView:
         self._build_ui()
         self._load_tasks()
     
+    def _get_priority_colors(self, priority: str) -> dict:
+        """Obtiene los colores para una prioridad específica."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        colors = {
+            'urgent_important': {
+                'primary': ft.Colors.RED_600,
+                'light': ft.Colors.RED_50 if not is_dark else ft.Colors.RED_900,
+                'bg': ft.Colors.RED_100 if not is_dark else ft.Colors.RED_900,
+                'text': '🔴 Urgente e Importante'
+            },
+            'not_urgent_important': {
+                'primary': ft.Colors.GREEN_600,
+                'light': ft.Colors.GREEN_50 if not is_dark else ft.Colors.GREEN_900,
+                'bg': ft.Colors.GREEN_100 if not is_dark else ft.Colors.GREEN_900,
+                'text': '🟢 No Urgente e Importante'
+            },
+            'urgent_not_important': {
+                'primary': ft.Colors.ORANGE_600,
+                'light': ft.Colors.ORANGE_50 if not is_dark else ft.Colors.ORANGE_900,
+                'bg': ft.Colors.ORANGE_100 if not is_dark else ft.Colors.ORANGE_900,
+                'text': '🟡 Urgente y No Importante'
+            },
+            'not_urgent_not_important': {
+                'primary': ft.Colors.GREY_500,
+                'light': ft.Colors.GREY_50 if not is_dark else ft.Colors.GREY_800,
+                'bg': ft.Colors.GREY_100 if not is_dark else ft.Colors.GREY_800,
+                'text': '⚪ No Urgente y No Importante'
+            }
+        }
+        return colors.get(priority, colors['not_urgent_important'])
+    
+    def _build_priority_section(self, priority: str) -> ft.Container:
+        """Construye una sección de prioridad con su filtro y tareas."""
+        colors = self._get_priority_colors(priority)
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        current_filter = self.priority_filters[priority]
+        
+        # Detectar si es escritorio o móvil
+        is_desktop = self.page.platform == ft.PagePlatform.WINDOWS or self.page.platform == ft.PagePlatform.LINUX or self.page.platform == ft.PagePlatform.MACOS
+        
+        # Título de la sección - responsive y adaptable
+        # Usar tamaño de fuente responsive basado en ancho de pantalla
+        try:
+            screen_width = self.page.width if (hasattr(self.page, 'width') and self.page.width is not None and isinstance(self.page.width, (int, float))) else 1024
+        except (AttributeError, TypeError):
+            screen_width = 1024
+        is_wide = screen_width > 600 if isinstance(screen_width, (int, float)) else False
+        
+        title_size = 22 if is_wide else 18
+        title_padding_vertical = 10 if is_wide else 8  # Reducido de 14/10 a 10/8
+        title_padding_horizontal = 20 if is_wide else 12
+        
+        section_title = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Text(
+                        colors['text'],
+                        size=title_size,
+                        weight=ft.FontWeight.BOLD,
+                        color=colors['primary'],
+                        expand=True,
+                        max_lines=2,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                        selectable=False
+                    )
+                ],
+                expand=True,
+                wrap=False
+            ),
+            padding=ft.padding.symmetric(
+                vertical=title_padding_vertical,
+                horizontal=title_padding_horizontal
+            ),
+            bgcolor=colors['light'],
+            border=ft.border.only(bottom=ft.BorderSide(2, colors['primary'])),
+            expand=True,
+            margin=ft.margin.only(top=0)  # Sin margen superior para acercar más
+        )
+        
+        # Botones de filtro para esta sección - responsive
+        active_bg = colors['primary']
+        inactive_bg = ft.Colors.GREY_800 if is_dark else ft.Colors.GREY_100
+        text_color = ft.Colors.WHITE
+        button_height = 40 if is_desktop else 36
+        button_padding = ft.padding.symmetric(vertical=12 if is_desktop else 8, horizontal=24 if is_desktop else 16)
+        
+        # Botones de filtro responsive - se adaptan al ancho disponible
+        filter_buttons = ft.Row(
+            [
+                ft.ElevatedButton(
+                    text="Todas",
+                    on_click=lambda e, p=priority: self._filter_priority_tasks(p, None),
+                    bgcolor=active_bg if current_filter is None else inactive_bg,
+                    color=text_color,
+                    height=button_height,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=8)
+                    ),
+                    expand=True if is_desktop else False
+                ),
+                ft.ElevatedButton(
+                    text="Pendientes",
+                    on_click=lambda e, p=priority: self._filter_priority_tasks(p, False),
+                    bgcolor=active_bg if current_filter is False else inactive_bg,
+                    color=text_color,
+                    height=button_height,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=8)
+                    ),
+                    expand=True if is_desktop else False
+                ),
+                ft.ElevatedButton(
+                    text="Completadas",
+                    on_click=lambda e, p=priority: self._filter_priority_tasks(p, True),
+                    bgcolor=active_bg if current_filter is True else inactive_bg,
+                    color=text_color,
+                    height=button_height,
+                    style=ft.ButtonStyle(
+                        shape=ft.RoundedRectangleBorder(radius=8)
+                    ),
+                    expand=True if is_desktop else False
+                )
+            ],
+            spacing=12 if is_desktop else 8,
+            scroll=ft.ScrollMode.AUTO if not is_desktop else ft.ScrollMode.HIDDEN,
+            wrap=False,
+            expand=True
+        )
+        
+        # Contenedor de tareas para esta prioridad
+        tasks_container = self.priority_containers[priority]
+        
+        # Contenedor completo de la sección - responsive y adaptable
+        section_padding = 20 if is_desktop else 12
+        section_container = ft.Container(
+            content=ft.Column(
+                [
+                    section_title,
+                    ft.Container(
+                        content=filter_buttons,
+                        padding=button_padding,
+                        expand=True
+                    ),
+                    ft.Container(
+                        content=tasks_container,
+                        padding=ft.padding.symmetric(
+                            horizontal=section_padding
+                        ),
+                        expand=True
+                    )
+                ],
+                spacing=0,
+                expand=True
+            ),
+            key=f"priority_section_{priority}",  # Key para referencia de scroll
+            margin=ft.margin.only(
+                bottom=16 if is_desktop else 12,  # Reducido de 24/16 a 16/12
+                top=0  # Sin margen superior para acercar más
+            ),
+            expand=True
+        )
+        
+        # Guardar referencia para scroll
+        self.priority_section_refs[priority] = section_container
+        
+        return section_container
+    
+    def _build_priority_navigation_bar(self) -> ft.Container:
+        """Construye la barra de navegación con 4 botones para las prioridades."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        is_desktop = self.page.platform == ft.PagePlatform.WINDOWS or self.page.platform == ft.PagePlatform.LINUX or self.page.platform == ft.PagePlatform.MACOS
+        bgcolor = ft.Colors.BLACK87 if is_dark else ft.Colors.WHITE
+        
+        buttons = []
+        priorities = [
+            ('urgent_important', '🔴', 'Urgente e\nImportante'),
+            ('not_urgent_important', '🟢', 'No Urgente e\nImportante'),
+            ('urgent_not_important', '🟡', 'Urgente y No\nImportante'),
+            ('not_urgent_not_important', '⚪', 'No Urgente y No\nImportante')
+        ]
+        
+        # Detectar ancho de pantalla para ajustar tamaños
+        try:
+            screen_width = self.page.width if (hasattr(self.page, 'width') and self.page.width is not None and isinstance(self.page.width, (int, float))) else 1024
+        except (AttributeError, TypeError):
+            screen_width = 1024
+        is_wide_screen = screen_width > 600 if isinstance(screen_width, (int, float)) else False
+        
+        for priority_key, emoji, label in priorities:
+            colors = self._get_priority_colors(priority_key)
+            is_active = self.current_priority_section == priority_key
+            
+            # Tamaños responsive basados en ancho de pantalla
+            emoji_size = 22 if is_wide_screen else 18
+            text_size = 10 if is_wide_screen else 9
+            button_padding = 10 if is_wide_screen else 6
+            
+            button = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(emoji, size=emoji_size),
+                        ft.Text(
+                            label,
+                            size=text_size,
+                            text_align=ft.TextAlign.CENTER,
+                            max_lines=2,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                            selectable=False
+                        )
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=4,
+                    tight=True
+                ),
+                on_click=lambda e, p=priority_key: self._scroll_to_priority(p),
+                padding=button_padding,
+                bgcolor=colors['primary'] if is_active else bgcolor,
+                border=ft.border.all(2, colors['primary'] if is_active else ft.Colors.TRANSPARENT),
+                border_radius=8,
+                expand=True,
+                tooltip=colors['text']
+            )
+            buttons.append(button)
+        
+        # Botón de agregar tarea - solo mostrar en la sección de tareas
+        add_button = None
+        if self.current_section == "tasks":
+            scheme = self.page.theme.color_scheme if self.page.theme else None
+            title_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_400
+            button_size = 40 if is_wide_screen else 36
+            icon_size = 20 if is_wide_screen else 18
+            
+            add_button = ft.IconButton(
+                icon=ft.Icons.ADD,
+                on_click=self._show_new_task_form,
+                bgcolor=title_color,
+                icon_color=ft.Colors.WHITE,
+                tooltip="Nueva Tarea",
+                width=button_size,
+                height=button_size,
+                icon_size=icon_size
+            )
+        
+        # Contenedor responsive con padding vertical mínimo
+        nav_padding = ft.padding.symmetric(
+            vertical=4 if is_wide_screen else 3,  # Reducido aún más: de 8/6 a 4/3
+            horizontal=20 if is_wide_screen else 12
+        )
+        button_spacing = 10 if is_wide_screen else 6
+        
+        # Crear Row con botones de prioridad y botón de agregar
+        row_controls = buttons.copy()
+        if add_button:
+            row_controls.append(add_button)
+        
+        return ft.Container(
+            content=ft.Row(
+                row_controls,
+                spacing=button_spacing,
+                scroll=ft.ScrollMode.AUTO if not is_wide_screen else ft.ScrollMode.HIDDEN,
+                wrap=False,
+                expand=True
+            ),
+            padding=nav_padding,
+            bgcolor=bgcolor,
+            border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700)),
+            expand=True,
+            margin=ft.margin.only(bottom=0)  # Sin margen inferior para acercar más a las tareas
+        )
+    
     def _build_ui(self):
-        """Construye la interfaz de usuario."""
-        # Barra de título
+        """Construye la interfaz de usuario con Matriz de Eisenhower."""
+        # Detectar si es escritorio o móvil para hacer responsive
+        is_desktop = self.page.platform == ft.PagePlatform.WINDOWS or self.page.platform == ft.PagePlatform.LINUX or self.page.platform == ft.PagePlatform.MACOS
+        
+        # Barra de título - responsive
         scheme = self.page.theme.color_scheme if self.page.theme else None
         title_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_400
+        title_size = 32 if is_desktop else 28
+        title_padding = ft.padding.symmetric(
+            vertical=20 if is_desktop else 16,
+            horizontal=32 if is_desktop else 20
+        )
+        button_size = 48 if is_desktop else 40
 
         self.title_bar = ft.Container(
             content=ft.Row(
@@ -110,106 +405,99 @@ class HomeView:
                         "Mis Tareas" if self.current_section == "tasks"
                         else "Mis Hábitos" if self.current_section == "habits"
                         else "Configuración",
-                        size=28,
+                        size=title_size,
                         weight=ft.FontWeight.BOLD,
                         color=title_color,
                         expand=True
                     )
                 ],
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                alignment=ft.MainAxisAlignment.START,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER
             ),
-            padding=ft.padding.symmetric(vertical=16, horizontal=20),
-            bgcolor=ft.Colors.BLACK87 if self.page.theme_mode == ft.ThemeMode.DARK else ft.Colors.RED_50
+            padding=ft.padding.symmetric(
+                vertical=8 if is_desktop else 6,  # Reducido aún más: de 12/10 a 8/6
+                horizontal=32 if is_desktop else 20
+            ),
+            bgcolor=ft.Colors.BLACK87 if self.page.theme_mode == ft.ThemeMode.DARK else ft.Colors.RED_50,
+            margin=ft.margin.only(bottom=0)  # Sin margen inferior para acercar a los botones
         )
         
         # Crear la barra inferior de navegación
         self._build_bottom_bar()
         
-        # Filtros - colores adaptativos según el tema/acento
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        scheme = self.page.theme.color_scheme if self.page.theme else None
-        primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_700
-        secondary = scheme.secondary if scheme and scheme.secondary else ft.Colors.RED_600
-
-        active_bg = primary
-        inactive_bg = ft.Colors.GREY_800 if is_dark else ft.Colors.GREY_100
-        text_color = ft.Colors.WHITE
+        # Barra de navegación de prioridades
+        priority_nav = self._build_priority_navigation_bar()
         
-        # Botón para agregar nueva tarea - color adaptativo
-        new_task_button_bg = primary
-        
-        # Botones de filtro
-        filter_buttons = [
-                ft.ElevatedButton(
-                    text="Todas",
-                    on_click=lambda e: self._filter_tasks(None),
-                    bgcolor=active_bg if self.current_task_filter is None else inactive_bg,
-                    color=text_color,
-                    height=40
-                ),
-                ft.ElevatedButton(
-                    text="Pendientes",
-                    on_click=lambda e: self._filter_tasks(False),
-                    bgcolor=active_bg if self.current_task_filter is False else inactive_bg,
-                    color=text_color,
-                    height=40
-                ),
-                ft.ElevatedButton(
-                    text="Completadas",
-                    on_click=lambda e: self._filter_tasks(True),
-                    bgcolor=active_bg if self.current_task_filter is True else inactive_bg,
-                    color=text_color,
-                    height=40
-                )
+        # Construir las 4 secciones de prioridad
+        priority_sections = [
+            self._build_priority_section('urgent_important'),
+            self._build_priority_section('not_urgent_important'),
+            self._build_priority_section('urgent_not_important'),
+            self._build_priority_section('not_urgent_not_important')
         ]
         
-        # Botón "+" para la parte superior derecha
-        self.new_task_button = ft.IconButton(
-            icon=ft.Icons.ADD,
-            on_click=self._show_new_task_form,
-            bgcolor=new_task_button_bg,
-            icon_color=ft.Colors.WHITE,
-            tooltip="Nueva Tarea",
-            width=40,
-            height=40
+        # Contenedor principal con scroll - responsive
+        section_spacing = 24 if is_desktop else 16
+        # Usar ListView para mejor soporte de scroll programático
+        self.main_scroll_listview = ft.ListView(
+            priority_sections,
+            spacing=section_spacing,
+            expand=True,
+            padding=0
+        )
+        main_scroll_content = self.main_scroll_listview
+        
+        # Padding responsive para el contenedor principal - reducido
+        main_padding = ft.padding.only(
+            bottom=24 if is_desktop else 16,
+            left=0,
+            right=0,
+            top=0  # Sin padding superior para acercar a los botones de prioridad
         )
         
-        # Fila de filtros con botón de nueva tarea a la derecha
-        filter_row = ft.Row(
-            [
-                ft.Row(
-                    filter_buttons,
-                    spacing=8,
-                    scroll=ft.ScrollMode.AUTO,
-                    expand=True
+        # Detectar ancho de pantalla para layout adaptable
+        try:
+            screen_width = self.page.width if (hasattr(self.page, 'width') and self.page.width is not None and isinstance(self.page.width, (int, float))) else 1024
+        except (AttributeError, TypeError):
+            screen_width = 1024
+        
+        # En escritorio con pantalla grande, centrar con ancho máximo; en pantallas pequeñas, usar todo el ancho
+        if is_desktop and isinstance(screen_width, (int, float)) and screen_width > 1200:
+            self.main_scroll_container = ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Container(width=0, expand=True),  # Espaciador izquierdo
+                        ft.Container(
+                            content=main_scroll_content,
+                            width=1200,  # Ancho máximo para legibilidad en pantallas grandes
+                            expand=False
+                        ),
+                        ft.Container(width=0, expand=True)  # Espaciador derecho
+                    ],
+                    alignment=ft.MainAxisAlignment.CENTER
                 ),
-                self.new_task_button
-            ],
-            spacing=8,
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER
-        )
+                padding=main_padding,
+                expand=True
+            )
+        else:
+            # En pantallas pequeñas o medianas, usar todo el ancho disponible
+            self.main_scroll_container = ft.Container(
+                content=main_scroll_content,
+                padding=main_padding,
+                expand=True,
+                width=None  # Sin ancho fijo para que se adapte
+            )
         
-        # Contenedor de estadísticas
-        stats_container = ft.Container(
-            content=create_statistics_card(self.task_service.get_statistics(), self.page),
-            visible=True
-        )
-        self.stats_container = stats_container
-        
-        # Vista principal (lista de tareas)
+        # Vista principal - sin spacing para acercar elementos
         main_view = ft.Container(
             content=ft.Column(
                 [
-                    stats_container,
-                    filter_row,
-                    self.tasks_container
+                    priority_nav,
+                    self.main_scroll_container
                 ],
-                spacing=8,
+                spacing=0,  # Sin spacing entre navegación y contenido
                 expand=True
             ),
-            padding=16,
             expand=True
         )
         
@@ -563,19 +851,8 @@ class HomeView:
                     ft.Divider(),
 
                     # ==================== Sección 2: Autenticación y Sincronización con Firebase ====================
-                    ft.Text(
-                        "Autenticación y Sincronización",
-                        size=18,
-                        weight=ft.FontWeight.BOLD,
-                        color=preview_color
-                    ),
-                    ft.Text(
-                        "Autentícate con Firebase para sincronizar tus datos en la nube. "
-                        "Tus datos se guardan localmente y se sincronizan cuando lo solicites.",
-                        size=14,
-                        color=ft.Colors.GREY_600
-                    ),
-                    self._build_firebase_auth_section(preview_color, is_dark),
+                    # Solo mostrar la sección si Firebase está disponible
+                    *self._build_firebase_sync_section(preview_color, is_dark),
 
                     ft.Divider(),
 
@@ -621,7 +898,10 @@ class HomeView:
                             alignment=ft.MainAxisAlignment.START
                         ),
                         padding=ft.padding.symmetric(vertical=8, horizontal=0)
-                    )
+                    ),
+                    
+                    # Botón discreto para copiar error (solo si hay error de Firebase)
+                    *self._get_error_copy_button(preview_color, is_dark)
                 ],
                 spacing=16,
                 expand=True,
@@ -646,31 +926,92 @@ class HomeView:
         self.home_view.bgcolor = bgcolor
         self.page.update()
 
-    def _build_firebase_auth_section(self, preview_color, is_dark):
-        """Construye la sección de autenticación y sincronización con Firebase."""
+    def _build_firebase_sync_section(self, preview_color, is_dark):
+        """
+        Construye la sección de autenticación y sincronización con Firebase.
+        Retorna una lista de widgets. Si hay error, retorna lista vacía (no muestra nada).
+        """
         sync_settings = self.sync_service.get_sync_settings()
         is_authenticated = sync_settings.is_authenticated
         
         if not FIREBASE_AVAILABLE or not self.firebase_auth_service:
-            return ft.Container(
-                content=ft.Column(
+            # Si hay error, NO mostrar la sección de autenticación
+            # El botón para copiar el error se mostrará al final mediante _get_error_copy_button
+            return []
+        
+        # Si Firebase está disponible, mostrar la sección completa
+        return [
+            ft.Text(
+                "Autenticación y Sincronización",
+                size=18,
+                weight=ft.FontWeight.BOLD,
+                color=preview_color
+            ),
+            ft.Text(
+                "Autentícate con Firebase para sincronizar tus datos en la nube. "
+                "Tus datos se guardan localmente y se sincronizan cuando lo solicites.",
+                size=14,
+                color=ft.Colors.GREY_600
+            ),
+            self._build_firebase_auth_section(preview_color, is_dark),
+        ]
+    
+    def _get_error_copy_button(self, preview_color, is_dark):
+        """
+        Retorna un botón discreto para copiar el error si Firebase no está disponible.
+        Si Firebase está disponible, retorna lista vacía.
+        """
+        if FIREBASE_AVAILABLE and self.firebase_auth_service:
+            return []
+        
+        # Construir el mensaje de error completo
+        error_msg = (
+            "Firebase no está disponible porque el módulo 'requests' no se empaquetó correctamente en el APK.\n\n"
+            "Solución:\n"
+            "1. Reconstruye el APK ejecutando:\n"
+            "   ./build_android.sh --apk\n\n"
+            "2. Verifica que requests>=2.31.0 esté en:\n"
+            "   - requirements.txt\n"
+            "   - pyproject.toml (sección dependencies)\n\n"
+            "3. Asegúrate de que main.py importa requests explícitamente."
+        )
+        
+        # Obtener el error de importación si existe
+        import_error = ""
+        try:
+            # Acceder a la variable del módulo
+            import app.ui.home_view as home_view_module
+            import_error = getattr(home_view_module, '_firebase_import_error', '')
+        except:
+            pass
+        
+        full_error = f"{error_msg}\n\nError técnico: {import_error}" if import_error else error_msg
+        
+        # Retornar un botón discreto al final
+        return [
+            ft.Container(
+                content=ft.Row(
                     [
-                        ft.Text(
-                            "Firebase no está disponible",
-                            size=14,
-                            color=ft.Colors.RED,
-                            weight=ft.FontWeight.BOLD
+                        ft.IconButton(
+                            icon=ft.Icons.CONTENT_COPY,
+                            tooltip="Copiar información de error",
+                            icon_size=16,
+                            on_click=lambda e: self._copy_error_to_clipboard(full_error, None),
+                            style=ft.ButtonStyle(
+                                color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400,
+                            )
                         ),
-                        ft.Text(
-                            "Las dependencias de Firebase no están instaladas. "
-                            "Instala con: pip install requests",
-                            size=12,
-                            color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
-                        )
                     ],
-                    spacing=8
-                )
+                    alignment=ft.MainAxisAlignment.END,
+                ),
+                padding=ft.padding.only(top=8),
             )
+        ]
+    
+    def _build_firebase_auth_section(self, preview_color, is_dark):
+        """Construye la sección de autenticación y sincronización con Firebase."""
+        sync_settings = self.sync_service.get_sync_settings()
+        is_authenticated = sync_settings.is_authenticated
         
         if is_authenticated:
             # Usuario autenticado: mostrar información y botón de sincronización
@@ -1735,57 +2076,206 @@ class HomeView:
         self.page.update()
     
     def _load_tasks(self):
-        """Carga las tareas desde la base de datos."""
-        tasks = self.task_service.get_all_tasks(self.current_task_filter)
+        """Carga las tareas desde la base de datos y las distribuye por prioridad."""
+        # Cargar todas las tareas sin filtro global
+        all_tasks = self.task_service.get_all_tasks(None)
         
-        # Asegurarse de que el contenedor existe
-        if not hasattr(self, 'tasks_container') or self.tasks_container is None:
-            return
+        # Limpiar todos los contenedores de prioridad
+        for priority in self.priority_containers:
+            self.priority_containers[priority].controls.clear()
         
-        self.tasks_container.controls.clear()
+        # Distribuir tareas por prioridad y aplicar filtro de cada sección
+        for priority in ['urgent_important', 'not_urgent_important', 'urgent_not_important', 'not_urgent_not_important']:
+            container = self.priority_containers[priority]
+            filter_value = self.priority_filters[priority]
+            
+            # Filtrar tareas de esta prioridad
+            priority_tasks = [t for t in all_tasks if t.priority == priority]
+            
+            # Aplicar filtro de completado si existe
+            if filter_value is not None:
+                priority_tasks = [t for t in priority_tasks if t.completed == filter_value]
+            
+            # Agregar tareas al contenedor
+            if not priority_tasks:
+                # Mostrar estado vacío solo si hay filtro activo
+                if filter_value is not None:
+                    empty_text = "Completadas" if filter_value else "Pendientes"
+                    container.controls.append(
+                        ft.Container(
+                            content=ft.Text(
+                                f"No hay tareas {empty_text.lower()} en esta prioridad",
+                                size=14,
+                                color=ft.Colors.GREY_500,
+                                text_align=ft.TextAlign.CENTER
+                            ),
+                            padding=20,
+                            alignment=ft.alignment.center
+                        )
+                    )
+            else:
+                # Detectar ancho de pantalla para decidir layout
+                is_desktop = self.page.platform == ft.PagePlatform.WINDOWS or self.page.platform == ft.PagePlatform.LINUX or self.page.platform == ft.PagePlatform.MACOS
+                try:
+                    screen_width = self.page.width if (hasattr(self.page, 'width') and self.page.width is not None and isinstance(self.page.width, (int, float))) else 1024
+                except (AttributeError, TypeError):
+                    screen_width = 1024
+                use_grid = is_desktop and isinstance(screen_width, (int, float)) and screen_width > 800 and len(priority_tasks) > 1
+                
+                if use_grid:
+                    # En escritorio con suficiente ancho, mostrar en grid de 2 columnas
+                    tasks_per_row = 2
+                    for i in range(0, len(priority_tasks), tasks_per_row):
+                        row_tasks = priority_tasks[i:i + tasks_per_row]
+                        row_cards = []
+                        for idx, task in enumerate(row_tasks):
+                            card = create_task_card(
+                                task,
+                                on_toggle=self._toggle_task,
+                                on_edit=self._edit_task,
+                                on_delete=self._delete_task,
+                                on_toggle_subtask=self._toggle_subtask,
+                                on_add_subtask=self._show_add_subtask_dialog,
+                                on_delete_subtask=self._delete_subtask,
+                                on_edit_subtask=self._edit_subtask,
+                                page=self.page
+                            )
+                            # Contenedor flexible que se adapta al ancho disponible
+                            row_cards.append(
+                                ft.Container(
+                                    content=card,
+                                    expand=True,
+                                    margin=ft.margin.only(right=12 if idx < len(row_tasks) - 1 else 0)
+                                )
+                            )
+                        
+                        # Crear fila con las tarjetas - adaptable
+                        container.controls.append(
+                            ft.Row(
+                                row_cards,
+                                spacing=12,
+                                wrap=False,
+                                expand=True,
+                                scroll=ft.ScrollMode.AUTO if not is_desktop else ft.ScrollMode.HIDDEN
+                            )
+                        )
+                else:
+                    # En móvil, tablet pequeña o pantallas estrechas, mostrar en columna simple
+                    for task in priority_tasks:
+                        card = create_task_card(
+                            task,
+                            on_toggle=self._toggle_task,
+                            on_edit=self._edit_task,
+                            on_delete=self._delete_task,
+                            on_toggle_subtask=self._toggle_subtask,
+                            on_add_subtask=self._show_add_subtask_dialog,
+                            on_delete_subtask=self._delete_subtask,
+                            on_edit_subtask=self._edit_subtask,
+                            page=self.page
+                        )
+                        # Asegurar que la tarjeta use todo el ancho disponible
+                        container.controls.append(
+                            ft.Container(
+                                content=card,
+                                expand=True,
+                                width=None  # Sin ancho fijo
+                            )
+                        )
         
-        if not tasks:
-            self.tasks_container.controls.append(create_empty_state(self.page))
-        else:
-            for task in tasks:
-                card = create_task_card(
-                    task,
-                    on_toggle=self._toggle_task,
-                    on_edit=self._edit_task,
-                    on_delete=self._delete_task,
-                    on_toggle_subtask=self._toggle_subtask,
-                    on_add_subtask=self._show_add_subtask_dialog,
-                    on_delete_subtask=self._delete_subtask,
-                    on_edit_subtask=self._edit_subtask,
-                    page=self.page
-                )
-                self.tasks_container.controls.append(card)
-        
-        # Actualizar estadísticas
-        if hasattr(self, 'stats_container') and self.stats_container:
-            stats = self.task_service.get_statistics()
-            self.stats_container.content = create_statistics_card(stats, self.page)
-            try:
-                self.stats_container.update()
-            except:
-                pass
-        
-        try:
-            self.tasks_container.update()
-        except:
-            pass
         self.page.update()
     
     def _filter_tasks(self, filter_completed: Optional[bool]):
-        """Filtra las tareas por estado."""
-        self.current_task_filter = filter_completed
+        """Filtra las tareas por estado (mantenido para compatibilidad)."""
+        # Aplicar el filtro a todas las prioridades
+        for priority in self.priority_filters:
+            self.priority_filters[priority] = filter_completed
         self._load_tasks()
-        self._rebuild_filters()
     
-    def _rebuild_filters(self):
-        """Reconstruye los botones de filtro con los colores correctos."""
-        # Esta función se puede mejorar para actualizar los colores dinámicamente
+    def _filter_priority_tasks(self, priority: str, filter_completed: Optional[bool]):
+        """Filtra las tareas de una prioridad específica."""
+        self.priority_filters[priority] = filter_completed
         self._load_tasks()
+        # Reconstruir la sección para actualizar los botones de filtro
+        self._rebuild_priority_section(priority)
+    
+    def _rebuild_priority_section(self, priority: str):
+        """Reconstruye una sección de prioridad específica."""
+        # Encontrar el contenedor principal y reemplazar la sección
+        if self.main_scroll_container and self.main_scroll_container.content:
+            main_column = self.main_scroll_container.content
+            if isinstance(main_column, ft.Column):
+                # Encontrar el índice de la sección
+                priorities_order = ['urgent_important', 'not_urgent_important', 'urgent_not_important', 'not_urgent_not_important']
+                try:
+                    index = priorities_order.index(priority)
+                    # Reconstruir la sección
+                    new_section = self._build_priority_section(priority)
+                    main_column.controls[index] = new_section
+                    self.priority_section_refs[priority] = new_section
+                except ValueError:
+                    pass
+        
+        # Actualizar barra de navegación
+        self._update_priority_navigation()
+        self.page.update()
+    
+    def _update_priority_navigation(self):
+        """Actualiza la barra de navegación de prioridades."""
+        # Reconstruir la barra de navegación con el estado actualizado
+        if self.home_view and len(self.home_view.controls) > 0:
+            main_column = self.home_view.controls[0]
+            if isinstance(main_column, ft.Column) and len(main_column.controls) > 1:
+                main_view = main_column.controls[1]
+                if isinstance(main_view, ft.Container) and main_view.content:
+                    main_content = main_view.content
+                    if isinstance(main_content, ft.Column) and len(main_content.controls) > 0:
+                        # Reemplazar la barra de navegación
+                        new_nav = self._build_priority_navigation_bar()
+                        main_content.controls[0] = new_nav
+    
+    def _scroll_to_priority(self, priority: str):
+        """Hace scroll automático hasta la sección de prioridad especificada."""
+        self.current_priority_section = priority
+        
+        # Actualizar la barra de navegación para reflejar el estado activo
+        self._update_priority_navigation()
+        
+        # Mapeo de prioridades a índices en el ListView
+        priority_index_map = {
+            'urgent_important': 0,
+            'not_urgent_important': 1,
+            'urgent_not_important': 2,
+            'not_urgent_not_important': 3
+        }
+        
+        # Obtener el índice de la sección
+        target_index = priority_index_map.get(priority, 0)
+        
+        # Hacer scroll al índice correspondiente usando la referencia directa al ListView
+        if self.main_scroll_listview:
+            try:
+                # Intentar usar scroll_to con index (más preciso)
+                self.main_scroll_listview.scroll_to(
+                    index=target_index,
+                    duration=500,  # Duración de la animación en ms
+                    curve=ft.AnimationCurve.EASE_OUT
+                )
+            except (AttributeError, TypeError) as e:
+                # Si scroll_to con index no está disponible o falla, usar offset
+                print(f"Intentando scroll con offset (index no disponible): {e}")
+                try:
+                    # Calcular offset aproximado (cada sección puede tener ~400-600px de altura)
+                    # Ajustar según el tamaño promedio de las secciones
+                    estimated_offset = target_index * 500
+                    self.main_scroll_listview.scroll_to(
+                        offset=estimated_offset,
+                        duration=500,
+                        curve=ft.AnimationCurve.EASE_OUT
+                    )
+                except Exception as e2:
+                    print(f"Error en scroll_to: {e2}")
+        
+        self.page.update()
     
     def _show_new_task_form(self, e):
         """Navega a la vista del formulario para crear una nueva tarea."""
@@ -2093,7 +2583,10 @@ class HomeView:
             section_controls.append(ft.Divider())
 
         # Contenido scrollable ocupando ~70% del ancho de la pantalla
-        content_width = self.page.width * 0.7 if self.page.width else None
+        try:
+            content_width = self.page.width * 0.7 if (hasattr(self.page, 'width') and self.page.width is not None and isinstance(self.page.width, (int, float))) else None
+        except (AttributeError, TypeError):
+            content_width = None
 
         self.accent_dialog.title = ft.Text("Selecciona un matiz")
         self.accent_dialog.content = ft.Container(

@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "46129291924",
+    "firebase_url": "https://justice-driven-task-power-default-rtdb.firebaseio.com",
     "project_id": "justice-driven-task-power",
     "storage_bucket": "justice-driven-task-power.firebasestorage.app"
   },

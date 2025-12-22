@@ -76,6 +76,14 @@ try:
 except ImportError:
     pass
 
+# CRÍTICO: Importar requests explícitamente para que Flet lo empaquete en el APK
+# Esto asegura que la dependencia se detecte y se incluya en el build
+try:
+    import requests  # noqa: F401
+except ImportError:
+    # Si requests no está disponible, la app funcionará en modo offline
+    pass
+
 from app.main import main
 import flet as ft
 
