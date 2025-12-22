@@ -940,12 +940,17 @@ class HomeView:
         is_authenticated = sync_settings.is_authenticated
         
         if not FIREBASE_AVAILABLE or not self.firebase_auth_service:
-            # Obtener el mensaje de error específico si está disponible
-            error_msg = "Las dependencias de Firebase no están instaladas."
-            if hasattr(self, '_firebase_import_error'):
-                error_msg = f"Error al importar Firebase: {_firebase_import_error}"
-            elif not FIREBASE_AVAILABLE:
-                error_msg = "Firebase no está disponible. El módulo requests no se empaquetó correctamente en el APK."
+            # Mensaje de error claro y conciso
+            error_msg = (
+                "Firebase no está disponible porque el módulo 'requests' no se empaquetó correctamente en el APK.\n\n"
+                "Solución:\n"
+                "1. Reconstruye el APK ejecutando:\n"
+                "   ./build_android.sh --apk\n\n"
+                "2. Verifica que requests>=2.31.0 esté en:\n"
+                "   - requirements.txt\n"
+                "   - pyproject.toml (sección dependencies)\n\n"
+                "3. Asegúrate de que main.py importa requests explícitamente."
+            )
             
             return ft.Container(
                 content=ft.Column(
@@ -957,10 +962,7 @@ class HomeView:
                             weight=ft.FontWeight.BOLD
                         ),
                         ft.Text(
-                            error_msg + "\n\n"
-                            "Solución: Reconstruye el APK con:\n"
-                            "./build_android.sh --apk\n\n"
-                            "Asegúrate de que requests>=2.31.0 esté en requirements.txt y pyproject.toml",
+                            error_msg,
                             size=11,
                             color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400,
                             selectable=True
