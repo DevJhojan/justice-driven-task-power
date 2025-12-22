@@ -851,19 +851,8 @@ class HomeView:
                     ft.Divider(),
 
                     # ==================== Sección 2: Autenticación y Sincronización con Firebase ====================
-                    ft.Text(
-                        "Autenticación y Sincronización",
-                        size=18,
-                        weight=ft.FontWeight.BOLD,
-                        color=preview_color
-                    ),
-                    ft.Text(
-                        "Autentícate con Firebase para sincronizar tus datos en la nube. "
-                        "Tus datos se guardan localmente y se sincronizan cuando lo solicites.",
-                        size=14,
-                        color=ft.Colors.GREY_600
-                    ),
-                    self._build_firebase_auth_section(preview_color, is_dark),
+                    # Solo mostrar la sección si Firebase está disponible
+                    *self._build_firebase_sync_section(preview_color, is_dark),
 
                     ft.Divider(),
 
@@ -909,7 +898,10 @@ class HomeView:
                             alignment=ft.MainAxisAlignment.START
                         ),
                         padding=ft.padding.symmetric(vertical=8, horizontal=0)
-                    )
+                    ),
+                    
+                    # Botón discreto para copiar error (solo si hay error de Firebase)
+                    *self._get_error_copy_button(preview_color, is_dark)
                 ],
                 spacing=16,
                 expand=True,
@@ -934,44 +926,92 @@ class HomeView:
         self.home_view.bgcolor = bgcolor
         self.page.update()
 
-    def _build_firebase_auth_section(self, preview_color, is_dark):
-        """Construye la sección de autenticación y sincronización con Firebase."""
+    def _build_firebase_sync_section(self, preview_color, is_dark):
+        """
+        Construye la sección de autenticación y sincronización con Firebase.
+        Retorna una lista de widgets. Si hay error, retorna lista vacía (no muestra nada).
+        """
         sync_settings = self.sync_service.get_sync_settings()
         is_authenticated = sync_settings.is_authenticated
         
         if not FIREBASE_AVAILABLE or not self.firebase_auth_service:
-            # Mensaje de error claro y conciso
-            error_msg = (
-                "Firebase no está disponible porque el módulo 'requests' no se empaquetó correctamente en el APK.\n\n"
-                "Solución:\n"
-                "1. Reconstruye el APK ejecutando:\n"
-                "   ./build_android.sh --apk\n\n"
-                "2. Verifica que requests>=2.31.0 esté en:\n"
-                "   - requirements.txt\n"
-                "   - pyproject.toml (sección dependencies)\n\n"
-                "3. Asegúrate de que main.py importa requests explícitamente."
-            )
-            
-            return ft.Container(
-                content=ft.Column(
+            # Si hay error, NO mostrar la sección de autenticación
+            # El botón para copiar el error se mostrará al final mediante _get_error_copy_button
+            return []
+        
+        # Si Firebase está disponible, mostrar la sección completa
+        return [
+            ft.Text(
+                "Autenticación y Sincronización",
+                size=18,
+                weight=ft.FontWeight.BOLD,
+                color=preview_color
+            ),
+            ft.Text(
+                "Autentícate con Firebase para sincronizar tus datos en la nube. "
+                "Tus datos se guardan localmente y se sincronizan cuando lo solicites.",
+                size=14,
+                color=ft.Colors.GREY_600
+            ),
+            self._build_firebase_auth_section(preview_color, is_dark),
+        ]
+    
+    def _get_error_copy_button(self, preview_color, is_dark):
+        """
+        Retorna un botón discreto para copiar el error si Firebase no está disponible.
+        Si Firebase está disponible, retorna lista vacía.
+        """
+        if FIREBASE_AVAILABLE and self.firebase_auth_service:
+            return []
+        
+        # Construir el mensaje de error completo
+        error_msg = (
+            "Firebase no está disponible porque el módulo 'requests' no se empaquetó correctamente en el APK.\n\n"
+            "Solución:\n"
+            "1. Reconstruye el APK ejecutando:\n"
+            "   ./build_android.sh --apk\n\n"
+            "2. Verifica que requests>=2.31.0 esté en:\n"
+            "   - requirements.txt\n"
+            "   - pyproject.toml (sección dependencies)\n\n"
+            "3. Asegúrate de que main.py importa requests explícitamente."
+        )
+        
+        # Obtener el error de importación si existe
+        import_error = ""
+        try:
+            # Acceder a la variable del módulo
+            import app.ui.home_view as home_view_module
+            import_error = getattr(home_view_module, '_firebase_import_error', '')
+        except:
+            pass
+        
+        full_error = f"{error_msg}\n\nError técnico: {import_error}" if import_error else error_msg
+        
+        # Retornar un botón discreto al final
+        return [
+            ft.Container(
+                content=ft.Row(
                     [
-                        ft.Text(
-                            "Firebase no está disponible",
-                            size=14,
-                            color=ft.Colors.RED,
-                            weight=ft.FontWeight.BOLD
+                        ft.IconButton(
+                            icon=ft.Icons.CONTENT_COPY,
+                            tooltip="Copiar información de error",
+                            icon_size=16,
+                            on_click=lambda e: self._copy_error_to_clipboard(full_error, None),
+                            style=ft.ButtonStyle(
+                                color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400,
+                            )
                         ),
-                        ft.Text(
-                            error_msg,
-                            size=11,
-                            color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400,
-                            selectable=True
-                        )
                     ],
-                    spacing=8
+                    alignment=ft.MainAxisAlignment.END,
                 ),
-                padding=16
+                padding=ft.padding.only(top=8),
             )
+        ]
+    
+    def _build_firebase_auth_section(self, preview_color, is_dark):
+        """Construye la sección de autenticación y sincronización con Firebase."""
+        sync_settings = self.sync_service.get_sync_settings()
+        is_authenticated = sync_settings.is_authenticated
         
         if is_authenticated:
             # Usuario autenticado: mostrar información y botón de sincronización
