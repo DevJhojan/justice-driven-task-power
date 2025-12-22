@@ -48,3 +48,9 @@ token.pickle
 .DS_Store
 Thumbs.db
 
+# Android Keystore y credenciales (NUNCA subir a git)
+*.jks
+*.keystore
+**/key.properties
+upload-keystore.jks
+
