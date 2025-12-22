@@ -280,6 +280,98 @@ replace_icons() {
 }
 
 ################################################################################
+# Funciones de configuración de firma
+################################################################################
+
+verify_release_signing() {
+    # Verifica que un APK o AAB esté firmado en modo release
+    local file_path="$1"
+    local file_type="$2"  # "apk" o "aab"
+    
+    if [ ! -f "$file_path" ]; then
+        print_error "Archivo no encontrado: $file_path"
+        return 1
+    fi
+    
+    print_info "Verificando firma de release en $file_type..."
+    
+    # Verificar usando apksigner si está disponible (para APK)
+    if [ "$file_type" = "apk" ] && command -v apksigner &> /dev/null; then
+        local signing_info=$(apksigner verify --print-certs "$file_path" 2>&1)
+        if echo "$signing_info" | grep -qi "debug\|debuggable"; then
+            print_error "El APK está firmado en modo DEBUG"
+            return 1
+        else
+            print_success "APK verificado: firmado en modo RELEASE"
+            return 0
+        fi
+    fi
+    
+    # Verificar usando jarsigner si está disponible (para AAB y APK)
+    if command -v jarsigner &> /dev/null; then
+        local verify_output=$(jarsigner -verify -verbose -certs "$file_path" 2>&1)
+        if echo "$verify_output" | grep -qi "debug\|debuggable"; then
+            print_warning "Posible firma de debug detectada"
+        else
+            print_success "$(echo "$file_type" | tr '[:lower:]' '[:upper:]') verificado: parece estar firmado correctamente"
+        fi
+        return 0
+    fi
+    
+    # Si no hay herramientas de verificación, al menos verificar que el archivo existe y tiene tamaño
+    local file_size=$(stat -f%z "$file_path" 2>/dev/null || stat -c%s "$file_path" 2>/dev/null || echo "0")
+    if [ "$file_size" -gt 1000000 ]; then
+        print_success "$(echo "$file_type" | tr '[:lower:]' '[:upper:]') generado: $(numfmt --to=iec-i --suffix=B $file_size 2>/dev/null || echo "${file_size} bytes")"
+        print_info "Nota: Instala 'apksigner' o 'jarsigner' para verificación completa de firma"
+        return 0
+    else
+        print_error "El archivo $file_type parece estar vacío o corrupto"
+        return 1
+    fi
+}
+
+configure_release_signing() {
+    # Configura la firma de release en build.gradle para cumplir con los estándares de Google Play
+    print_info "Configurando firma de release para cumplir con estándares de Google Play..."
+    
+    local build_gradle="build/flutter/android/app/build.gradle"
+    local keystore_path="build/flutter/android/app/upload-keystore.jks"
+    
+    # Verificar que existe el build.gradle
+    if [ ! -f "$build_gradle" ]; then
+        print_warning "build.gradle no encontrado. Se configurará después de que Flet genere el proyecto."
+        return 0
+    fi
+    
+    # Verificar que existe el keystore
+    if [ ! -f "$keystore_path" ]; then
+        print_warning "Keystore no encontrado en $keystore_path"
+        print_info "Asegúrate de que el keystore existe antes de construir para release"
+    fi
+    
+    # Usar el script auxiliar para aplicar la configuración
+    if [ -f "apply_release_signing.sh" ]; then
+        if ./apply_release_signing.sh; then
+            print_success "Configuración de firma de release aplicada correctamente"
+            return 0
+        else
+            print_error "Error al aplicar configuración de firma de release"
+            return 1
+        fi
+    else
+        print_warning "Script apply_release_signing.sh no encontrado. Intentando configuración manual..."
+        # Fallback: verificar si ya está configurado
+        if grep -q "signingConfig signingConfigs.release" "$build_gradle" 2>/dev/null; then
+            print_success "La configuración de firma de release ya está presente"
+            return 0
+        else
+            print_error "No se pudo aplicar la configuración automáticamente"
+            return 1
+        fi
+    fi
+}
+
+################################################################################
 # Funciones de construcción
 ################################################################################
 
@@ -321,42 +413,65 @@ build_apk() {
         print_warning "Icono personalizado no encontrado. Flet usará el icono por defecto."
     fi
     
-    print_info "Ejecutando: flet build apk"
+    print_info "Ejecutando: flet build apk (para generar estructura del proyecto)"
     print_info "Flet detectará automáticamente las dependencias de pyproject.toml o requirements.txt"
     print_info "Flet debería usar el icono de: assets/app_icon.png (según pyproject.toml)"
     flet build apk
+    
+    # IMPORTANTE: Eliminar cualquier APK generado por Flet (puede estar firmado en debug)
+    print_info "Eliminando archivos APK generados por Flet (pueden estar en modo debug)..."
+    rm -f build/apk/app-release.apk 2>/dev/null || true
+    rm -f build/flutter/build/app/outputs/flutter-apk/*.apk 2>/dev/null || true
+    
+    # Configurar firma de release ANTES de construir
+    print_info "Aplicando configuración de firma de release..."
+    if ! configure_release_signing; then
+        print_error "Error al configurar firma de release"
+        return 1
+    fi
+    
+    # Verificar que la configuración de firma esté correcta
+    if ! grep -q "signingConfig signingConfigs.release" build/flutter/android/app/build.gradle 2>/dev/null; then
+        print_error "La configuración de firma de release no se aplicó correctamente"
+        return 1
+    fi
+    print_success "Configuración de firma de release verificada"
     
     # Reemplazar iconos personalizados después del build inicial
     # Esto asegura que los iconos estén en todas las resoluciones necesarias
     replace_icons
     
-    # Si se reemplazaron iconos, reconstruir el APK para aplicar los cambios
-    if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null && [ -d "build/flutter/android/app/src/main/res" ]; then
-        print_info "Reconstruyendo APK con iconos personalizados..."
-        cd build/flutter
-        
-        # Limpiar build anterior para asegurar que se usen los nuevos iconos
-        flutter clean 2>/dev/null || true
-        
-        # Reconstruir el APK
-        if flutter build apk --release 2>&1 | tee /tmp/flutter_build.log; then
-            print_success "APK reconstruido exitosamente con iconos personalizados"
-        else
-            print_warning "Error al reconstruir APK. Verificando si el APK original existe..."
-        fi
-        
-        cd ../..
-        
-        # Copiar el APK reconstruido si existe
-        if [ -f "build/flutter/build/app/outputs/flutter-apk/app-release.apk" ]; then
-            mkdir -p build/apk
-            cp build/flutter/build/app/outputs/flutter-apk/app-release.apk build/apk/app-release.apk
-            print_success "APK con iconos personalizados copiado a build/apk/app-release.apk"
-        elif [ -f "build/apk/app-release.apk" ]; then
-            print_info "APK original encontrado en build/apk/app-release.apk"
-        fi
+    # SIEMPRE reconstruir el APK con Flutter para asegurar firma de release
+    print_info "Construyendo APK con firma de release (estándares de Google Play)..."
+    cd build/flutter
+    
+    # Limpiar build anterior para asegurar que se use la configuración correcta
+    flutter clean 2>/dev/null || true
+    
+    # Reconstruir el APK con firma de release (--release es crítico)
+    print_info "Ejecutando: flutter build apk --release"
+    if flutter build apk --release 2>&1 | tee /tmp/flutter_build.log; then
+        print_success "APK construido exitosamente con firma de release"
     else
-        print_info "Usando APK generado por Flet (iconos pueden ser los por defecto si Flet no los detectó)"
+        print_error "Error al construir APK con firma de release"
+        cd ../..
+        return 1
+    fi
+    
+    cd ../..
+    
+    # Verificar y copiar el APK reconstruido con firma de release
+    local apk_path="build/flutter/build/app/outputs/flutter-apk/app-release.apk"
+    if [ -f "$apk_path" ]; then
+        mkdir -p build/apk
+        cp "$apk_path" build/apk/app-release.apk
+        print_success "APK con firma de release copiado a build/apk/app-release.apk"
+        
+        # Verificar la firma del APK
+        verify_release_signing "build/apk/app-release.apk" "apk"
+    else
+        print_error "No se encontró el APK reconstruido en $apk_path"
+        return 1
     fi
     
     # Verificar que el APK se generó
@@ -403,42 +518,66 @@ build_aab() {
         print_warning "Icono personalizado no encontrado. Flet usará el icono por defecto."
     fi
     
-    print_info "Ejecutando: flet build aab"
+    print_info "Ejecutando: flet build aab (para generar estructura del proyecto)"
     print_info "Flet detectará automáticamente las dependencias de pyproject.toml o requirements.txt"
     print_info "Flet debería usar el icono de: assets/app_icon.png (según pyproject.toml)"
     flet build aab
+    
+    # IMPORTANTE: Eliminar cualquier AAB generado por Flet (puede estar firmado en debug)
+    print_info "Eliminando archivos AAB generados por Flet (pueden estar en modo debug)..."
+    rm -f build/aab/app-release.aab 2>/dev/null || true
+    rm -f build/flutter/build/app/outputs/bundle/release/*.aab 2>/dev/null || true
+    rm -f build/flutter/build/app/outputs/bundle/*.aab 2>/dev/null || true
+    
+    # Configurar firma de release ANTES de construir
+    print_info "Aplicando configuración de firma de release..."
+    if ! configure_release_signing; then
+        print_error "Error al configurar firma de release"
+        return 1
+    fi
+    
+    # Verificar que la configuración de firma esté correcta
+    if ! grep -q "signingConfig signingConfigs.release" build/flutter/android/app/build.gradle 2>/dev/null; then
+        print_error "La configuración de firma de release no se aplicó correctamente"
+        return 1
+    fi
+    print_success "Configuración de firma de release verificada"
     
     # Reemplazar iconos personalizados después del build inicial
     # Esto asegura que los iconos estén en todas las resoluciones necesarias
     replace_icons
     
-    # Si se reemplazaron iconos, reconstruir el AAB para aplicar los cambios
-    if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null && [ -d "build/flutter/android/app/src/main/res" ]; then
-        print_info "Reconstruyendo AAB con iconos personalizados..."
-        cd build/flutter
-        
-        # Limpiar build anterior para asegurar que se usen los nuevos iconos
-        flutter clean 2>/dev/null || true
-        
-        # Reconstruir el AAB
-        if flutter build appbundle --release 2>&1 | tee /tmp/flutter_build.log; then
-            print_success "AAB reconstruido exitosamente con iconos personalizados"
-        else
-            print_warning "Error al reconstruir AAB. Verificando si el AAB original existe..."
-        fi
-        
-        cd ../..
-        
-        # Copiar el AAB reconstruido si existe
-        if [ -f "build/flutter/build/app/outputs/bundle/release/app-release.aab" ]; then
-            mkdir -p build/aab
-            cp build/flutter/build/app/outputs/bundle/release/app-release.aab build/aab/app-release.aab
-            print_success "AAB con iconos personalizados copiado a build/aab/app-release.aab"
-        elif [ -f "build/aab/app-release.aab" ]; then
-            print_info "AAB original encontrado en build/aab/app-release.aab"
-        fi
+    # SIEMPRE reconstruir el AAB con Flutter para asegurar firma de release
+    print_info "Construyendo AAB con firma de release (estándares de Google Play)..."
+    cd build/flutter
+    
+    # Limpiar build anterior para asegurar que se use la configuración correcta
+    flutter clean 2>/dev/null || true
+    
+    # Reconstruir el AAB con firma de release (--release es crítico)
+    print_info "Ejecutando: flutter build appbundle --release"
+    if flutter build appbundle --release 2>&1 | tee /tmp/flutter_build.log; then
+        print_success "AAB construido exitosamente con firma de release"
     else
-        print_info "Usando AAB generado por Flet (iconos pueden ser los por defecto si Flet no los detectó)"
+        print_error "Error al construir AAB con firma de release"
+        cd ../..
+        return 1
+    fi
+    
+    cd ../..
+    
+    # Verificar y copiar el AAB reconstruido con firma de release
+    local aab_path="build/flutter/build/app/outputs/bundle/release/app-release.aab"
+    if [ -f "$aab_path" ]; then
+        mkdir -p build/aab
+        cp "$aab_path" build/aab/app-release.aab
+        print_success "AAB con firma de release copiado a build/aab/app-release.aab"
+        
+        # Verificar la firma del AAB
+        verify_release_signing "build/aab/app-release.aab" "aab"
+    else
+        print_error "No se encontró el AAB reconstruido en $aab_path"
+        return 1
     fi
     
     # Verificar que el AAB se generó
