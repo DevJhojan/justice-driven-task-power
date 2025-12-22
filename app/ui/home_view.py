@@ -162,7 +162,7 @@ class HomeView:
         is_wide = screen_width > 600 if isinstance(screen_width, (int, float)) else False
         
         title_size = 22 if is_wide else 18
-        title_padding_vertical = 14 if is_wide else 10
+        title_padding_vertical = 10 if is_wide else 8  # Reducido de 14/10 a 10/8
         title_padding_horizontal = 20 if is_wide else 12
         
         section_title = ft.Container(
@@ -188,7 +188,8 @@ class HomeView:
             ),
             bgcolor=colors['light'],
             border=ft.border.only(bottom=ft.BorderSide(2, colors['primary'])),
-            expand=True
+            expand=True,
+            margin=ft.margin.only(top=0)  # Sin margen superior para acercar más
         )
         
         # Botones de filtro para esta sección - responsive
@@ -352,9 +353,9 @@ class HomeView:
                 icon_size=icon_size
             )
         
-        # Contenedor responsive con menos padding vertical
+        # Contenedor responsive con padding vertical mínimo
         nav_padding = ft.padding.symmetric(
-            vertical=8 if is_wide_screen else 6,  # Reducido de 14/10 a 8/6
+            vertical=4 if is_wide_screen else 3,  # Reducido aún más: de 8/6 a 4/3
             horizontal=20 if is_wide_screen else 12
         )
         button_spacing = 10 if is_wide_screen else 6
@@ -376,7 +377,7 @@ class HomeView:
             bgcolor=bgcolor,
             border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700)),
             expand=True,
-            margin=ft.margin.only(bottom=4)  # Pequeño margen inferior para acercar a las tareas
+            margin=ft.margin.only(bottom=0)  # Sin margen inferior para acercar más a las tareas
         )
     
     def _build_ui(self):
@@ -411,10 +412,11 @@ class HomeView:
                 vertical_alignment=ft.CrossAxisAlignment.CENTER
             ),
             padding=ft.padding.symmetric(
-                vertical=12 if is_desktop else 10,  # Reducido de 20/16 a 12/10
+                vertical=8 if is_desktop else 6,  # Reducido aún más: de 12/10 a 8/6
                 horizontal=32 if is_desktop else 20
             ),
-            bgcolor=ft.Colors.BLACK87 if self.page.theme_mode == ft.ThemeMode.DARK else ft.Colors.RED_50
+            bgcolor=ft.Colors.BLACK87 if self.page.theme_mode == ft.ThemeMode.DARK else ft.Colors.RED_50,
+            margin=ft.margin.only(bottom=0)  # Sin margen inferior para acercar a los botones
         )
         
         # Crear la barra inferior de navegación
