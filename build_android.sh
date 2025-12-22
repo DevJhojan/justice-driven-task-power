@@ -153,6 +153,11 @@ include_assets() {
         print_success "Assets copiados a build/flutter/assets/"
     fi
     
+    # Copiar google-services.json a assets si existe en la raíz
+    if [ -f "google-services.json" ]; then
+        cp google-services.json build/flutter/assets/ 2>/dev/null && print_success "google-services.json copiado a assets/" || true
+    fi
+    
     # Actualizar pubspec.yaml para incluir assets
     if [ -f "build/flutter/pubspec.yaml" ]; then
         # Usar Python para manipular YAML de forma segura

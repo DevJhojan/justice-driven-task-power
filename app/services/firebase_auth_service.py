@@ -19,6 +19,7 @@ Decisiones técnicas:
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -79,11 +80,33 @@ class FirebaseAuthService:
             self.project_id = None
             return
         
-        # Buscar google-services.json en la raíz del proyecto
-        root_dir = Path(__file__).parent.parent.parent
-        google_services_path = root_dir / 'google-services.json'
+        # Buscar google-services.json en múltiples ubicaciones:
+        # 1. En assets/ (para APK compilado)
+        # 2. En la raíz del proyecto (para desarrollo)
+        # 3. Junto al ejecutable (para distribuciones)
+        possible_paths = []
         
-        if not google_services_path.exists():
+        # Ruta desde el módulo actual hacia assets
+        module_dir = Path(__file__).parent
+        possible_paths.append(module_dir.parent.parent / 'assets' / 'google-services.json')
+        possible_paths.append(module_dir.parent.parent.parent / 'assets' / 'google-services.json')
+        
+        # Ruta en la raíz del proyecto (desarrollo)
+        root_dir = Path(__file__).parent.parent.parent
+        possible_paths.append(root_dir / 'google-services.json')
+        
+        # Ruta junto al ejecutable (distribuciones)
+        if hasattr(sys, '_MEIPASS'):  # PyInstaller
+            possible_paths.append(Path(sys._MEIPASS) / 'google-services.json')
+        
+        # Buscar el archivo en las rutas posibles
+        google_services_path = None
+        for path in possible_paths:
+            if path.exists():
+                google_services_path = path
+                break
+        
+        if not google_services_path:
             # OFFLINE-FIRST: No lanzar excepción, solo marcar como no disponible
             self.api_key = None
             self.auth_domain = None
