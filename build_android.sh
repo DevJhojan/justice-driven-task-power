@@ -261,10 +261,35 @@ replace_icons() {
 build_apk() {
     print_section "Construyendo APK para Android"
     
+    # Verificar que las dependencias están configuradas
+    print_info "Verificando dependencias..."
+    if ! grep -q "requests" pyproject.toml 2>/dev/null && ! grep -q "requests" requirements.txt 2>/dev/null; then
+        print_error "requests no está en pyproject.toml ni en requirements.txt"
+        print_info "Agregando requests a requirements.txt..."
+        echo "requests>=2.31.0" >> requirements.txt
+    fi
+    
+    # Asegurar que requirements.txt existe y tiene las dependencias necesarias
+    if [ ! -f "requirements.txt" ]; then
+        print_warning "requirements.txt no existe. Creándolo desde pyproject.toml..."
+        echo "flet>=0.28.0" > requirements.txt
+        echo "requests>=2.31.0" >> requirements.txt
+    fi
+    
+    # Verificar que pyproject.toml tiene las dependencias correctas
+    if ! grep -q '"requests' pyproject.toml 2>/dev/null; then
+        print_warning "requests no encontrado en pyproject.toml. Flet usará requirements.txt."
+    fi
+    
+    # Mostrar dependencias detectadas
+    print_info "Dependencias detectadas:"
+    grep -E "flet|requests" pyproject.toml requirements.txt 2>/dev/null | head -5
+    
     # Incluir assets antes del build
     include_assets
     
     print_info "Ejecutando: flet build apk"
+    print_info "Flet detectará automáticamente las dependencias de pyproject.toml o requirements.txt"
     flet build apk
     
     # Reemplazar iconos personalizados después del build inicial
@@ -297,10 +322,31 @@ build_apk() {
 build_aab() {
     print_section "Construyendo AAB (Android App Bundle) para Google Play"
     
+    # Verificar que las dependencias están configuradas
+    print_info "Verificando dependencias..."
+    if ! grep -q "requests" pyproject.toml 2>/dev/null && ! grep -q "requests" requirements.txt 2>/dev/null; then
+        print_error "requests no está en pyproject.toml ni en requirements.txt"
+        print_info "Agregando requests a requirements.txt..."
+        echo "requests>=2.31.0" >> requirements.txt
+    fi
+    
+    # Asegurar que requirements.txt existe y tiene las dependencias necesarias
+    if [ ! -f "requirements.txt" ]; then
+        print_warning "requirements.txt no existe. Creándolo desde pyproject.toml..."
+        echo "flet>=0.28.0" > requirements.txt
+        echo "requests>=2.31.0" >> requirements.txt
+    fi
+    
+    # Verificar que pyproject.toml tiene las dependencias correctas
+    if ! grep -q '"requests' pyproject.toml 2>/dev/null; then
+        print_warning "requests no encontrado en pyproject.toml. Flet usará requirements.txt."
+    fi
+    
     # Incluir assets antes del build
     include_assets
     
     print_info "Ejecutando: flet build aab"
+    print_info "Flet detectará automáticamente las dependencias de pyproject.toml o requirements.txt"
     flet build aab
     
     # Reemplazar iconos personalizados después del build inicial
