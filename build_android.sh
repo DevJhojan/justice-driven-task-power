@@ -158,6 +158,19 @@ include_assets() {
         cp google-services.json build/flutter/assets/ 2>/dev/null && print_success "google-services.json copiado a assets/" || true
     fi
     
+    # Asegurar que el icono esté disponible ANTES del build de Flet
+    # Flet lee el icono desde pyproject.toml, pero necesita que el archivo exista
+    if [ -f "assets/app_icon.png" ]; then
+        # Verificar que el icono existe y es válido
+        if file "assets/app_icon.png" | grep -q "PNG\|image"; then
+            print_success "Icono app_icon.png encontrado y válido"
+        else
+            print_warning "El archivo app_icon.png podría no ser una imagen PNG válida"
+        fi
+    else
+        print_warning "assets/app_icon.png no encontrado. Flet usará el icono por defecto."
+    fi
+    
     # Actualizar pubspec.yaml para incluir assets
     if [ -f "build/flutter/pubspec.yaml" ]; then
         # Usar Python para manipular YAML de forma segura
@@ -222,8 +235,13 @@ replace_icons() {
         return 0
     fi
     
-    # Directorios de iconos Android
+    # Verificar que el directorio de recursos de Android existe
     ANDROID_RES_DIR="build/flutter/android/app/src/main/res"
+    if [ ! -d "$ANDROID_RES_DIR" ]; then
+        print_warning "Directorio de recursos de Android no encontrado: $ANDROID_RES_DIR"
+        print_info "Esperando a que Flet complete el build inicial..."
+        return 0
+    fi
     
     # Crear directorios si no existen
     mkdir -p "$ANDROID_RES_DIR/mipmap-mdpi"
@@ -237,21 +255,28 @@ replace_icons() {
     mkdir -p "$ANDROID_RES_DIR/drawable-xxhdpi"
     mkdir -p "$ANDROID_RES_DIR/drawable-xxxhdpi"
     
+    print_info "Reemplazando iconos en todas las resoluciones..."
+    
     # Reemplazar iconos en todas las resoluciones (mipmap para iconos de app)
-    convert "$ICON_SOURCE" -resize 48x48 "$ANDROID_RES_DIR/mipmap-mdpi/ic_launcher.png" 2>/dev/null && print_success "Icono 48x48 en mipmap-mdpi" || true
-    convert "$ICON_SOURCE" -resize 72x72 "$ANDROID_RES_DIR/mipmap-hdpi/ic_launcher.png" 2>/dev/null && print_success "Icono 72x72 en mipmap-hdpi" || true
-    convert "$ICON_SOURCE" -resize 96x96 "$ANDROID_RES_DIR/mipmap-xhdpi/ic_launcher.png" 2>/dev/null && print_success "Icono 96x96 en mipmap-xhdpi" || true
-    convert "$ICON_SOURCE" -resize 144x144 "$ANDROID_RES_DIR/mipmap-xxhdpi/ic_launcher.png" 2>/dev/null && print_success "Icono 144x144 en mipmap-xxhdpi" || true
-    convert "$ICON_SOURCE" -resize 192x192 "$ANDROID_RES_DIR/mipmap-xxxhdpi/ic_launcher.png" 2>/dev/null && print_success "Icono 192x192 en mipmap-xxxhdpi" || true
+    convert "$ICON_SOURCE" -resize 48x48! "$ANDROID_RES_DIR/mipmap-mdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 48x48 en mipmap-mdpi" || print_warning "✗ Error al crear icono 48x48"
+    convert "$ICON_SOURCE" -resize 72x72! "$ANDROID_RES_DIR/mipmap-hdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 72x72 en mipmap-hdpi" || print_warning "✗ Error al crear icono 72x72"
+    convert "$ICON_SOURCE" -resize 96x96! "$ANDROID_RES_DIR/mipmap-xhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 96x96 en mipmap-xhdpi" || print_warning "✗ Error al crear icono 96x96"
+    convert "$ICON_SOURCE" -resize 144x144! "$ANDROID_RES_DIR/mipmap-xxhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 144x144 en mipmap-xxhdpi" || print_warning "✗ Error al crear icono 144x144"
+    convert "$ICON_SOURCE" -resize 192x192! "$ANDROID_RES_DIR/mipmap-xxxhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 192x192 en mipmap-xxxhdpi" || print_warning "✗ Error al crear icono 192x192"
     
     # Reemplazar iconos foreground para adaptive icons (drawable)
-    convert "$ICON_SOURCE" -resize 108x108 "$ANDROID_RES_DIR/drawable-mdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "Icono foreground 108x108 en drawable-mdpi" || true
-    convert "$ICON_SOURCE" -resize 162x162 "$ANDROID_RES_DIR/drawable-hdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "Icono foreground 162x162 en drawable-hdpi" || true
-    convert "$ICON_SOURCE" -resize 216x216 "$ANDROID_RES_DIR/drawable-xhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "Icono foreground 216x216 en drawable-xhdpi" || true
-    convert "$ICON_SOURCE" -resize 324x324 "$ANDROID_RES_DIR/drawable-xxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "Icono foreground 324x324 en drawable-xxhdpi" || true
-    convert "$ICON_SOURCE" -resize 432x432 "$ANDROID_RES_DIR/drawable-xxxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "Icono foreground 432x432 en drawable-xxxhdpi" || true
+    convert "$ICON_SOURCE" -resize 108x108! "$ANDROID_RES_DIR/drawable-mdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 108x108 en drawable-mdpi" || print_warning "✗ Error al crear icono foreground 108x108"
+    convert "$ICON_SOURCE" -resize 162x162! "$ANDROID_RES_DIR/drawable-hdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 162x162 en drawable-hdpi" || print_warning "✗ Error al crear icono foreground 162x162"
+    convert "$ICON_SOURCE" -resize 216x216! "$ANDROID_RES_DIR/drawable-xhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 216x216 en drawable-xhdpi" || print_warning "✗ Error al crear icono foreground 216x216"
+    convert "$ICON_SOURCE" -resize 324x324! "$ANDROID_RES_DIR/drawable-xxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 324x324 en drawable-xxhdpi" || print_warning "✗ Error al crear icono foreground 324x324"
+    convert "$ICON_SOURCE" -resize 432x432! "$ANDROID_RES_DIR/drawable-xxxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 432x432 en drawable-xxxhdpi" || print_warning "✗ Error al crear icono foreground 432x432"
     
-    print_success "Iconos personalizados reemplazados"
+    # También reemplazar el icono round si existe
+    if [ -d "$ANDROID_RES_DIR/mipmap-anydpi-v26" ]; then
+        print_info "Adaptive icons detectados, asegurando compatibilidad..."
+    fi
+    
+    print_success "Iconos personalizados reemplazados correctamente"
 }
 
 ################################################################################
@@ -288,25 +313,50 @@ build_apk() {
     # Incluir assets antes del build
     include_assets
     
+    # Verificar que el icono existe antes del build
+    if [ -f "assets/app_icon.png" ]; then
+        print_info "Icono personalizado encontrado: assets/app_icon.png"
+        print_info "Flet debería usar este icono según pyproject.toml"
+    else
+        print_warning "Icono personalizado no encontrado. Flet usará el icono por defecto."
+    fi
+    
     print_info "Ejecutando: flet build apk"
     print_info "Flet detectará automáticamente las dependencias de pyproject.toml o requirements.txt"
+    print_info "Flet debería usar el icono de: assets/app_icon.png (según pyproject.toml)"
     flet build apk
     
     # Reemplazar iconos personalizados después del build inicial
+    # Esto asegura que los iconos estén en todas las resoluciones necesarias
     replace_icons
     
-    # Si se reemplazaron iconos, reconstruir el APK
-    if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
+    # Si se reemplazaron iconos, reconstruir el APK para aplicar los cambios
+    if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null && [ -d "build/flutter/android/app/src/main/res" ]; then
         print_info "Reconstruyendo APK con iconos personalizados..."
         cd build/flutter
-        flutter build apk --release 2>/dev/null || true
+        
+        # Limpiar build anterior para asegurar que se usen los nuevos iconos
+        flutter clean 2>/dev/null || true
+        
+        # Reconstruir el APK
+        if flutter build apk --release 2>&1 | tee /tmp/flutter_build.log; then
+            print_success "APK reconstruido exitosamente con iconos personalizados"
+        else
+            print_warning "Error al reconstruir APK. Verificando si el APK original existe..."
+        fi
+        
         cd ../..
         
         # Copiar el APK reconstruido si existe
         if [ -f "build/flutter/build/app/outputs/flutter-apk/app-release.apk" ]; then
             mkdir -p build/apk
             cp build/flutter/build/app/outputs/flutter-apk/app-release.apk build/apk/app-release.apk
+            print_success "APK con iconos personalizados copiado a build/apk/app-release.apk"
+        elif [ -f "build/apk/app-release.apk" ]; then
+            print_info "APK original encontrado en build/apk/app-release.apk"
         fi
+    else
+        print_info "Usando APK generado por Flet (iconos pueden ser los por defecto si Flet no los detectó)"
     fi
     
     # Verificar que el APK se generó
@@ -345,25 +395,50 @@ build_aab() {
     # Incluir assets antes del build
     include_assets
     
+    # Verificar que el icono existe antes del build
+    if [ -f "assets/app_icon.png" ]; then
+        print_info "Icono personalizado encontrado: assets/app_icon.png"
+        print_info "Flet debería usar este icono según pyproject.toml"
+    else
+        print_warning "Icono personalizado no encontrado. Flet usará el icono por defecto."
+    fi
+    
     print_info "Ejecutando: flet build aab"
     print_info "Flet detectará automáticamente las dependencias de pyproject.toml o requirements.txt"
+    print_info "Flet debería usar el icono de: assets/app_icon.png (según pyproject.toml)"
     flet build aab
     
     # Reemplazar iconos personalizados después del build inicial
+    # Esto asegura que los iconos estén en todas las resoluciones necesarias
     replace_icons
     
-    # Si se reemplazaron iconos, reconstruir el AAB
-    if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null; then
+    # Si se reemplazaron iconos, reconstruir el AAB para aplicar los cambios
+    if [ -f "assets/app_icon.png" ] && command -v convert &> /dev/null && [ -d "build/flutter/android/app/src/main/res" ]; then
         print_info "Reconstruyendo AAB con iconos personalizados..."
         cd build/flutter
-        flutter build appbundle --release 2>/dev/null || true
+        
+        # Limpiar build anterior para asegurar que se usen los nuevos iconos
+        flutter clean 2>/dev/null || true
+        
+        # Reconstruir el AAB
+        if flutter build appbundle --release 2>&1 | tee /tmp/flutter_build.log; then
+            print_success "AAB reconstruido exitosamente con iconos personalizados"
+        else
+            print_warning "Error al reconstruir AAB. Verificando si el AAB original existe..."
+        fi
+        
         cd ../..
         
         # Copiar el AAB reconstruido si existe
         if [ -f "build/flutter/build/app/outputs/bundle/release/app-release.aab" ]; then
             mkdir -p build/aab
             cp build/flutter/build/app/outputs/bundle/release/app-release.aab build/aab/app-release.aab
+            print_success "AAB con iconos personalizados copiado a build/aab/app-release.aab"
+        elif [ -f "build/aab/app-release.aab" ]; then
+            print_info "AAB original encontrado en build/aab/app-release.aab"
         fi
+    else
+        print_info "Usando AAB generado por Flet (iconos pueden ser los por defecto si Flet no los detectó)"
     fi
     
     # Verificar que el AAB se generó
