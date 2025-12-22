@@ -333,16 +333,40 @@ class HomeView:
             )
             buttons.append(button)
         
-        # Contenedor responsive
+        # Botón de agregar tarea - solo mostrar en la sección de tareas
+        add_button = None
+        if self.current_section == "tasks":
+            scheme = self.page.theme.color_scheme if self.page.theme else None
+            title_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_400
+            button_size = 40 if is_wide_screen else 36
+            icon_size = 20 if is_wide_screen else 18
+            
+            add_button = ft.IconButton(
+                icon=ft.Icons.ADD,
+                on_click=self._show_new_task_form,
+                bgcolor=title_color,
+                icon_color=ft.Colors.WHITE,
+                tooltip="Nueva Tarea",
+                width=button_size,
+                height=button_size,
+                icon_size=icon_size
+            )
+        
+        # Contenedor responsive con menos padding vertical
         nav_padding = ft.padding.symmetric(
-            vertical=14 if is_wide_screen else 10,
+            vertical=8 if is_wide_screen else 6,  # Reducido de 14/10 a 8/6
             horizontal=20 if is_wide_screen else 12
         )
         button_spacing = 10 if is_wide_screen else 6
         
+        # Crear Row con botones de prioridad y botón de agregar
+        row_controls = buttons.copy()
+        if add_button:
+            row_controls.append(add_button)
+        
         return ft.Container(
             content=ft.Row(
-                buttons,
+                row_controls,
                 spacing=button_spacing,
                 scroll=ft.ScrollMode.AUTO if not is_wide_screen else ft.ScrollMode.HIDDEN,
                 wrap=False,
@@ -351,7 +375,8 @@ class HomeView:
             padding=nav_padding,
             bgcolor=bgcolor,
             border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700)),
-            expand=True
+            expand=True,
+            margin=ft.margin.only(bottom=4)  # Pequeño margen inferior para acercar a las tareas
         )
     
     def _build_ui(self):
@@ -380,22 +405,15 @@ class HomeView:
                         weight=ft.FontWeight.BOLD,
                         color=title_color,
                         expand=True
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.ADD,
-                        on_click=self._show_new_task_form,
-                        bgcolor=title_color,
-                        icon_color=ft.Colors.WHITE,
-                        tooltip="Nueva Tarea",
-                        width=button_size,
-                        height=button_size,
-                        icon_size=24 if is_desktop else 20
                     )
                 ],
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                alignment=ft.MainAxisAlignment.START,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER
             ),
-            padding=title_padding,
+            padding=ft.padding.symmetric(
+                vertical=12 if is_desktop else 10,  # Reducido de 20/16 a 12/10
+                horizontal=32 if is_desktop else 20
+            ),
             bgcolor=ft.Colors.BLACK87 if self.page.theme_mode == ft.ThemeMode.DARK else ft.Colors.RED_50
         )
         
@@ -424,11 +442,12 @@ class HomeView:
         )
         main_scroll_content = self.main_scroll_listview
         
-        # Padding responsive para el contenedor principal
+        # Padding responsive para el contenedor principal - reducido
         main_padding = ft.padding.only(
             bottom=24 if is_desktop else 16,
             left=0,
-            right=0
+            right=0,
+            top=0  # Sin padding superior para acercar a los botones de prioridad
         )
         
         # Detectar ancho de pantalla para layout adaptable
@@ -464,14 +483,14 @@ class HomeView:
                 width=None  # Sin ancho fijo para que se adapte
             )
         
-        # Vista principal
+        # Vista principal - sin spacing para acercar elementos
         main_view = ft.Container(
             content=ft.Column(
                 [
                     priority_nav,
                     self.main_scroll_container
                 ],
-                spacing=0,
+                spacing=0,  # Sin spacing entre navegación y contenido
                 expand=True
             ),
             expand=True
