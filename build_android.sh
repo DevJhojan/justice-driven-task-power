@@ -254,29 +254,39 @@ replace_icons() {
     mkdir -p "$ANDROID_RES_DIR/drawable-xhdpi"
     mkdir -p "$ANDROID_RES_DIR/drawable-xxhdpi"
     mkdir -p "$ANDROID_RES_DIR/drawable-xxxhdpi"
+    mkdir -p "$ANDROID_RES_DIR/mipmap-anydpi-v26"
     
     print_info "Reemplazando iconos en todas las resoluciones..."
     
     # Reemplazar iconos en todas las resoluciones (mipmap para iconos de app)
-    convert "$ICON_SOURCE" -resize 48x48! "$ANDROID_RES_DIR/mipmap-mdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 48x48 en mipmap-mdpi" || print_warning "✗ Error al crear icono 48x48"
-    convert "$ICON_SOURCE" -resize 72x72! "$ANDROID_RES_DIR/mipmap-hdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 72x72 en mipmap-hdpi" || print_warning "✗ Error al crear icono 72x72"
-    convert "$ICON_SOURCE" -resize 96x96! "$ANDROID_RES_DIR/mipmap-xhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 96x96 en mipmap-xhdpi" || print_warning "✗ Error al crear icono 96x96"
-    convert "$ICON_SOURCE" -resize 144x144! "$ANDROID_RES_DIR/mipmap-xxhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 144x144 en mipmap-xxhdpi" || print_warning "✗ Error al crear icono 144x144"
-    convert "$ICON_SOURCE" -resize 192x192! "$ANDROID_RES_DIR/mipmap-xxxhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 192x192 en mipmap-xxxhdpi" || print_warning "✗ Error al crear icono 192x192"
+    # Usar -quality 100 para mantener la mejor calidad posible
+    convert "$ICON_SOURCE" -resize 48x48! -quality 100 "$ANDROID_RES_DIR/mipmap-mdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 48x48 en mipmap-mdpi" || print_warning "✗ Error al crear icono 48x48"
+    convert "$ICON_SOURCE" -resize 72x72! -quality 100 "$ANDROID_RES_DIR/mipmap-hdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 72x72 en mipmap-hdpi" || print_warning "✗ Error al crear icono 72x72"
+    convert "$ICON_SOURCE" -resize 96x96! -quality 100 "$ANDROID_RES_DIR/mipmap-xhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 96x96 en mipmap-xhdpi" || print_warning "✗ Error al crear icono 96x96"
+    convert "$ICON_SOURCE" -resize 144x144! -quality 100 "$ANDROID_RES_DIR/mipmap-xxhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 144x144 en mipmap-xxhdpi" || print_warning "✗ Error al crear icono 144x144"
+    convert "$ICON_SOURCE" -resize 192x192! -quality 100 "$ANDROID_RES_DIR/mipmap-xxxhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 192x192 en mipmap-xxxhdpi" || print_warning "✗ Error al crear icono 192x192"
     
     # Reemplazar iconos foreground para adaptive icons (drawable)
-    convert "$ICON_SOURCE" -resize 108x108! "$ANDROID_RES_DIR/drawable-mdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 108x108 en drawable-mdpi" || print_warning "✗ Error al crear icono foreground 108x108"
-    convert "$ICON_SOURCE" -resize 162x162! "$ANDROID_RES_DIR/drawable-hdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 162x162 en drawable-hdpi" || print_warning "✗ Error al crear icono foreground 162x162"
-    convert "$ICON_SOURCE" -resize 216x216! "$ANDROID_RES_DIR/drawable-xhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 216x216 en drawable-xhdpi" || print_warning "✗ Error al crear icono foreground 216x216"
-    convert "$ICON_SOURCE" -resize 324x324! "$ANDROID_RES_DIR/drawable-xxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 324x324 en drawable-xxhdpi" || print_warning "✗ Error al crear icono foreground 324x324"
-    convert "$ICON_SOURCE" -resize 432x432! "$ANDROID_RES_DIR/drawable-xxxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 432x432 en drawable-xxxhdpi" || print_warning "✗ Error al crear icono foreground 432x432"
+    # Los tamaños son más grandes porque se usan con inset del 16%
+    convert "$ICON_SOURCE" -resize 108x108! -quality 100 "$ANDROID_RES_DIR/drawable-mdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 108x108 en drawable-mdpi" || print_warning "✗ Error al crear icono foreground 108x108"
+    convert "$ICON_SOURCE" -resize 162x162! -quality 100 "$ANDROID_RES_DIR/drawable-hdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 162x162 en drawable-hdpi" || print_warning "✗ Error al crear icono foreground 162x162"
+    convert "$ICON_SOURCE" -resize 216x216! -quality 100 "$ANDROID_RES_DIR/drawable-xhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 216x216 en drawable-xhdpi" || print_warning "✗ Error al crear icono foreground 216x216"
+    convert "$ICON_SOURCE" -resize 324x324! -quality 100 "$ANDROID_RES_DIR/drawable-xxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 324x324 en drawable-xxhdpi" || print_warning "✗ Error al crear icono foreground 324x324"
+    convert "$ICON_SOURCE" -resize 432x432! -quality 100 "$ANDROID_RES_DIR/drawable-xxxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 432x432 en drawable-xxxhdpi" || print_warning "✗ Error al crear icono foreground 432x432"
     
-    # También reemplazar el icono round si existe
-    if [ -d "$ANDROID_RES_DIR/mipmap-anydpi-v26" ]; then
-        print_info "Adaptive icons detectados, asegurando compatibilidad..."
+    # Verificar que los iconos se crearon correctamente
+    local icon_count=0
+    for icon_file in "$ANDROID_RES_DIR"/mipmap-*/ic_launcher.png "$ANDROID_RES_DIR"/drawable-*/ic_launcher_foreground.png; do
+        if [ -f "$icon_file" ]; then
+            icon_count=$((icon_count + 1))
+        fi
+    done
+    
+    if [ $icon_count -ge 5 ]; then
+        print_success "Iconos personalizados reemplazados correctamente ($icon_count archivos creados)"
+    else
+        print_warning "Solo se crearon $icon_count iconos. Puede haber un problema."
     fi
-    
-    print_success "Iconos personalizados reemplazados correctamente"
 }
 
 ################################################################################
@@ -530,9 +540,32 @@ build_apk() {
     print_info "Flet detectará automáticamente las dependencias de pyproject.toml o requirements.txt"
     print_info "Flet debería usar el icono de: assets/app_icon.png (según pyproject.toml)"
     
+    # Configurar SERIOUS_PYTHON_SITE_PACKAGES para serious_python_android
+    print_info "Configurando SERIOUS_PYTHON_SITE_PACKAGES..."
+    if [ -z "$SERIOUS_PYTHON_SITE_PACKAGES" ]; then
+        # Detectar automáticamente la ubicación de site-packages
+        SERIOUS_PYTHON_SITE_PACKAGES=$(python3 -c "import site; pkgs = site.getsitepackages(); print(pkgs[0] if pkgs else site.getusersitepackages())" 2>/dev/null)
+        if [ -z "$SERIOUS_PYTHON_SITE_PACKAGES" ]; then
+            # Fallback: usar ubicación común
+            SERIOUS_PYTHON_SITE_PACKAGES="/usr/local/lib/python3.12/dist-packages"
+        fi
+        export SERIOUS_PYTHON_SITE_PACKAGES
+        print_success "SERIOUS_PYTHON_SITE_PACKAGES configurado: $SERIOUS_PYTHON_SITE_PACKAGES"
+    else
+        print_info "SERIOUS_PYTHON_SITE_PACKAGES ya está configurado: $SERIOUS_PYTHON_SITE_PACKAGES"
+    fi
+    
     # Activar venv si existe antes de ejecutar flet
     if activate_venv; then
         print_info "Entorno virtual activado"
+        # Si estamos en un venv, actualizar SERIOUS_PYTHON_SITE_PACKAGES
+        if [ -n "$VIRTUAL_ENV" ]; then
+            VENV_SITE_PACKAGES="$VIRTUAL_ENV/lib/python3.12/site-packages"
+            if [ -d "$VENV_SITE_PACKAGES" ]; then
+                export SERIOUS_PYTHON_SITE_PACKAGES="$VENV_SITE_PACKAGES"
+                print_info "SERIOUS_PYTHON_SITE_PACKAGES actualizado para venv: $SERIOUS_PYTHON_SITE_PACKAGES"
+            fi
+        fi
     fi
     
     # Construir comando flet build apk con parámetros de firma si están disponibles
@@ -601,16 +634,53 @@ build_apk() {
     fi
     print_success "Configuración de firma de release verificada"
     
-    # Reemplazar iconos personalizados después del build inicial
-    # Esto asegura que los iconos estén en todas las resoluciones necesarias
-    replace_icons
-    
     # Reconstruir el APK con Flutter para asegurar firma de release
     print_info "Construyendo APK con firma de release (estándares de Google Play)..."
     cd build/flutter
     
     # Limpiar build anterior para asegurar que se use la configuración correcta
     flutter clean 2>/dev/null || true
+    
+    # Reemplazar iconos personalizados DESPUÉS del clean y ANTES del build
+    # Esto asegura que los iconos personalizados se incluyan en el APK final
+    cd ../..
+    print_info "Reemplazando iconos personalizados antes del build final..."
+    replace_icons
+    
+    # Verificar que los iconos se reemplazaron correctamente
+    if [ -f "build/flutter/android/app/src/main/res/mipmap-mdpi/ic_launcher.png" ]; then
+        print_success "Iconos personalizados verificados y listos para el build"
+        # Verificar que el icono es diferente del de Flet comparando tamaños
+        local icon_size=$(stat -c%s "build/flutter/android/app/src/main/res/mipmap-mdpi/ic_launcher.png" 2>/dev/null || echo "0")
+        if [ "$icon_size" -gt 1000 ]; then
+            print_success "Icono personalizado verificado (tamaño: ${icon_size} bytes)"
+        fi
+    else
+        print_warning "Los iconos personalizados no se encontraron. El APK usará los iconos de Flet."
+    fi
+    
+    cd build/flutter
+    
+    # Configurar SERIOUS_PYTHON_SITE_PACKAGES para serious_python_android
+    print_info "Configurando SERIOUS_PYTHON_SITE_PACKAGES..."
+    if [ -z "$SERIOUS_PYTHON_SITE_PACKAGES" ]; then
+        # Detectar automáticamente la ubicación de site-packages
+        SERIOUS_PYTHON_SITE_PACKAGES=$(python3 -c "import site; pkgs = site.getsitepackages(); print(pkgs[0] if pkgs else site.getusersitepackages())" 2>/dev/null)
+        if [ -z "$SERIOUS_PYTHON_SITE_PACKAGES" ]; then
+            # Fallback: usar ubicación común
+            SERIOUS_PYTHON_SITE_PACKAGES="/usr/local/lib/python3.12/dist-packages"
+        fi
+        export SERIOUS_PYTHON_SITE_PACKAGES
+        print_success "SERIOUS_PYTHON_SITE_PACKAGES configurado: $SERIOUS_PYTHON_SITE_PACKAGES"
+    else
+        print_info "SERIOUS_PYTHON_SITE_PACKAGES ya está configurado: $SERIOUS_PYTHON_SITE_PACKAGES"
+    fi
+    
+    # Asegurar que los iconos personalizados estén presentes ANTES del build
+    cd ../..
+    print_info "Verificando iconos personalizados antes del build final..."
+    replace_icons
+    cd build/flutter
     
     # Reconstruir el APK con firma de release (--release es crítico)
     print_info "Ejecutando: flutter build apk --release"
@@ -648,12 +718,30 @@ build_apk() {
     
     cd ../..
     
+    # Verificar que los iconos personalizados siguen presentes después del build
+    if [ -f "build/flutter/android/app/src/main/res/mipmap-mdpi/ic_launcher.png" ]; then
+        print_success "Iconos personalizados verificados después del build"
+    else
+        print_warning "Los iconos personalizados no se encontraron después del build. Reemplazando nuevamente..."
+        replace_icons
+    fi
+    
     # Verificar y copiar el APK reconstruido con firma de release
     local apk_path="build/flutter/build/app/outputs/flutter-apk/app-release.apk"
     if [ -f "$apk_path" ]; then
         mkdir -p build/apk
         cp "$apk_path" build/apk/app-release.apk
         print_success "APK con firma de release copiado a build/apk/app-release.apk"
+        
+        # Verificar que el APK contiene los iconos personalizados
+        print_info "Verificando iconos en el APK..."
+        if command -v unzip &> /dev/null; then
+            if unzip -l "$apk_path" 2>/dev/null | grep -q "res/mipmap.*/ic_launcher.png"; then
+                print_success "Iconos encontrados en el APK"
+            else
+                print_warning "No se encontraron iconos en el APK. Puede ser un problema de empaquetado."
+            fi
+        fi
         
         # Verificar la firma del APK
         verify_release_signing "build/apk/app-release.apk" "apk"
@@ -719,9 +807,32 @@ build_aab() {
     print_info "Flet detectará automáticamente las dependencias de pyproject.toml o requirements.txt"
     print_info "Flet debería usar el icono de: assets/app_icon.png (según pyproject.toml)"
     
+    # Configurar SERIOUS_PYTHON_SITE_PACKAGES para serious_python_android
+    print_info "Configurando SERIOUS_PYTHON_SITE_PACKAGES..."
+    if [ -z "$SERIOUS_PYTHON_SITE_PACKAGES" ]; then
+        # Detectar automáticamente la ubicación de site-packages
+        SERIOUS_PYTHON_SITE_PACKAGES=$(python3 -c "import site; pkgs = site.getsitepackages(); print(pkgs[0] if pkgs else site.getusersitepackages())" 2>/dev/null)
+        if [ -z "$SERIOUS_PYTHON_SITE_PACKAGES" ]; then
+            # Fallback: usar ubicación común
+            SERIOUS_PYTHON_SITE_PACKAGES="/usr/local/lib/python3.12/dist-packages"
+        fi
+        export SERIOUS_PYTHON_SITE_PACKAGES
+        print_success "SERIOUS_PYTHON_SITE_PACKAGES configurado: $SERIOUS_PYTHON_SITE_PACKAGES"
+    else
+        print_info "SERIOUS_PYTHON_SITE_PACKAGES ya está configurado: $SERIOUS_PYTHON_SITE_PACKAGES"
+    fi
+    
     # Activar venv si existe antes de ejecutar flet
     if activate_venv; then
         print_info "Entorno virtual activado"
+        # Si estamos en un venv, actualizar SERIOUS_PYTHON_SITE_PACKAGES
+        if [ -n "$VIRTUAL_ENV" ]; then
+            VENV_SITE_PACKAGES="$VIRTUAL_ENV/lib/python3.12/site-packages"
+            if [ -d "$VENV_SITE_PACKAGES" ]; then
+                export SERIOUS_PYTHON_SITE_PACKAGES="$VENV_SITE_PACKAGES"
+                print_info "SERIOUS_PYTHON_SITE_PACKAGES actualizado para venv: $SERIOUS_PYTHON_SITE_PACKAGES"
+            fi
+        fi
     fi
     
     # Construir comando flet build aab con parámetros de firma si están disponibles
@@ -790,16 +901,42 @@ build_aab() {
     fi
     print_success "Configuración de firma de release verificada"
     
-    # Reemplazar iconos personalizados después del build inicial
-    # Esto asegura que los iconos estén en todas las resoluciones necesarias
-    replace_icons
-    
     # Reconstruir el AAB con Flutter para asegurar firma de release
     print_info "Construyendo AAB con firma de release (estándares de Google Play)..."
     cd build/flutter
     
     # Limpiar build anterior para asegurar que se use la configuración correcta
     flutter clean 2>/dev/null || true
+    
+    # Reemplazar iconos personalizados DESPUÉS del clean y ANTES del build
+    # Esto asegura que los iconos personalizados se incluyan en el AAB final
+    cd ../..
+    print_info "Reemplazando iconos personalizados antes del build final..."
+    replace_icons
+    
+    # Verificar que los iconos se reemplazaron correctamente
+    if [ -f "build/flutter/android/app/src/main/res/mipmap-mdpi/ic_launcher.png" ]; then
+        print_success "Iconos personalizados verificados y listos para el build"
+    else
+        print_warning "Los iconos personalizados no se encontraron. El AAB usará los iconos de Flet."
+    fi
+    
+    cd build/flutter
+    
+    # Configurar SERIOUS_PYTHON_SITE_PACKAGES para serious_python_android
+    print_info "Configurando SERIOUS_PYTHON_SITE_PACKAGES..."
+    if [ -z "$SERIOUS_PYTHON_SITE_PACKAGES" ]; then
+        # Detectar automáticamente la ubicación de site-packages
+        SERIOUS_PYTHON_SITE_PACKAGES=$(python3 -c "import site; pkgs = site.getsitepackages(); print(pkgs[0] if pkgs else site.getusersitepackages())" 2>/dev/null)
+        if [ -z "$SERIOUS_PYTHON_SITE_PACKAGES" ]; then
+            # Fallback: usar ubicación común
+            SERIOUS_PYTHON_SITE_PACKAGES="/usr/local/lib/python3.12/dist-packages"
+        fi
+        export SERIOUS_PYTHON_SITE_PACKAGES
+        print_success "SERIOUS_PYTHON_SITE_PACKAGES configurado: $SERIOUS_PYTHON_SITE_PACKAGES"
+    else
+        print_info "SERIOUS_PYTHON_SITE_PACKAGES ya está configurado: $SERIOUS_PYTHON_SITE_PACKAGES"
+    fi
     
     # Reconstruir el AAB con firma de release (--release es crítico)
     print_info "Ejecutando: flutter build appbundle --release"
