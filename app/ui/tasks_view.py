@@ -518,20 +518,20 @@ class TasksView:
     
     def _rebuild_priority_section(self, priority: str):
         """Reconstruye una sección de prioridad específica."""
-        # Encontrar el contenedor principal y reemplazar la sección
-        if self.main_scroll_container and self.main_scroll_container.content:
-            main_column = self.main_scroll_container.content
-            if isinstance(main_column, ft.Column):
-                # Encontrar el índice de la sección
-                priorities_order = ['urgent_important', 'not_urgent_important', 'urgent_not_important', 'not_urgent_not_important']
-                try:
-                    index = priorities_order.index(priority)
-                    # Reconstruir la sección
-                    new_section = self._build_priority_section(priority)
-                    main_column.controls[index] = new_section
+        # Encontrar el ListView principal y reemplazar la sección
+        if self.main_scroll_listview:
+            # Encontrar el índice de la sección
+            priorities_order = ['urgent_important', 'not_urgent_important', 'urgent_not_important', 'not_urgent_not_important']
+            try:
+                index = priorities_order.index(priority)
+                # Reconstruir la sección
+                new_section = self._build_priority_section(priority)
+                # Reemplazar en el ListView
+                if index < len(self.main_scroll_listview.controls):
+                    self.main_scroll_listview.controls[index] = new_section
                     self.priority_section_refs[priority] = new_section
-                except ValueError:
-                    pass
+            except (ValueError, IndexError):
+                pass
         
         # Actualizar barra de navegación
         self._update_priority_navigation()
