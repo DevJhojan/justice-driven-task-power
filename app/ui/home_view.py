@@ -29,6 +29,7 @@ from app.ui.widgets import (
 )
 from app.ui.task_form import TaskForm
 from app.ui.habit_form import HabitForm
+from app.ui.tasks_view import TasksView
 
 
 class HomeView:
@@ -60,33 +61,18 @@ class HomeView:
             self.firebase_sync_service = None
             print(f"Error al inicializar Firebase: {e}")
         
-        # Filtros por sección de prioridad: {priority: filter_value}
-        self.priority_filters = {
-            'urgent_important': None,  # None=all, True=completed, False=pending
-            'not_urgent_important': None,
-            'urgent_not_important': None,
-            'not_urgent_not_important': None
-        }
-        self.current_priority_section = 'urgent_important'  # Prioridad activa visible
+        # Inicializar vista de tareas como módulo separado
+        self.tasks_view = TasksView(
+            page=page,
+            task_service=self.task_service,
+            on_go_back=self._go_back
+        )
+        
         self.current_habit_filter: Optional[bool] = None  # None=all, True=active, False=inactive
-        self.editing_task: Optional[Task] = None
-        self.editing_subtask_task_id: Optional[int] = None
-        self.editing_subtask = None
         self.editing_habit: Optional[Habit] = None
         # Secciones: "tasks", "habits", "settings"
         self.current_section = "tasks"
         
-        # Contenedores principales para cada prioridad - responsive
-        # En escritorio, las tarjetas se mostrarán en grid; en móvil en columna
-        self.priority_containers = {
-            'urgent_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO),
-            'not_urgent_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO),
-            'urgent_not_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO),
-            'not_urgent_not_important': ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO)
-        }
-        self.priority_section_refs = {}  # Referencias a los contenedores de sección para scroll
-        self.main_scroll_container = None  # Contenedor principal con scroll
-        self.main_scroll_listview = None  # Referencia directa al ListView para scroll programático
         self.habits_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
         self.stats_card = None
         self.habit_stats_card = None
@@ -111,44 +97,91 @@ class HomeView:
         self.page.update()
 
         self._build_ui()
-        self._load_tasks()
+        self.tasks_view.load_tasks()
+    
+    # ==================== MÉTODOS DE TAREAS (delegados a TasksView) ====================
     
     def _get_priority_colors(self, priority: str) -> dict:
-        """Obtiene los colores para una prioridad específica."""
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        colors = {
-            'urgent_important': {
-                'primary': ft.Colors.RED_600,
-                'light': ft.Colors.RED_50 if not is_dark else ft.Colors.RED_900,
-                'bg': ft.Colors.RED_100 if not is_dark else ft.Colors.RED_900,
-                'text': '🔴 Urgente e Importante'
-            },
-            'not_urgent_important': {
-                'primary': ft.Colors.GREEN_600,
-                'light': ft.Colors.GREEN_50 if not is_dark else ft.Colors.GREEN_900,
-                'bg': ft.Colors.GREEN_100 if not is_dark else ft.Colors.GREEN_900,
-                'text': '🟢 No Urgente e Importante'
-            },
-            'urgent_not_important': {
-                'primary': ft.Colors.ORANGE_600,
-                'light': ft.Colors.ORANGE_50 if not is_dark else ft.Colors.ORANGE_900,
-                'bg': ft.Colors.ORANGE_100 if not is_dark else ft.Colors.ORANGE_900,
-                'text': '🟡 Urgente y No Importante'
-            },
-            'not_urgent_not_important': {
-                'primary': ft.Colors.GREY_500,
-                'light': ft.Colors.GREY_50 if not is_dark else ft.Colors.GREY_800,
-                'bg': ft.Colors.GREY_100 if not is_dark else ft.Colors.GREY_800,
-                'text': '⚪ No Urgente y No Importante'
-            }
-        }
-        return colors.get(priority, colors['not_urgent_important'])
+        """Delega a TasksView."""
+        return self.tasks_view._get_priority_colors(priority)
     
     def _build_priority_section(self, priority: str) -> ft.Container:
+        """Delega a TasksView."""
+        return self.tasks_view._build_priority_section(priority)
+    
+    def _build_priority_navigation_bar(self) -> ft.Container:
+        """Delega a TasksView."""
+        return self.tasks_view._build_priority_navigation_bar()
+    
+    def _load_tasks(self):
+        """Delega a TasksView."""
+        return self.tasks_view.load_tasks()
+    
+    def _filter_priority_tasks(self, priority: str, filter_completed: Optional[bool]):
+        """Delega a TasksView."""
+        return self.tasks_view._filter_priority_tasks(priority, filter_completed)
+    
+    def _rebuild_priority_section(self, priority: str):
+        """Delega a TasksView."""
+        return self.tasks_view._rebuild_priority_section(priority)
+    
+    def _update_priority_navigation(self):
+        """Delega a TasksView."""
+        return self.tasks_view._update_priority_navigation()
+    
+    def _scroll_to_priority(self, priority: str):
+        """Delega a TasksView."""
+        return self.tasks_view._scroll_to_priority(priority)
+    
+    def _show_new_task_form(self, e):
+        """Delega a TasksView."""
+        return self.tasks_view._show_new_task_form(e)
+    
+    def _edit_task(self, task: Task):
+        """Delega a TasksView."""
+        return self.tasks_view._edit_task(task)
+    
+    def _navigate_to_form_view(self):
+        """Delega a TasksView."""
+        return self.tasks_view._navigate_to_form_view()
+    
+    def _save_task(self, *args):
+        """Delega a TasksView."""
+        return self.tasks_view._save_task(*args)
+    
+    def _toggle_task(self, task_id: int):
+        """Delega a TasksView."""
+        return self.tasks_view._toggle_task(task_id)
+    
+    def _delete_task(self, task_id: int):
+        """Delega a TasksView."""
+        return self.tasks_view._delete_task(task_id)
+    
+    def _toggle_subtask(self, subtask_id: int):
+        """Delega a TasksView."""
+        return self.tasks_view._toggle_subtask(subtask_id)
+    
+    def _delete_subtask(self, subtask_id: int):
+        """Delega a TasksView."""
+        return self.tasks_view._delete_subtask(subtask_id)
+    
+    def _show_add_subtask_dialog(self, task_id: int):
+        """Delega a TasksView."""
+        return self.tasks_view._show_add_subtask_dialog(task_id)
+    
+    def _edit_subtask(self, subtask):
+        """Delega a TasksView."""
+        return self.tasks_view._edit_subtask(subtask)
+    
+    def _navigate_to_subtask_form_view(self):
+        """Delega a TasksView."""
+        return self.tasks_view._navigate_to_subtask_form_view()
+    
+    # ==================== MÉTODOS DE HÁBITOS ====================
         """Construye una sección de prioridad con su filtro y tareas."""
         colors = self._get_priority_colors(priority)
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        current_filter = self.priority_filters[priority]
+        current_filter = self.tasks_view.priority_filters[priority]
         
         # Detectar si es escritorio o móvil
         is_desktop = self.page.platform == ft.PagePlatform.WINDOWS or self.page.platform == ft.PagePlatform.LINUX or self.page.platform == ft.PagePlatform.MACOS
@@ -425,81 +458,16 @@ class HomeView:
         # Crear la barra inferior de navegación
         self._build_bottom_bar()
         
-        # Barra de navegación de prioridades
-        priority_nav = self._build_priority_navigation_bar()
-        
-        # Construir las 4 secciones de prioridad
-        priority_sections = [
-            self._build_priority_section('urgent_important'),
-            self._build_priority_section('not_urgent_important'),
-            self._build_priority_section('urgent_not_important'),
-            self._build_priority_section('not_urgent_not_important')
-        ]
-        
-        # Contenedor principal con scroll - responsive
-        section_spacing = 24 if is_desktop else 16
-        # Usar ListView para mejor soporte de scroll programático
-        self.main_scroll_listview = ft.ListView(
-            priority_sections,
-            spacing=section_spacing,
-            expand=True,
-            padding=0
-        )
-        main_scroll_content = self.main_scroll_listview
-        
-        # Padding responsive para el contenedor principal - reducido
-        main_padding = ft.padding.only(
-            bottom=24 if is_desktop else 16,
-            left=0,
-            right=0,
-            top=0  # Sin padding superior para acercar a los botones de prioridad
-        )
-        
-        # Detectar ancho de pantalla para layout adaptable
-        try:
-            screen_width = self.page.width if (hasattr(self.page, 'width') and self.page.width is not None and isinstance(self.page.width, (int, float))) else 1024
-        except (AttributeError, TypeError):
-            screen_width = 1024
-        
-        # En escritorio con pantalla grande, centrar con ancho máximo; en pantallas pequeñas, usar todo el ancho
-        if is_desktop and isinstance(screen_width, (int, float)) and screen_width > 1200:
-            self.main_scroll_container = ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Container(width=0, expand=True),  # Espaciador izquierdo
-                        ft.Container(
-                            content=main_scroll_content,
-                            width=1200,  # Ancho máximo para legibilidad en pantallas grandes
-                            expand=False
-                        ),
-                        ft.Container(width=0, expand=True)  # Espaciador derecho
-                    ],
-                    alignment=ft.MainAxisAlignment.CENTER
-                ),
-                padding=main_padding,
-                expand=True
-            )
+        # Construir la vista según la sección actual
+        if self.current_section == "tasks":
+            # Usar TasksView para construir la vista de tareas
+            main_view = self.tasks_view.build_ui()
+        elif self.current_section == "habits":
+            # Vista de hábitos (se construirá en _build_habits_view)
+            main_view = ft.Container(content=ft.Text("Cargando hábitos..."), expand=True)
         else:
-            # En pantallas pequeñas o medianas, usar todo el ancho disponible
-            self.main_scroll_container = ft.Container(
-                content=main_scroll_content,
-                padding=main_padding,
-                expand=True,
-                width=None  # Sin ancho fijo para que se adapte
-            )
-        
-        # Vista principal - sin spacing para acercar elementos
-        main_view = ft.Container(
-            content=ft.Column(
-                [
-                    priority_nav,
-                    self.main_scroll_container
-                ],
-                spacing=0,  # Sin spacing entre navegación y contenido
-                expand=True
-            ),
-            expand=True
-        )
+            # Vista de configuración (se construirá en _build_settings_view)
+            main_view = ft.Container(content=ft.Text("Cargando configuración..."), expand=True)
         
         # Guardar referencia a la vista principal
         self.home_view = ft.View(
@@ -641,7 +609,7 @@ class HomeView:
         if section == "tasks":
             # Mostrar la vista de tareas
             self._build_ui()
-            self._load_tasks()
+            self.tasks_view.load_tasks()
         elif section == "habits":
             # Mostrar la vista de hábitos
             self._build_habits_view()
@@ -2075,349 +2043,6 @@ class HomeView:
         self.page.go("/storage-permissions")
         self.page.update()
     
-    def _load_tasks(self):
-        """Carga las tareas desde la base de datos y las distribuye por prioridad."""
-        # Cargar todas las tareas sin filtro global
-        all_tasks = self.task_service.get_all_tasks(None)
-        
-        # Limpiar todos los contenedores de prioridad
-        for priority in self.priority_containers:
-            self.priority_containers[priority].controls.clear()
-        
-        # Distribuir tareas por prioridad y aplicar filtro de cada sección
-        for priority in ['urgent_important', 'not_urgent_important', 'urgent_not_important', 'not_urgent_not_important']:
-            container = self.priority_containers[priority]
-            filter_value = self.priority_filters[priority]
-            
-            # Filtrar tareas de esta prioridad
-            priority_tasks = [t for t in all_tasks if t.priority == priority]
-            
-            # Aplicar filtro de completado si existe
-            if filter_value is not None:
-                priority_tasks = [t for t in priority_tasks if t.completed == filter_value]
-            
-            # Agregar tareas al contenedor
-            if not priority_tasks:
-                # Mostrar estado vacío solo si hay filtro activo
-                if filter_value is not None:
-                    empty_text = "Completadas" if filter_value else "Pendientes"
-                    container.controls.append(
-                        ft.Container(
-                            content=ft.Text(
-                                f"No hay tareas {empty_text.lower()} en esta prioridad",
-                                size=14,
-                                color=ft.Colors.GREY_500,
-                                text_align=ft.TextAlign.CENTER
-                            ),
-                            padding=20,
-                            alignment=ft.alignment.center
-                        )
-                    )
-            else:
-                # Detectar ancho de pantalla para decidir layout
-                is_desktop = self.page.platform == ft.PagePlatform.WINDOWS or self.page.platform == ft.PagePlatform.LINUX or self.page.platform == ft.PagePlatform.MACOS
-                try:
-                    screen_width = self.page.width if (hasattr(self.page, 'width') and self.page.width is not None and isinstance(self.page.width, (int, float))) else 1024
-                except (AttributeError, TypeError):
-                    screen_width = 1024
-                use_grid = is_desktop and isinstance(screen_width, (int, float)) and screen_width > 800 and len(priority_tasks) > 1
-                
-                if use_grid:
-                    # En escritorio con suficiente ancho, mostrar en grid de 2 columnas
-                    tasks_per_row = 2
-                    for i in range(0, len(priority_tasks), tasks_per_row):
-                        row_tasks = priority_tasks[i:i + tasks_per_row]
-                        row_cards = []
-                        for idx, task in enumerate(row_tasks):
-                            card = create_task_card(
-                                task,
-                                on_toggle=self._toggle_task,
-                                on_edit=self._edit_task,
-                                on_delete=self._delete_task,
-                                on_toggle_subtask=self._toggle_subtask,
-                                on_add_subtask=self._show_add_subtask_dialog,
-                                on_delete_subtask=self._delete_subtask,
-                                on_edit_subtask=self._edit_subtask,
-                                page=self.page
-                            )
-                            # Contenedor flexible que se adapta al ancho disponible
-                            row_cards.append(
-                                ft.Container(
-                                    content=card,
-                                    expand=True,
-                                    margin=ft.margin.only(right=12 if idx < len(row_tasks) - 1 else 0)
-                                )
-                            )
-                        
-                        # Crear fila con las tarjetas - adaptable
-                        container.controls.append(
-                            ft.Row(
-                                row_cards,
-                                spacing=12,
-                                wrap=False,
-                                expand=True,
-                                scroll=ft.ScrollMode.AUTO if not is_desktop else ft.ScrollMode.HIDDEN
-                            )
-                        )
-                else:
-                    # En móvil, tablet pequeña o pantallas estrechas, mostrar en columna simple
-                    for task in priority_tasks:
-                        card = create_task_card(
-                            task,
-                            on_toggle=self._toggle_task,
-                            on_edit=self._edit_task,
-                            on_delete=self._delete_task,
-                            on_toggle_subtask=self._toggle_subtask,
-                            on_add_subtask=self._show_add_subtask_dialog,
-                            on_delete_subtask=self._delete_subtask,
-                            on_edit_subtask=self._edit_subtask,
-                            page=self.page
-                        )
-                        # Asegurar que la tarjeta use todo el ancho disponible
-                        container.controls.append(
-                            ft.Container(
-                                content=card,
-                                expand=True,
-                                width=None  # Sin ancho fijo
-                            )
-                        )
-        
-        self.page.update()
-    
-    def _filter_tasks(self, filter_completed: Optional[bool]):
-        """Filtra las tareas por estado (mantenido para compatibilidad)."""
-        # Aplicar el filtro a todas las prioridades
-        for priority in self.priority_filters:
-            self.priority_filters[priority] = filter_completed
-        self._load_tasks()
-    
-    def _filter_priority_tasks(self, priority: str, filter_completed: Optional[bool]):
-        """Filtra las tareas de una prioridad específica."""
-        self.priority_filters[priority] = filter_completed
-        self._load_tasks()
-        # Reconstruir la sección para actualizar los botones de filtro
-        self._rebuild_priority_section(priority)
-    
-    def _rebuild_priority_section(self, priority: str):
-        """Reconstruye una sección de prioridad específica."""
-        # Encontrar el contenedor principal y reemplazar la sección
-        if self.main_scroll_container and self.main_scroll_container.content:
-            main_column = self.main_scroll_container.content
-            if isinstance(main_column, ft.Column):
-                # Encontrar el índice de la sección
-                priorities_order = ['urgent_important', 'not_urgent_important', 'urgent_not_important', 'not_urgent_not_important']
-                try:
-                    index = priorities_order.index(priority)
-                    # Reconstruir la sección
-                    new_section = self._build_priority_section(priority)
-                    main_column.controls[index] = new_section
-                    self.priority_section_refs[priority] = new_section
-                except ValueError:
-                    pass
-        
-        # Actualizar barra de navegación
-        self._update_priority_navigation()
-        self.page.update()
-    
-    def _update_priority_navigation(self):
-        """Actualiza la barra de navegación de prioridades."""
-        # Reconstruir la barra de navegación con el estado actualizado
-        if self.home_view and len(self.home_view.controls) > 0:
-            main_column = self.home_view.controls[0]
-            if isinstance(main_column, ft.Column) and len(main_column.controls) > 1:
-                main_view = main_column.controls[1]
-                if isinstance(main_view, ft.Container) and main_view.content:
-                    main_content = main_view.content
-                    if isinstance(main_content, ft.Column) and len(main_content.controls) > 0:
-                        # Reemplazar la barra de navegación
-                        new_nav = self._build_priority_navigation_bar()
-                        main_content.controls[0] = new_nav
-    
-    def _scroll_to_priority(self, priority: str):
-        """Hace scroll automático hasta la sección de prioridad especificada."""
-        self.current_priority_section = priority
-        
-        # Actualizar la barra de navegación para reflejar el estado activo
-        self._update_priority_navigation()
-        
-        # Mapeo de prioridades a índices en el ListView
-        priority_index_map = {
-            'urgent_important': 0,
-            'not_urgent_important': 1,
-            'urgent_not_important': 2,
-            'not_urgent_not_important': 3
-        }
-        
-        # Obtener el índice de la sección
-        target_index = priority_index_map.get(priority, 0)
-        
-        # Hacer scroll al índice correspondiente usando la referencia directa al ListView
-        if self.main_scroll_listview:
-            try:
-                # Intentar usar scroll_to con index (más preciso)
-                self.main_scroll_listview.scroll_to(
-                    index=target_index,
-                    duration=500,  # Duración de la animación en ms
-                    curve=ft.AnimationCurve.EASE_OUT
-                )
-            except (AttributeError, TypeError) as e:
-                # Si scroll_to con index no está disponible o falla, usar offset
-                print(f"Intentando scroll con offset (index no disponible): {e}")
-                try:
-                    # Calcular offset aproximado (cada sección puede tener ~400-600px de altura)
-                    # Ajustar según el tamaño promedio de las secciones
-                    estimated_offset = target_index * 500
-                    self.main_scroll_listview.scroll_to(
-                        offset=estimated_offset,
-                        duration=500,
-                        curve=ft.AnimationCurve.EASE_OUT
-                    )
-                except Exception as e2:
-                    print(f"Error en scroll_to: {e2}")
-        
-        self.page.update()
-    
-    def _show_new_task_form(self, e):
-        """Navega a la vista del formulario para crear una nueva tarea."""
-        self.editing_task = None
-        self._navigate_to_form_view()
-    
-    def _edit_task(self, task: Task):
-        """Navega a la vista del formulario para editar una tarea."""
-        self.editing_task = task
-        self._navigate_to_form_view()
-    
-    def _navigate_to_form_view(self):
-        """Navega a la vista del formulario."""
-        title = "Editar Tarea" if self.editing_task else "Nueva Tarea"
-        
-        # Crear el formulario
-        form = TaskForm(
-            on_save=self._save_task,
-            on_cancel=self._go_back,
-            task=self.editing_task
-        )
-        
-        # Detectar el tema actual
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        bgcolor = ft.Colors.BLACK if is_dark else ft.Colors.GREY_50
-        
-        # Crear la barra de título con botón de volver
-        back_button = ft.IconButton(
-            icon=ft.Icons.ARROW_BACK,
-            on_click=lambda e: self._go_back(),
-            icon_color=ft.Colors.RED_400,
-            tooltip="Volver"
-        )
-        
-        title_bar = ft.Container(
-            content=ft.Row(
-                [
-                    back_button,
-                    ft.Text(
-                        title,
-                        size=24,
-                        weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.RED_400,
-                        expand=True
-                    )
-                ],
-                alignment=ft.MainAxisAlignment.START,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER
-            ),
-            padding=ft.padding.symmetric(vertical=16, horizontal=20),
-            bgcolor=ft.Colors.BLACK87 if is_dark else ft.Colors.RED_50
-        )
-        
-        # Construir la vista del formulario
-        form_view = ft.View(
-            route="/form",
-            controls=[
-                title_bar,
-                ft.Container(
-                    content=form.build(),
-                    expand=True,
-                    padding=20
-                )
-            ],
-            bgcolor=bgcolor
-        )
-        
-        # Agregar la vista y navegar a ella
-        self.page.views.append(form_view)
-        self.page.go("/form")
-    
-    def _go_back_from_form(self, e=None):
-        """Vuelve a la vista principal desde un formulario."""
-        self.editing_task = None
-        self.editing_habit = None
-        # Remover la última vista (el formulario)
-        if len(self.page.views) > 1:
-            self.page.views.pop()
-        # Navegar a la vista principal
-        if self.page.views:
-            self.page.go(self.page.views[-1].route)
-        else:
-            self.page.go("/")
-        self.page.update()
-    
-    def _save_task(self, *args):
-        """Guarda una tarea (crear o actualizar)."""
-        # Si el primer argumento es un objeto Task, es una actualización
-        if args and isinstance(args[0], Task):
-            # Actualizar tarea existente
-            task = args[0]
-            self.task_service.update_task(task)
-        else:
-            # Crear nueva tarea
-            title, description, priority = args
-            self.task_service.create_task(title, description, priority)
-        
-        # Volver a la vista principal
-        self._go_back_from_form()
-        
-        # Forzar actualización de la página antes de recargar tareas
-        self.page.update()
-        
-        # Recargar las tareas después de volver
-        # El contenedor debería estar disponible ya que no se reconstruye la UI
-        self._load_tasks()
-    
-    def _toggle_task(self, task_id: int):
-        """Cambia el estado de completado de una tarea."""
-        self.task_service.toggle_task_complete(task_id)
-        self._load_tasks()
-    
-    def _delete_task(self, task_id: int):
-        """Elimina una tarea."""
-        if task_id is None:
-            return
-        
-        # Eliminar directamente primero para verificar que funciona
-        try:
-            deleted = self.task_service.delete_task(int(task_id))
-            if deleted:
-                self._load_tasks()
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Tarea eliminada correctamente"),
-                    bgcolor=ft.Colors.RED_700
-                )
-                self.page.snack_bar.open = True
-            else:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("No se pudo eliminar la tarea"),
-                    bgcolor=ft.Colors.RED
-                )
-                self.page.snack_bar.open = True
-        except Exception as ex:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error: {str(ex)}"),
-                bgcolor=ft.Colors.RED
-            )
-            self.page.snack_bar.open = True
-        
-        self.page.update()
-    
     def _toggle_theme(self, e):
         """Cambia entre tema claro y oscuro."""
         # Alternar modo y persistir a través del servicio de ajustes
@@ -2429,7 +2054,7 @@ class HomeView:
         # Reconstruir vista según sección actual
         if self.current_section == "tasks":
             self._build_ui()
-            self._load_tasks()
+            self.tasks_view.load_tasks()
         elif self.current_section == "habits":
             self._build_habits_view()
         elif self.current_section == "settings":
@@ -2618,7 +2243,7 @@ class HomeView:
         # Reconstruir la vista actual respetando la sección activa
         if self.current_section == "tasks":
             self._build_ui()
-            self._load_tasks()
+            self.tasks_view.load_tasks()
         elif self.current_section == "habits":
             self._build_habits_view()
         elif self.current_section == "settings":
@@ -2633,233 +2258,6 @@ class HomeView:
         if hasattr(self, "accent_dialog"):
             self.accent_dialog.open = False
             self.page.update()
-    
-    def _toggle_subtask(self, subtask_id: int):
-        """Cambia el estado de completado de una subtarea."""
-        self.task_service.toggle_subtask_complete(subtask_id)
-        self._load_tasks()
-    
-    def _delete_subtask(self, subtask_id: int):
-        """Elimina una subtarea."""
-        self.task_service.delete_subtask(subtask_id)
-        self._load_tasks()
-    
-    def _show_add_subtask_dialog(self, task_id: int):
-        """Navega a la vista del formulario para agregar una subtarea."""
-        # Guardar el task_id para usarlo al guardar
-        self.editing_subtask_task_id = task_id
-        self.editing_subtask = None
-        self._navigate_to_subtask_form_view()
-    
-    def _edit_subtask(self, subtask):
-        """Navega a la vista del formulario para editar una subtarea."""
-        # Guardar la subtarea y el task_id para usarlos al guardar
-        self.editing_subtask = subtask
-        self.editing_subtask_task_id = subtask.task_id
-        self._navigate_to_subtask_form_view()
-    
-    def _navigate_to_subtask_form_view(self):
-        """Navega a la vista del formulario de subtarea."""
-        from datetime import datetime
-        
-        # Determinar si es edición o creación
-        is_editing = self.editing_subtask is not None
-        
-        # Crear campos del formulario con valores iniciales si es edición
-        subtask_title_field = ft.TextField(
-            label="Título de la subtarea",
-            hint_text="Ingresa el título de la subtarea",
-            autofocus=True,
-            expand=True,
-            value=self.editing_subtask.title if is_editing else ""
-        )
-        
-        subtask_description_field = ft.TextField(
-            label="Descripción",
-            hint_text="Ingresa una descripción (opcional)",
-            multiline=True,
-            min_lines=3,
-            max_lines=5,
-            expand=True,
-            value=self.editing_subtask.description if is_editing and self.editing_subtask.description else ""
-        )
-        
-        # Formatear fecha límite si existe
-        deadline_value = ""
-        if is_editing and self.editing_subtask.deadline:
-            try:
-                deadline_value = self.editing_subtask.deadline.strftime("%Y-%m-%d %H:%M")
-            except:
-                deadline_value = ""
-        
-        subtask_deadline_field = ft.TextField(
-            label="Fecha límite",
-            hint_text="YYYY-MM-DD HH:MM (opcional)",
-            expand=True,
-            helper_text="Formato: 2024-12-31 23:59",
-            value=deadline_value
-        )
-        
-        # Detectar el tema actual
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        bgcolor = ft.Colors.BLACK if is_dark else ft.Colors.GREY_50
-        title_bar_bgcolor = ft.Colors.BLACK87 if is_dark else ft.Colors.RED_50
-        
-        def save_subtask(e):
-            title = subtask_title_field.value
-            description = subtask_description_field.value or ""
-            deadline_str = subtask_deadline_field.value or ""
-            
-            if not title or not title.strip():
-                subtask_title_field.error_text = "El título es obligatorio"
-                subtask_title_field.update()
-                return
-            
-            # Validar y parsear fecha límite
-            deadline = None
-            if deadline_str.strip():
-                try:
-                    # Intentar parsear diferentes formatos
-                    formats = [
-                        "%Y-%m-%d %H:%M",
-                        "%Y-%m-%d",
-                        "%d/%m/%Y %H:%M",
-                        "%d/%m/%Y"
-                    ]
-                    parsed = False
-                    for fmt in formats:
-                        try:
-                            deadline = datetime.strptime(deadline_str.strip(), fmt)
-                            parsed = True
-                            break
-                        except ValueError:
-                            continue
-                    
-                    if not parsed:
-                        subtask_deadline_field.error_text = "Formato inválido. Use YYYY-MM-DD HH:MM"
-                        subtask_deadline_field.update()
-                        return
-                except Exception as ex:
-                    subtask_deadline_field.error_text = f"Error al parsear fecha: {str(ex)}"
-                    subtask_deadline_field.update()
-                    return
-            
-            try:
-                if is_editing:
-                    # Actualizar subtarea existente
-                    self.editing_subtask.title = title.strip()
-                    self.editing_subtask.description = description.strip()
-                    self.editing_subtask.deadline = deadline
-                    self.task_service.update_subtask(self.editing_subtask)
-                else:
-                    # Crear nueva subtarea
-                    task_id = getattr(self, 'editing_subtask_task_id', None)
-                    if task_id:
-                        self.task_service.create_subtask(
-                            task_id, 
-                            title.strip(), 
-                            description.strip(),
-                            deadline
-                        )
-                    else:
-                        # Mostrar error en la página en lugar de actualizar el campo
-                        self.page.snack_bar = ft.SnackBar(
-                            content=ft.Text("Error: No se encontró la tarea padre"),
-                            bgcolor=ft.Colors.RED
-                        )
-                        self.page.snack_bar.open = True
-                        self.page.update()
-                        return
-                
-                self._go_back_from_form()
-                self._load_tasks()
-            except Exception as ex:
-                # Mostrar error en la página en lugar de actualizar el campo
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Error: {str(ex)}"),
-                    bgcolor=ft.Colors.RED
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
-        
-        # Crear la barra de título con botón de volver
-        back_button = ft.IconButton(
-            icon=ft.Icons.ARROW_BACK,
-            on_click=lambda e: self._go_back(),
-            icon_color=ft.Colors.RED_400,
-            tooltip="Volver"
-        )
-        
-        title_bar = ft.Container(
-            content=ft.Row(
-                [
-                    back_button,
-                    ft.Text(
-                        "Editar Subtarea" if is_editing else "Nueva Subtarea",
-                        size=24,
-                        weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.RED_400,
-                        expand=True
-                    )
-                ],
-                alignment=ft.MainAxisAlignment.START,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER
-            ),
-            padding=ft.padding.symmetric(vertical=16, horizontal=20),
-            bgcolor=title_bar_bgcolor
-        )
-        
-        # Botones de acción
-        save_button = ft.ElevatedButton(
-            text="Guardar",
-            icon=ft.Icons.SAVE,
-            on_click=save_subtask,
-            color=ft.Colors.WHITE,
-            bgcolor=ft.Colors.RED_700,
-            expand=True
-        )
-        
-        cancel_button = ft.OutlinedButton(
-            text="Cancelar",
-            icon=ft.Icons.CANCEL,
-            on_click=lambda e: self._go_back(),
-            expand=True
-        )
-        
-        # Construir la vista del formulario
-        form_view = ft.View(
-            route="/subtask-form",
-            controls=[
-                title_bar,
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            subtask_title_field,
-                            subtask_description_field,
-                            subtask_deadline_field,
-                            ft.Row(
-                                [
-                                    save_button,
-                                    cancel_button
-                                ],
-                                spacing=8,
-                                alignment=ft.MainAxisAlignment.END
-                            )
-                        ],
-                        spacing=16,
-                        expand=True,
-                        scroll=ft.ScrollMode.AUTO
-                    ),
-                    expand=True,
-                    padding=20
-                )
-            ],
-            bgcolor=bgcolor
-        )
-        
-        # Agregar la vista y navegar a ella
-        self.page.views.append(form_view)
-        self.page.go("/subtask-form")
     
     # ==================== MÉTODOS PARA HÁBITOS ====================
     
