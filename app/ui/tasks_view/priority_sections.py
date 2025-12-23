@@ -39,8 +39,8 @@ def build_priority_section(
     screen_width = get_screen_width(page)
     is_wide = screen_width > 600 if isinstance(screen_width, (int, float)) else False
     
-    title_size = 22 if is_wide else 18
-    title_padding_vertical = 10 if is_wide else 8
+    title_size = 20 if is_wide else 16  # Reducido de 22/18 a 20/16
+    title_padding_vertical = 6 if is_wide else 4  # Reducido de 10/8 a 6/4
     title_padding_horizontal = 20 if is_wide else 12
     
     section_title = ft.Container(
@@ -70,12 +70,12 @@ def build_priority_section(
         margin=ft.margin.only(top=0)
     )
     
-    # Botones de filtro para esta sección - responsive
+    # Botones de filtro para esta sección - responsive - más compactos
     active_bg = colors['primary']
     inactive_bg = ft.Colors.GREY_800 if is_dark else ft.Colors.GREY_100
     text_color = ft.Colors.WHITE
-    button_height = 40 if is_desktop else 36
-    button_padding = ft.padding.symmetric(vertical=12 if is_desktop else 8, horizontal=24 if is_desktop else 16)
+    button_height = 36 if is_desktop else 32  # Reducido de 40/36 a 36/32
+    button_padding = ft.padding.symmetric(vertical=6 if is_desktop else 4, horizontal=16 if is_desktop else 12)  # Reducido
     
     # Botones de filtro responsive
     filter_buttons = ft.Row(
@@ -144,7 +144,7 @@ def build_priority_section(
         ),
         key=f"priority_section_{priority}",
         margin=ft.margin.only(
-            bottom=16 if is_desktop else 12,
+            bottom=12 if is_desktop else 8,  # Reducido de 16/12 a 12/8
             top=0
         ),
         expand=True

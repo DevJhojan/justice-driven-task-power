@@ -90,8 +90,8 @@ class TasksView:
             for priority in PRIORITIES
         ]
         
-        # Contenedor principal con scroll - responsive
-        section_spacing = 24 if is_desktop else 16
+        # Contenedor principal con scroll - responsive - más compacto
+        section_spacing = 16 if is_desktop else 12  # Reducido de 24/16 a 16/12
         # Usar ListView para mejor soporte de scroll programático
         self.main_scroll_listview = ft.ListView(
             priority_sections,

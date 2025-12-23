@@ -35,10 +35,10 @@ def build_priority_navigation_bar(
         colors = get_priority_colors(priority_key, is_dark)
         is_active = current_priority_section == priority_key
         
-        # Tamaños responsive basados en ancho de pantalla
-        emoji_size = 22 if is_wide_screen else 18
-        text_size = 10 if is_wide_screen else 9
-        button_padding = 10 if is_wide_screen else 6
+        # Tamaños responsive basados en ancho de pantalla - más compactos
+        emoji_size = 18 if is_wide_screen else 16
+        text_size = 9 if is_wide_screen else 8
+        button_padding = 6 if is_wide_screen else 4
         
         button = ft.Container(
             content=ft.Column(
@@ -54,7 +54,7 @@ def build_priority_navigation_bar(
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=4,
+                spacing=2,  # Reducido de 4 a 2
                 tight=True
             ),
             on_click=lambda e, p=priority_key: on_priority_click(p),
@@ -67,11 +67,11 @@ def build_priority_navigation_bar(
         )
         buttons.append(button)
     
-    # Botón de agregar tarea
+    # Botón de agregar tarea - más compacto
     scheme = page.theme.color_scheme if page.theme else None
     title_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_400
-    button_size = 40 if is_wide_screen else 36
-    icon_size = 20 if is_wide_screen else 18
+    button_size = 36 if is_wide_screen else 32
+    icon_size = 18 if is_wide_screen else 16
     
     add_button = ft.IconButton(
         icon=ft.Icons.ADD,
@@ -84,12 +84,12 @@ def build_priority_navigation_bar(
         icon_size=icon_size
     )
     
-    # Contenedor responsive con padding vertical mínimo
+    # Contenedor responsive con padding vertical mínimo - reducido
     nav_padding = ft.padding.symmetric(
-        vertical=4 if is_wide_screen else 3,
+        vertical=2 if is_wide_screen else 1,  # Reducido de 4/3 a 2/1
         horizontal=20 if is_wide_screen else 12
     )
-    button_spacing = 10 if is_wide_screen else 6
+    button_spacing = 8 if is_wide_screen else 4  # Reducido de 10/6 a 8/4
     
     # Crear Row con botones de prioridad y botón de agregar
     row_controls = buttons.copy()
