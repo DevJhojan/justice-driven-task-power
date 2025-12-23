@@ -40,6 +40,25 @@ def build_priority_navigation_bar(
         text_size = 9 if is_wide_screen else 8
         button_padding = 6 if is_wide_screen else 4
         
+        # Estilos para botón activo vs inactivo
+        if is_active:
+            # Botón activo: color de fondo, borde grueso, y sombra
+            button_bgcolor = colors['primary']
+            button_border = ft.border.all(3, colors['primary'])
+            button_shadow = ft.BoxShadow(
+                spread_radius=2,
+                blur_radius=6,
+                color=colors['primary'],
+                offset=ft.Offset(0, 2)
+            )
+            text_color = ft.Colors.WHITE
+        else:
+            # Botón inactivo: fondo neutro, borde sutil
+            button_bgcolor = bgcolor
+            button_border = ft.border.all(1, ft.Colors.GREY_400 if not is_dark else ft.Colors.GREY_600)
+            button_shadow = None
+            text_color = ft.Colors.GREY_700 if not is_dark else ft.Colors.GREY_300
+        
         button = ft.Container(
             content=ft.Column(
                 [
@@ -50,7 +69,9 @@ def build_priority_navigation_bar(
                         text_align=ft.TextAlign.CENTER,
                         max_lines=2,
                         overflow=ft.TextOverflow.ELLIPSIS,
-                        selectable=False
+                        selectable=False,
+                        color=text_color if not is_active else ft.Colors.WHITE,
+                        weight=ft.FontWeight.BOLD if is_active else ft.FontWeight.NORMAL
                     )
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -59,11 +80,12 @@ def build_priority_navigation_bar(
             ),
             on_click=lambda e, p=priority_key: on_priority_click(p),
             padding=button_padding,
-            bgcolor=colors['primary'] if is_active else bgcolor,
-            border=ft.border.all(2, colors['primary'] if is_active else ft.Colors.TRANSPARENT),
+            bgcolor=button_bgcolor,
+            border=button_border,
             border_radius=8,
             expand=True,
-            tooltip=colors['text']
+            tooltip=colors['text'],
+            shadow=button_shadow
         )
         buttons.append(button)
     
@@ -106,7 +128,7 @@ def build_priority_navigation_bar(
         padding=nav_padding,
         bgcolor=bgcolor,
         border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700)),
-        expand=True,
-        margin=ft.margin.only(bottom=0)
+        expand=False,  # Cambiado de True a False para que no ocupe espacio extra
+        margin=ft.margin.only(top=0, bottom=0)  # Sin márgenes para eliminar espacio en blanco
     )
 

@@ -57,6 +57,8 @@ class TasksView:
         self.priority_section_refs = {}  # Referencias a los contenedores de sección para scroll
         self.main_scroll_container = None  # Contenedor principal con scroll
         self.main_scroll_listview = None  # Referencia directa al ListView para scroll programático
+        self.priority_nav_container = None  # Referencia al contenedor de la barra de navegación
+        self.main_view_container = None  # Referencia al contenedor principal de la vista
     
     def build_ui(self) -> ft.Container:
         """
@@ -76,6 +78,8 @@ class TasksView:
             self._scroll_to_priority,
             self._show_new_task_form
         )
+        # Guardar referencia a la barra de navegación para poder actualizarla
+        self.priority_nav_container = priority_nav
         
         # Construir las 4 secciones de prioridad
         priority_sections = [
@@ -101,12 +105,12 @@ class TasksView:
         )
         main_scroll_content = self.main_scroll_listview
         
-        # Padding responsive para el contenedor principal - reducido
+        # Padding responsive para el contenedor principal - sin padding superior
         main_padding = ft.padding.only(
             bottom=24 if is_desktop else 16,
             left=0,
             right=0,
-            top=0
+            top=0  # Sin padding superior para eliminar espacio en blanco
         )
         
         # Detectar ancho de pantalla para layout adaptable
@@ -139,8 +143,8 @@ class TasksView:
                 width=None
             )
         
-        # Vista principal - sin spacing para acercar elementos
-        return ft.Container(
+        # Vista principal - sin spacing ni márgenes para acercar elementos
+        main_view_container = ft.Container(
             content=ft.Column(
                 [
                     priority_nav,
@@ -149,8 +153,13 @@ class TasksView:
                 spacing=0,
                 expand=True
             ),
-            expand=True
+            expand=True,
+            margin=ft.margin.only(top=0, bottom=0),  # Sin márgenes para eliminar espacio en blanco
+            padding=0  # Sin padding adicional
         )
+        # Guardar referencia al contenedor principal
+        self.main_view_container = main_view_container
+        return main_view_container
     
     def load_tasks(self):
         """Carga las tareas desde la base de datos y las distribuye por prioridad."""
@@ -204,8 +213,21 @@ class TasksView:
     
     def _update_priority_navigation(self):
         """Actualiza la barra de navegación de prioridades."""
-        # Esta función se implementará si es necesario para actualizar la navegación
-        pass
+        # Reconstruir la barra de navegación para reflejar el cambio de prioridad
+        if self.main_view_container and self.main_view_container.content:
+            main_column = self.main_view_container.content
+            if isinstance(main_column, ft.Column) and len(main_column.controls) > 0:
+                # Reconstruir la barra de navegación con el estado actualizado
+                from .navigation import build_priority_navigation_bar
+                new_nav = build_priority_navigation_bar(
+                    self.page,
+                    self.current_priority_section,
+                    self._scroll_to_priority,
+                    self._show_new_task_form
+                )
+                # Reemplazar la barra de navegación antigua
+                main_column.controls[0] = new_nav
+                self.priority_nav_container = new_nav
     
     def _scroll_to_priority(self, priority: str):
         """Hace scroll automático hasta la sección de prioridad especificada."""

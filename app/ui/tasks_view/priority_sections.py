@@ -66,8 +66,8 @@ def build_priority_section(
         ),
         bgcolor=colors['light'],
         border=ft.border.only(bottom=ft.BorderSide(2, colors['primary'])),
-        expand=True,
-        margin=ft.margin.only(top=0)
+        expand=False,  # Cambiado de True a False para evitar expansión innecesaria
+        margin=ft.margin.only(top=0, bottom=0)  # Sin márgenes
     )
     
     # Botones de filtro para esta sección - responsive - más compactos

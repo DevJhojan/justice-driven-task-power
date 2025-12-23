@@ -220,7 +220,7 @@ class HomeView:
                 vertical_alignment=ft.CrossAxisAlignment.CENTER
             ),
             padding=ft.padding.symmetric(
-                vertical=8 if is_desktop else 6,  # Reducido aún más: de 12/10 a 8/6
+                vertical=4 if is_desktop else 3,  # Reducido aún más para eliminar espacio en blanco
                 horizontal=32 if is_desktop else 20
             ),
             bgcolor=ft.Colors.BLACK87 if self.page.theme_mode == ft.ThemeMode.DARK else ft.Colors.RED_50,
