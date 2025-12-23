@@ -75,7 +75,8 @@ if (keystorePropertiesFile.exists()) {
                 def keystoreFile = keystoreProperties['storeFile']
                 if (keystoreFile) {
                     // La ruta en key.properties es relativa al directorio android/
-                    storeFile keystoreFile.startsWith('/') ? file(keystoreFile) : file("../${keystoreFile}")
+                    // Por ejemplo: "app/upload-keystore.jks" significa "android/app/upload-keystore.jks"
+                    storeFile keystoreFile.startsWith('/') ? file(keystoreFile) : file(keystoreFile)
                 }
                 storePassword keystoreProperties['storePassword']
             }
