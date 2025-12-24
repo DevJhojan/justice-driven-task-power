@@ -248,6 +248,9 @@ replace_icons() {
     print_info "Eliminando iconos antiguos de Flet para forzar reemplazo..."
     find "$ANDROID_RES_DIR" -name "ic_launcher.png" -type f -delete 2>/dev/null || true
     find "$ANDROID_RES_DIR" -name "ic_launcher_foreground.png" -type f -delete 2>/dev/null || true
+    find "$ANDROID_RES_DIR" -name "ic_launcher.xml" -type f -delete 2>/dev/null || true
+    find "$ANDROID_RES_DIR" -name "ic_launcher_round.png" -type f -delete 2>/dev/null || true
+    find "$ANDROID_RES_DIR" -name "ic_launcher_round.xml" -type f -delete 2>/dev/null || true
     
     # Crear directorios si no existen
     mkdir -p "$ANDROID_RES_DIR/mipmap-mdpi"
@@ -265,20 +268,21 @@ replace_icons() {
     print_info "Reemplazando iconos en todas las resoluciones..."
     
     # Reemplazar iconos en todas las resoluciones (mipmap para iconos de app)
-    # Usar -quality 100 para mantener la mejor calidad posible
-    convert "$ICON_SOURCE" -resize 48x48! -quality 100 "$ANDROID_RES_DIR/mipmap-mdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 48x48 en mipmap-mdpi" || print_warning "✗ Error al crear icono 48x48"
-    convert "$ICON_SOURCE" -resize 72x72! -quality 100 "$ANDROID_RES_DIR/mipmap-hdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 72x72 en mipmap-hdpi" || print_warning "✗ Error al crear icono 72x72"
-    convert "$ICON_SOURCE" -resize 96x96! -quality 100 "$ANDROID_RES_DIR/mipmap-xhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 96x96 en mipmap-xhdpi" || print_warning "✗ Error al crear icono 96x96"
-    convert "$ICON_SOURCE" -resize 144x144! -quality 100 "$ANDROID_RES_DIR/mipmap-xxhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 144x144 en mipmap-xxhdpi" || print_warning "✗ Error al crear icono 144x144"
-    convert "$ICON_SOURCE" -resize 192x192! -quality 100 "$ANDROID_RES_DIR/mipmap-xxxhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 192x192 en mipmap-xxxhdpi" || print_warning "✗ Error al crear icono 192x192"
+    # Usar -quality 100 y -strip para mantener la mejor calidad posible sin metadatos
+    # Usar -define png:compression-level=9 para máxima calidad PNG
+    convert "$ICON_SOURCE" -resize 48x48! -quality 100 -strip -define png:compression-level=9 "$ANDROID_RES_DIR/mipmap-mdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 48x48 en mipmap-mdpi" || print_warning "✗ Error al crear icono 48x48"
+    convert "$ICON_SOURCE" -resize 72x72! -quality 100 -strip -define png:compression-level=9 "$ANDROID_RES_DIR/mipmap-hdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 72x72 en mipmap-hdpi" || print_warning "✗ Error al crear icono 72x72"
+    convert "$ICON_SOURCE" -resize 96x96! -quality 100 -strip -define png:compression-level=9 "$ANDROID_RES_DIR/mipmap-xhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 96x96 en mipmap-xhdpi" || print_warning "✗ Error al crear icono 96x96"
+    convert "$ICON_SOURCE" -resize 144x144! -quality 100 -strip -define png:compression-level=9 "$ANDROID_RES_DIR/mipmap-xxhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 144x144 en mipmap-xxhdpi" || print_warning "✗ Error al crear icono 144x144"
+    convert "$ICON_SOURCE" -resize 192x192! -quality 100 -strip -define png:compression-level=9 "$ANDROID_RES_DIR/mipmap-xxxhdpi/ic_launcher.png" 2>/dev/null && print_success "✓ Icono 192x192 en mipmap-xxxhdpi" || print_warning "✗ Error al crear icono 192x192"
     
     # Reemplazar iconos foreground para adaptive icons (drawable)
     # Los tamaños son más grandes porque se usan con inset del 16%
-    convert "$ICON_SOURCE" -resize 108x108! -quality 100 "$ANDROID_RES_DIR/drawable-mdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 108x108 en drawable-mdpi" || print_warning "✗ Error al crear icono foreground 108x108"
-    convert "$ICON_SOURCE" -resize 162x162! -quality 100 "$ANDROID_RES_DIR/drawable-hdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 162x162 en drawable-hdpi" || print_warning "✗ Error al crear icono foreground 162x162"
-    convert "$ICON_SOURCE" -resize 216x216! -quality 100 "$ANDROID_RES_DIR/drawable-xhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 216x216 en drawable-xhdpi" || print_warning "✗ Error al crear icono foreground 216x216"
-    convert "$ICON_SOURCE" -resize 324x324! -quality 100 "$ANDROID_RES_DIR/drawable-xxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 324x324 en drawable-xxhdpi" || print_warning "✗ Error al crear icono foreground 324x324"
-    convert "$ICON_SOURCE" -resize 432x432! -quality 100 "$ANDROID_RES_DIR/drawable-xxxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 432x432 en drawable-xxxhdpi" || print_warning "✗ Error al crear icono foreground 432x432"
+    convert "$ICON_SOURCE" -resize 108x108! -quality 100 -strip -define png:compression-level=9 "$ANDROID_RES_DIR/drawable-mdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 108x108 en drawable-mdpi" || print_warning "✗ Error al crear icono foreground 108x108"
+    convert "$ICON_SOURCE" -resize 162x162! -quality 100 -strip -define png:compression-level=9 "$ANDROID_RES_DIR/drawable-hdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 162x162 en drawable-hdpi" || print_warning "✗ Error al crear icono foreground 162x162"
+    convert "$ICON_SOURCE" -resize 216x216! -quality 100 -strip -define png:compression-level=9 "$ANDROID_RES_DIR/drawable-xhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 216x216 en drawable-xhdpi" || print_warning "✗ Error al crear icono foreground 216x216"
+    convert "$ICON_SOURCE" -resize 324x324! -quality 100 -strip -define png:compression-level=9 "$ANDROID_RES_DIR/drawable-xxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 324x324 en drawable-xxhdpi" || print_warning "✗ Error al crear icono foreground 324x324"
+    convert "$ICON_SOURCE" -resize 432x432! -quality 100 -strip -define png:compression-level=9 "$ANDROID_RES_DIR/drawable-xxxhdpi/ic_launcher_foreground.png" 2>/dev/null && print_success "✓ Icono foreground 432x432 en drawable-xxxhdpi" || print_warning "✗ Error al crear icono foreground 432x432"
     
     # Verificar que los iconos se crearon correctamente
     local icon_count=0
@@ -293,11 +297,20 @@ replace_icons() {
         
         # Verificar que los iconos son diferentes del de Flet (comparar tamaño del archivo)
         # Los iconos de Flet suelen ser más pequeños que los personalizados
+        # Si el icono es muy pequeño, intentar recrearlo con más calidad
         local sample_icon="$ANDROID_RES_DIR/mipmap-mdpi/ic_launcher.png"
         if [ -f "$sample_icon" ]; then
             local icon_size=$(stat -c%s "$sample_icon" 2>/dev/null || echo "0")
-            if [ "$icon_size" -lt 500 ]; then
-                print_warning "El icono parece ser muy pequeño ($icon_size bytes). Puede ser el icono por defecto de Flet."
+            if [ "$icon_size" -lt 3000 ]; then
+                print_warning "El icono parece ser muy pequeño ($icon_size bytes). Recreando con más calidad..."
+                # Recrear con menos compresión para mantener más detalles
+                convert "$ICON_SOURCE" -resize 48x48! -quality 100 -strip -define png:compression-level=0 "$sample_icon" 2>/dev/null || true
+                local new_size=$(stat -c%s "$sample_icon" 2>/dev/null || echo "0")
+                if [ "$new_size" -gt "$icon_size" ]; then
+                    print_success "Icono recreado con mejor calidad (tamaño: ${new_size} bytes)"
+                else
+                    print_warning "El icono sigue siendo pequeño. Puede ser el icono por defecto de Flet o el original es muy simple."
+                fi
             else
                 print_success "Icono personalizado verificado (tamaño: ${icon_size} bytes)"
             fi
