@@ -98,6 +98,8 @@ class FirebaseSyncService:
         self.db = database or Database()
         self.task_service = TaskService()
         self.habit_service = HabitService()
+        from app.data.task_repository import TaskRepository
+        self.task_repository = TaskRepository(self.db)  # Acceso directo al repositorio para sincronización
         self.database_url = None
         self._initialize_realtime_db()
     
@@ -462,6 +464,9 @@ class FirebaseSyncService:
             if isinstance(tasks_data, dict):
                 for task_id, task_data in tasks_data.items():
                     if isinstance(task_data, dict):
+                        # Asegurar que el ID de la tarea esté presente en los datos
+                        if 'id' not in task_data or task_data['id'] is None:
+                            task_data['id'] = int(task_id) if task_id.isdigit() else None
                         tasks.append(task_data)
             
             return tasks
@@ -520,6 +525,8 @@ class FirebaseSyncService:
         - Compara timestamps (updated_at) para resolver conflictos
         - Solo crea nueva tarea si no existe localmente
         - Si existe, solo actualiza si la remota es más reciente
+        - Mantiene el ID remoto para evitar duplicaciones
+        - Sincroniza las subtareas
         
         Returns:
             True si se fusionó/creó una nueva tarea, False si se ignoró
@@ -528,13 +535,16 @@ class FirebaseSyncService:
             remote_id = remote_task_data.get('id')
             remote_updated = remote_task_data.get('updated_at')
             
+            if not remote_id:
+                # Sin ID remoto, no se puede sincronizar
+                return False
+            
             # Buscar tarea local por ID
             local_task = None
-            if remote_id:
-                try:
-                    local_task = self.task_service.get_task(remote_id)
-                except:
-                    pass
+            try:
+                local_task = self.task_service.get_task(remote_id)
+            except:
+                pass
             
             if local_task:
                 # Tarea existe localmente, comparar timestamps
@@ -543,21 +553,22 @@ class FirebaseSyncService:
                 if remote_updated and local_updated:
                     # Solo actualizar si la remota es más reciente
                     if remote_updated > local_updated:
-                        # Actualizar tarea local con datos remotos
+                        # Actualizar tarea local con datos remotos (incluyendo subtareas)
                         task = Task.from_dict(remote_task_data)
+                        task.id = remote_id  # Asegurar que se mantiene el ID
                         self.task_service.update_task(task)
                         return True
                 return False  # Ignorar si la local es más reciente o igual
             else:
-                # Tarea no existe localmente, crearla
+                # Tarea no existe localmente, crearla con el ID remoto
                 task = Task.from_dict(remote_task_data)
-                # Asignar nuevo ID local (el remoto se mantiene como referencia)
-                task.id = None
-                self.task_service.create_task(
-                    task.title,
-                    task.description,
-                    task.priority
-                )
+                # Mantener el ID remoto para evitar duplicaciones
+                task.id = remote_id
+                # Usar el repositorio directamente para crear con ID específico
+                created_task = self.task_repository.create(task)
+                # Sincronizar subtareas si existen
+                if task.subtasks:
+                    self.task_repository._sync_subtasks(created_task.id, task.subtasks)
                 return True
         
         except Exception as e:

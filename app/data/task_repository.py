@@ -34,21 +34,47 @@ class TaskRepository:
         
         now = datetime.now().isoformat()
         
-        cursor.execute('''
-            INSERT INTO tasks (title, description, completed, priority, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (
-            task.title,
-            task.description,
-            1 if task.completed else 0,
-            task.priority,
-            now,
-            now
-        ))
+        # Si la tarea tiene un ID, intentar insertarlo (útil para sincronización)
+        if task.id is not None:
+            # Verificar si ya existe una tarea con ese ID
+            cursor.execute('SELECT id FROM tasks WHERE id = ?', (task.id,))
+            if cursor.fetchone():
+                # Ya existe, actualizar en lugar de crear
+                conn.close()
+                return self.update(task)
+            
+            # Insertar con ID específico
+            cursor.execute('''
+                INSERT INTO tasks (id, title, description, completed, priority, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                task.id,
+                task.title,
+                task.description,
+                1 if task.completed else 0,
+                task.priority,
+                task.created_at.isoformat() if task.created_at else now,
+                task.updated_at.isoformat() if task.updated_at else now
+            ))
+        else:
+            # Insertar sin ID (auto-increment)
+            cursor.execute('''
+                INSERT INTO tasks (title, description, completed, priority, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                task.title,
+                task.description,
+                1 if task.completed else 0,
+                task.priority,
+                now,
+                now
+            ))
+            task.id = cursor.lastrowid
         
-        task.id = cursor.lastrowid
-        task.created_at = datetime.now()
-        task.updated_at = datetime.now()
+        if not task.created_at:
+            task.created_at = datetime.now()
+        if not task.updated_at:
+            task.updated_at = datetime.now()
         
         conn.commit()
         conn.close()
@@ -112,7 +138,7 @@ class TaskRepository:
     
     def update(self, task: Task) -> Task:
         """
-        Actualiza una tarea existente.
+        Actualiza una tarea existente y sincroniza sus subtareas.
         
         Args:
             task: Tarea con los datos actualizados.
@@ -140,10 +166,93 @@ class TaskRepository:
         
         task.updated_at = datetime.now()
         
+        # Sincronizar subtareas si están presentes
+        if task.subtasks is not None:
+            self._sync_subtasks(task.id, task.subtasks)
+        
         conn.commit()
         conn.close()
         
         return task
+    
+    def _sync_subtasks(self, task_id: int, remote_subtasks: List[SubTask]) -> None:
+        """
+        Sincroniza las subtareas de una tarea con las subtareas remotas.
+        
+        Args:
+            task_id: ID de la tarea
+            remote_subtasks: Lista de subtareas remotas a sincronizar
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        # Obtener subtareas locales actuales
+        cursor.execute('SELECT id FROM subtasks WHERE task_id = ?', (task_id,))
+        local_subtask_ids = {row['id'] for row in cursor.fetchall()}
+        
+        # IDs de subtareas remotas
+        remote_subtask_ids = {st.id for st in remote_subtasks if st.id is not None}
+        
+        # Eliminar subtareas locales que no están en las remotas
+        subtasks_to_delete = local_subtask_ids - remote_subtask_ids
+        for subtask_id in subtasks_to_delete:
+            cursor.execute('DELETE FROM subtasks WHERE id = ?', (subtask_id,))
+        
+        # Sincronizar cada subtarea remota
+        for remote_subtask in remote_subtasks:
+            if remote_subtask.id and remote_subtask.id in local_subtask_ids:
+                # Actualizar subtarea existente
+                now = datetime.now().isoformat()
+                deadline_str = remote_subtask.deadline.isoformat() if remote_subtask.deadline else None
+                cursor.execute('''
+                    UPDATE subtasks 
+                    SET title = ?, description = ?, deadline = ?, completed = ?, updated_at = ?
+                    WHERE id = ?
+                ''', (
+                    remote_subtask.title,
+                    remote_subtask.description or "",
+                    deadline_str,
+                    1 if remote_subtask.completed else 0,
+                    now,
+                    remote_subtask.id
+                ))
+            else:
+                # Crear nueva subtarea
+                now = datetime.now().isoformat()
+                deadline_str = remote_subtask.deadline.isoformat() if remote_subtask.deadline else None
+                
+                if remote_subtask.id:
+                    # Insertar con ID específico
+                    cursor.execute('''
+                        INSERT INTO subtasks (id, task_id, title, description, deadline, completed, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        remote_subtask.id,
+                        task_id,
+                        remote_subtask.title,
+                        remote_subtask.description or "",
+                        deadline_str,
+                        1 if remote_subtask.completed else 0,
+                        remote_subtask.created_at.isoformat() if remote_subtask.created_at else now,
+                        remote_subtask.updated_at.isoformat() if remote_subtask.updated_at else now
+                    ))
+                else:
+                    # Insertar sin ID (auto-increment)
+                    cursor.execute('''
+                        INSERT INTO subtasks (task_id, title, description, deadline, completed, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        task_id,
+                        remote_subtask.title,
+                        remote_subtask.description or "",
+                        deadline_str,
+                        1 if remote_subtask.completed else 0,
+                        now,
+                        now
+                    ))
+        
+        conn.commit()
+        conn.close()
     
     def delete(self, task_id: int) -> bool:
         """
