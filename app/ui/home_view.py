@@ -252,19 +252,9 @@ class HomeView:
             main_view = self.habits_view.build_ui(self.title_bar, self.bottom_bar, self.home_view)
         elif self.current_section == "settings":
             # Usar SettingsView para construir la vista de configuración
+            # Solo el contenido, sin title_bar ni bottom_bar (se agregan en la estructura externa)
             settings_content = self.settings_view.build_ui()
-            main_view = ft.Container(
-                content=ft.Column(
-                    [
-                        self.title_bar,
-                        settings_content,
-                        self.bottom_bar
-                    ],
-                    spacing=0,
-                    expand=True
-                ),
-                expand=True
-            )
+            main_view = settings_content
         else:
             main_view = ft.Container(content=ft.Text("Sección no encontrada"), expand=True)
         
