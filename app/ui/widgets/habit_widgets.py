@@ -191,11 +191,11 @@ def create_habit_card(
                 ft.Row(
                     [
                         ft.IconButton(
-                            icon=ft.Icons.INFO_OUTLINE,
+                            icon=ft.Icons.ANALYTICS,
                             icon_color=secondary,
                             icon_size=20,
                             on_click=lambda e, h=habit: on_view_details(h),
-                            tooltip="Ver detalles"
+                            tooltip="Ver métricas"
                         ),
                         ft.IconButton(
                             icon=ft.Icons.EDIT,

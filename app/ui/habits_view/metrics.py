@@ -529,7 +529,16 @@ def create_charts_view(
     # Gráfica de progreso semanal - Últimas 8 semanas
     # Ajustar según el tipo de hábito
     is_daily = habit.frequency == 'daily'
-    target_days = 1 if is_daily else habit.target_days
+    # Para hábitos diarios, el objetivo es 7 días por semana (todos los días)
+    # Para hábitos semanales/personalizados, usar el target_days del hábito
+    if is_daily:
+        target_days = 7  # Siempre 7 días para hábitos diarios
+    else:
+        # Para hábitos semanales/personalizados, usar el target_days del hábito
+        # Asegurar que sea al menos 1 y máximo 7
+        target_days = max(1, min(7, habit.target_days)) if habit.target_days and habit.target_days > 0 else 7
+    
+    print(f"DEBUG create_charts_view: habit.frequency={habit.frequency}, is_daily={is_daily}, habit.target_days={habit.target_days}, calculated target_days={target_days}")
     max_height_weekly = 150
     
     weekly_data = []
@@ -546,20 +555,24 @@ def create_charts_view(
         })
     
     # Crear gráfica de barras para semanas (más grande y clara)
-    max_completions = max([d['completions'] for d in weekly_data] + [target_days] + [1])
+    # Usar el máximo entre completions y target_days para escalar correctamente
+    max_value = max([d['completions'] for d in weekly_data] + [target_days] + [1])
     week_bars = []
     for week_data in weekly_data:
-        height = int((week_data['completions'] / max_completions) * max_height_weekly) if max_completions > 0 else 0
-        target_height = int((week_data['target'] / max_completions) * max_height_weekly) if max_completions > 0 else 0
+        # Calcular altura de la barra de completados
+        height = int((week_data['completions'] / max_value) * max_height_weekly) if max_value > 0 else 0
+        # Calcular altura de la barra de objetivo (siempre debe ser target_days / max_value)
+        target_height = int((target_days / max_value) * max_height_weekly) if max_value > 0 else 0
+        # Asegurar que target_height sea al menos la altura mínima visible
+        if target_height < 10 and target_days > 0:
+            target_height = 10
         
-        # Para hábitos diarios, no mostrar "1/1", solo el número de días completados
-        if is_daily:
-            completion_text = str(week_data['completions'])
-            tooltip_text = f"{week_data['week']}: {week_data['completions']} días completados"
-        else:
-            # Para hábitos semanales/personalizados, mostrar "completados/objetivo"
-            completion_text = f"{week_data['completions']}/{week_data['target']}"
-            tooltip_text = f"{week_data['week']}: {week_data['completions']}/{week_data['target']} días completados"
+        # Mostrar siempre "completados/objetivo"
+        # Para hábitos diarios: "X/7" (días completados / 7 días de la semana)
+        # Para hábitos semanales/personalizados: "X/Y" (días completados / días objetivo)
+        # Usar target_days directamente para asegurar que siempre muestre el objetivo correcto
+        completion_text = f"{week_data['completions']}/{target_days}"
+        tooltip_text = f"{week_data['week']}: {week_data['completions']}/{target_days} días completados (objetivo: {target_days} días/semana)"
         
         week_bars.append(
             ft.Container(
@@ -567,15 +580,14 @@ def create_charts_view(
                     [
                         ft.Stack(
                             [
-                                # Barra de objetivo (fondo) - solo mostrar si no es diario
+                                # Barra de objetivo (fondo) - mostrar siempre
                                 ft.Container(
                                     width=40,
-                                    height=target_height if not is_daily else 0,
+                                    height=target_height,
                                     bgcolor=ft.Colors.ORANGE_200 if not is_dark else ft.Colors.ORANGE_800,
                                     border_radius=8,
                                     bottom=0,
-                                    border=ft.border.all(2, ft.Colors.ORANGE_400 if not is_dark else ft.Colors.ORANGE_600),
-                                    visible=not is_daily
+                                    border=ft.border.all(2, ft.Colors.ORANGE_400 if not is_dark else ft.Colors.ORANGE_600)
                                 ),
                                 # Barra de completados (frente)
                                 ft.Container(
@@ -617,7 +629,7 @@ def create_charts_view(
     
     # Título para la gráfica semanal según el tipo de hábito
     if is_daily:
-        weekly_title = "Últimas 8 Semanas - Días Completados"
+        weekly_title = f"Últimas 8 Semanas - Días Completados/Objetivo (7 días/semana)"
     else:
         weekly_title = f"Últimas 8 Semanas - Días Completados/Objetivo ({target_days} días/semana)"
     
