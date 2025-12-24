@@ -3,8 +3,10 @@ Módulo para la navegación y construcción de formularios de hábitos.
 """
 import flet as ft
 from typing import Optional
+from datetime import date
 from app.data.models import Habit
 from app.ui.habit_form import HabitForm
+from app.ui.habits_view.metrics import create_habit_metrics_view
 
 
 def navigate_to_habit_form(
@@ -98,8 +100,6 @@ def navigate_to_habit_details(
     """
     # Obtener métricas completas
     metrics = habit_service.get_habit_metrics(habit.id)
-    weekly_progress = habit_service.get_weekly_progress(habit.id)
-    monthly_progress = habit_service.get_monthly_progress(habit.id)
     
     # Detectar el tema actual
     is_dark = page.theme_mode == ft.ThemeMode.DARK
@@ -132,7 +132,51 @@ def navigate_to_habit_details(
         bgcolor=ft.Colors.BLACK87 if is_dark else ft.Colors.RED_50
     )
     
-    # Construir contenido de detalles
+    # Contenedor para la vista de métricas (se actualizará dinámicamente)
+    metrics_container = ft.Container()
+    
+    def load_completion_dates():
+        """Carga las fechas de cumplimiento actuales."""
+        completions = habit_service.repository.get_completions(habit.id)
+        return {c.completion_date.date() for c in completions}
+    
+    # Callback para alternar cumplimiento
+    def toggle_completion(habit_id: int, completion_date: date):
+        """Alterna el cumplimiento de un hábito para una fecha específica."""
+        habit_service.toggle_completion(habit_id, completion_date)
+        # Reconstruir la vista después de cambiar
+        rebuild_metrics_view()
+    
+    def rebuild_metrics_view():
+        """Reconstruye la vista de métricas con datos actualizados."""
+        completion_dates = load_completion_dates()
+        metrics_view = create_habit_metrics_view(
+            page=page,
+            habit=habit,
+            habit_service=habit_service,
+            completion_dates=completion_dates,
+            on_completion_toggle=toggle_completion,
+            on_refresh=rebuild_metrics_view
+        )
+        metrics_container.content = metrics_view
+        page.update()
+    
+    # Cargar fechas iniciales
+    completion_dates = load_completion_dates()
+    
+    # Crear vista de métricas avanzadas inicial
+    metrics_view = create_habit_metrics_view(
+        page=page,
+        habit=habit,
+        habit_service=habit_service,
+        completion_dates=completion_dates,
+        on_completion_toggle=toggle_completion,
+        on_refresh=rebuild_metrics_view
+    )
+    
+    metrics_container.content = metrics_view
+    
+    # Construir contenido de detalles con métricas básicas y avanzadas
     details_content = ft.Container(
         content=ft.Column(
             [
@@ -143,9 +187,9 @@ def navigate_to_habit_details(
                     color=ft.Colors.GREY_500 if is_dark else ft.Colors.GREY_600
                 ),
                 ft.Divider(),
-                # Métricas principales
+                # Métricas principales (resumen)
                 ft.Text(
-                    "Métricas",
+                    "Resumen",
                     size=20,
                     weight=ft.FontWeight.BOLD,
                     color=ft.Colors.RED_400
@@ -211,7 +255,10 @@ def navigate_to_habit_details(
                 ft.Text(
                     f"Último cumplimiento: {metrics['last_completion_date'].strftime('%d/%m/%Y') if metrics['last_completion_date'] else 'Nunca'}",
                     size=14
-                )
+                ),
+                ft.Divider(),
+                # Métricas avanzadas (calendario y gráficas)
+                metrics_container
             ],
             spacing=16,
             scroll=ft.ScrollMode.AUTO
