@@ -6,6 +6,7 @@ from datetime import date
 from typing import Callable
 from calendar import monthrange
 from app.data.models import Habit
+from ...utils import load_completion_dates
 
 
 def create_calendar_view(
@@ -122,8 +123,7 @@ def create_calendar_view(
         
         # Agregar días del mes
         # OFFLINE-FIRST: Recargar siempre desde SQLite local para tener datos frescos
-        completions = habit_service.repository.get_completions(habit.id)
-        current_completion_dates = {c.completion_date.date() for c in completions}
+        current_completion_dates = load_completion_dates(habit_service, habit.id)
         
         today = date.today()
         for day in range(1, days_in_month + 1):
@@ -175,8 +175,7 @@ def create_calendar_view(
                             on_completion_toggle(habit.id, d)
                             
                             # Recargar datos frescos desde SQLite local
-                            completions = habit_service.repository.get_completions(habit.id)
-                            fresh_completion_dates = {c.completion_date.date() for c in completions}
+                            fresh_completion_dates = load_completion_dates(habit_service, habit.id)
                             
                             # Actualizar el set de completion_dates
                             completion_dates.clear()
@@ -195,9 +194,9 @@ def create_calendar_view(
                             print(f"Error al alternar cumplimiento (offline): {ex}")
                             try:
                                 # Recargar datos y reconstruir
-                                completions = habit_service.repository.get_completions(habit.id)
+                                fresh_completion_dates = load_completion_dates(habit_service, habit.id)
                                 completion_dates.clear()
-                                completion_dates.update({c.completion_date.date() for c in completions})
+                                completion_dates.update(fresh_completion_dates)
                                 build_calendar(current_month[0], current_year[0])
                                 page.update()
                             except Exception as ex2:
@@ -249,40 +248,29 @@ def create_calendar_view(
     # Función para actualizar datos del calendario
     def refresh_calendar_data(e):
         """Recarga los datos del calendario desde la base de datos."""
-        print("DEBUG: Botón de actualizar presionado")
         try:
-            print(f"DEBUG: Recargando datos para hábito {habit.id}")
             # Recargar datos frescos desde SQLite
-            completions = habit_service.repository.get_completions(habit.id)
-            fresh_completion_dates = {c.completion_date.date() for c in completions}
-            print(f"DEBUG: Fechas encontradas: {len(fresh_completion_dates)} - {sorted(fresh_completion_dates)}")
+            fresh_completion_dates = load_completion_dates(habit_service, habit.id)
             
             # Actualizar el set de completion_dates (esto es importante para las otras vistas)
             completion_dates.clear()
             completion_dates.update(fresh_completion_dates)
-            print(f"DEBUG: completion_dates actualizado: {len(completion_dates)} fechas")
             
             # Reconstruir el calendario con datos frescos
-            print("DEBUG: Reconstruyendo calendario...")
             build_calendar(current_month[0], current_year[0])
             
             # Actualizar el contenedor del calendario explícitamente
             calendar_container.update()
-            print("DEBUG: Contenedor del calendario actualizado")
             
             # Refrescar otras vistas (gráficas, progreso, etc.)
             # Esto reconstruye toda la vista de métricas con los datos actualizados
-            print("DEBUG: Refrescando otras vistas...")
             if on_refresh:
                 on_refresh()
-                print("DEBUG: on_refresh() ejecutado")
             
             # Actualizar la página
-            print("DEBUG: Actualizando página...")
             page.update()
             
             # Mostrar mensaje de confirmación
-            print("DEBUG: Mostrando mensaje de confirmación...")
             page.snack_bar = ft.SnackBar(
                 content=ft.Text("Datos actualizados correctamente"),
                 bgcolor=primary,
@@ -290,7 +278,6 @@ def create_calendar_view(
             )
             page.snack_bar.open = True
             page.update()
-            print("DEBUG: Actualización completada")
         except Exception as ex:
             print(f"ERROR: Error al actualizar datos del calendario: {ex}")
             import traceback

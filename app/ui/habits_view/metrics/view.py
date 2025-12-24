@@ -5,6 +5,7 @@ import flet as ft
 from typing import Callable
 from datetime import date
 from app.data.models import Habit
+from ...utils import load_completion_dates
 from .calendar import create_calendar_view
 from .charts import create_charts_view
 from .progress import create_progress_view
@@ -49,8 +50,7 @@ def create_habit_metrics_view(
     
     # Contenido de las tabs - crear con datos frescos
     # IMPORTANTE: Recargar completion_dates desde la BD para asegurar datos actualizados
-    fresh_completions = habit_service.repository.get_completions(habit.id)
-    fresh_completion_dates = {c.completion_date.date() for c in fresh_completions}
+    fresh_completion_dates = load_completion_dates(habit_service, habit.id)
     
     calendar_content = create_calendar_view(
         page, habit, habit_service, fresh_completion_dates, on_completion_toggle, on_refresh

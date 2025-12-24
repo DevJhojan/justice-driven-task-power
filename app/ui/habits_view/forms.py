@@ -136,10 +136,12 @@ def navigate_to_habit_details(
     # Contenedor para la vista de métricas (se actualizará dinámicamente)
     metrics_container = ft.Container()
     
+    # Usar función helper de utils para cargar completion_dates
+    from .utils import load_completion_dates as load_completion_dates_helper
+    
     def load_completion_dates():
         """Carga las fechas de cumplimiento actuales."""
-        completions = habit_service.repository.get_completions(habit.id)
-        return {c.completion_date.date() for c in completions}
+        return load_completion_dates_helper(habit_service, habit.id)
     
     # Callback para alternar cumplimiento (100% offline, solo SQLite local)
     def toggle_completion(habit_id: int, completion_date: date):
@@ -154,7 +156,6 @@ def navigate_to_habit_details(
     
     def rebuild_metrics_view():
         """Reconstruye la vista de métricas con datos actualizados."""
-        print("DEBUG rebuild_metrics_view: Iniciando reconstrucción...")
         try:
             # OFFLINE-FIRST: Recargar el hábito completo desde SQLite local
             # Esto asegura que todos los datos estén actualizados (completions, etc.)
@@ -165,18 +166,14 @@ def navigate_to_habit_details(
                 habit.updated_at = updated_habit.updated_at
                 # Usar el hábito actualizado
                 habit_to_use = updated_habit
-                print(f"DEBUG rebuild_metrics_view: Hábito actualizado, {len(updated_habit.completions)} completions")
             else:
                 # Si no se encuentra, usar el original
                 habit_to_use = habit
-                print("DEBUG rebuild_metrics_view: Usando hábito original")
             
             # Recargar fechas de cumplimiento
             completion_dates = load_completion_dates()
-            print(f"DEBUG rebuild_metrics_view: {len(completion_dates)} fechas de cumplimiento cargadas")
             
             # Reconstruir la vista de métricas con el hábito actualizado
-            print("DEBUG rebuild_metrics_view: Creando nueva vista de métricas...")
             metrics_view = create_habit_metrics_view(
                 page=page,
                 habit=habit_to_use,
@@ -186,9 +183,7 @@ def navigate_to_habit_details(
                 on_refresh=rebuild_metrics_view
             )
             metrics_container.content = metrics_view
-            print("DEBUG rebuild_metrics_view: Vista reconstruida, actualizando página...")
             page.update()
-            print("DEBUG rebuild_metrics_view: Reconstrucción completada")
         except Exception as ex:
             print(f"ERROR: Error al reconstruir métricas: {ex}")
             import traceback

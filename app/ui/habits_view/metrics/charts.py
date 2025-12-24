@@ -4,6 +4,7 @@ Vista de gráficas de progreso del hábito (últimos 30 días y últimas 8 seman
 import flet as ft
 from datetime import date, timedelta
 from app.data.models import Habit
+from ...utils import load_completion_dates
 
 
 def create_charts_view(
@@ -29,8 +30,7 @@ def create_charts_view(
     primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_400
     
     # OFFLINE-FIRST: Recargar datos frescos desde SQLite local
-    completions = habit_service.repository.get_completions(habit.id)
-    fresh_completion_dates = {c.completion_date.date() for c in completions}
+    fresh_completion_dates = load_completion_dates(habit_service, habit.id)
     
     # Gráfica de barras - Últimos 30 días
     today = date.today()
@@ -120,7 +120,6 @@ def create_charts_view(
         # Asegurar que sea al menos 1 y máximo 7
         target_days = max(1, min(7, habit.target_days)) if habit.target_days and habit.target_days > 0 else 7
     
-    print(f"DEBUG create_charts_view: habit.frequency={habit.frequency}, is_daily={is_daily}, habit.target_days={habit.target_days}, calculated target_days={target_days}")
     max_height_weekly = 150
     
     weekly_data = []
