@@ -78,6 +78,13 @@ class HomeView:
         )
         
         # Inicializar vista de configuración como módulo separado
+        firebase_error = ""
+        try:
+            if not FIREBASE_AVAILABLE:
+                firebase_error = _firebase_import_error
+        except:
+            pass
+        
         self.settings_view = SettingsView(
             page=page,
             settings_service=self.settings_service,
@@ -85,11 +92,14 @@ class HomeView:
             firebase_auth_service=self.firebase_auth_service,
             firebase_sync_service=self.firebase_sync_service,
             firebase_available=FIREBASE_AVAILABLE,
-            firebase_import_error=_firebase_import_error if 'FIREBASE_AVAILABLE' in globals() and not FIREBASE_AVAILABLE else "",
+            firebase_import_error=firebase_error,
             on_go_back=self._go_back,
             on_rebuild_tasks=lambda: (self._build_ui() if self.current_section == "tasks" else None, self.tasks_view.load_tasks() if self.current_section == "tasks" else None),
             on_rebuild_habits=lambda: (self._build_ui() if self.current_section == "habits" else None, self.habits_view.load_habits() if self.current_section == "habits" else None)
         )
+        
+        # Configurar callback para reconstruir vista de configuración
+        self.settings_view.set_rebuild_settings_callback(lambda: self._build_ui() if self.current_section == "settings" else None)
         
         # Secciones: "tasks", "habits", "settings"
         self.current_section = "tasks"
@@ -1751,222 +1761,10 @@ class HomeView:
         self.page.go("/storage-permissions")
         self.page.update()
     
-    def _toggle_theme(self, e):
-        """Cambia entre tema claro y oscuro."""
-        # Alternar modo y persistir a través del servicio de ajustes
-        current = self.settings_service.get_settings()
-        new_mode = "light" if current.theme_mode == "dark" else "dark"
-        updated = self.settings_service.update_settings(theme_mode=new_mode)
-        apply_theme_to_page(self.page, updated)
-
-        # Reconstruir vista según sección actual
-        if self.current_section == "tasks":
-            self._build_ui()
-            self.tasks_view.load_tasks()
-        elif self.current_section == "habits":
-            self._build_habits_view()
-        elif self.current_section == "settings":
-            self._build_settings_view()
-
-        self.page.update()
-
-    def _open_accent_dialog(self, e):
-        """Abre el diálogo con la paleta de matices disponibles."""
-        current_settings = self.settings_service.get_settings()
-
-        # Secciones de colores con sus opciones
-        sections: list[tuple[str, list[tuple[str, str, str]]]] = [
-            (
-                "Azules",
-                [
-                    ("dodger_blue", "#1E90FF", "DodgerBlue"),
-                    ("primary_blue", "#007BFF", "Primary Blue"),
-                    ("bootstrap_blue", "#0D6EFD", "Bootstrap Blue"),
-                    ("deep_blue", "#0056B3", "Deep Blue"),
-                    ("deepsky_blue", "#00BFFF", "DeepSkyBlue"),
-                    ("steel_blue", "#4682B4", "SteelBlue"),
-                    ("navy_dark", "#003366", "Navy Dark"),
-                ],
-            ),
-            (
-                "Verdes",
-                [
-                    ("success_green", "#28A745", "Success Green"),
-                    ("emerald", "#2ECC71", "Emerald"),
-                    ("bright_green", "#00C853", "Bright Green"),
-                    ("material_green", "#4CAF50", "Material Green"),
-                    ("turquoise", "#1ABC9C", "Turquoise"),
-                    ("green_sea", "#16A085", "Green Sea"),
-                    ("dark_teal", "#00695C", "Dark Teal"),
-                ],
-            ),
-            (
-                "Rojos",
-                [
-                    ("danger_red", "#DC3545", "Danger Red"),
-                    ("alizarin", "#E74C3C", "Alizarin"),
-                    ("dark_red", "#C0392B", "Dark Red"),
-                    ("soft_red", "#FF5252", "Soft Red"),
-                    ("deep_red", "#B71C1C", "Deep Red"),
-                    ("vivid_red", "#FF1744", "Vivid Red"),
-                ],
-            ),
-            (
-                "Amarillos / Naranjas",
-                [
-                    ("amber", "#FFC107", "Amber"),
-                    ("soft_yellow", "#FFD54F", "Soft Yellow"),
-                    ("orange", "#FF9800", "Orange"),
-                    ("deep_orange", "#FF5722", "Deep Orange"),
-                    ("sun_orange", "#F39C12", "Sun Orange"),
-                    ("golden", "#FFB300", "Golden"),
-                ],
-            ),
-            (
-                "Morados / Rosas",
-                [
-                    ("ui_purple", "#6F42C1", "Purple UI"),
-                    ("amethyst", "#9B59B6", "Amethyst"),
-                    ("dark_purple", "#8E44AD", "Dark Purple"),
-                    ("vibrant_purple", "#E056FD", "Vibrant Purple"),
-                    ("ui_pink", "#D63384", "Pink"),
-                    ("hot_pink", "#FF69B4", "Hot Pink"),
-                ],
-            ),
-            (
-                "Grises / Neutros",
-                [
-                    ("dark_gray", "#212529", "Dark Gray"),
-                    ("charcoal", "#343A40", "Charcoal"),
-                    ("medium_gray", "#495057", "Medium Gray"),
-                    ("secondary_gray", "#6C757D", "Secondary Gray"),
-                    ("light_gray", "#ADB5BD", "Light Gray"),
-                    ("soft_gray", "#DEE2E6", "Soft Gray"),
-                    ("almost_white", "#F8F9FA", "Almost White"),
-                ],
-            ),
-            (
-                "Blancos / Negros",
-                [
-                    ("black", "#000000", "Black"),
-                    ("white", "#FFFFFF", "White"),
-                    ("soft_white", "#FAFAFA", "Soft White"),
-                    ("true_dark", "#121212", "True Dark Mode"),
-                ],
-            ),
-            (
-                "Colores gamer / UI",
-                [
-                    ("neon_cyan", "#00E5FF", "Neon Cyan"),
-                    ("neon_green", "#76FF03", "Neon Green"),
-                    ("neon_pink", "#FF4081", "Neon Pink"),
-                    ("electric_purple", "#651FFF", "Electric Purple"),
-                    ("tech_blue", "#00B0FF", "Tech Blue"),
-                    ("mint_neon", "#1DE9B6", "Mint Neon"),
-                    ("orange_neon", "#FF9100", "Orange Neon"),
-                ],
-            ),
-        ]
-
-        section_controls: list[ft.Control] = []
-
-        for title, options in sections:
-            # Título de sección
-            section_controls.append(
-                ft.Text(
-                    title,
-                    size=16,
-                    weight=ft.FontWeight.BOLD,
-                )
-            )
-
-            # Botones de la sección, organizados en filas
-            buttons: list[ft.Container] = []
-            for value, color, label in options:
-                selected = value == current_settings.accent_color
-                buttons.append(
-                    ft.Container(
-                        content=ft.IconButton(
-                            icon=ft.Icons.CIRCLE,
-                            icon_color=color,
-                            tooltip=label,
-                            data=value,
-                            on_click=self._on_accent_button_click,
-                        ),
-                        border=ft.border.all(
-                            2,
-                            color if selected else ft.Colors.TRANSPARENT,
-                        ),
-                        border_radius=20,
-                        padding=4,
-                    )
-                )
-
-            # Agrupar botones en filas de 4 para mejor uso de espacio
-            for i in range(0, len(buttons), 4):
-                section_controls.append(
-                    ft.Row(
-                        controls=buttons[i : i + 4],
-                        spacing=8,
-                        alignment=ft.MainAxisAlignment.START,
-                    )
-                )
-
-            # Separador entre secciones
-            section_controls.append(ft.Divider())
-
-        # Contenido scrollable ocupando ~70% del ancho de la pantalla
-        try:
-            content_width = self.page.width * 0.7 if (hasattr(self.page, 'width') and self.page.width is not None and isinstance(self.page.width, (int, float))) else None
-        except (AttributeError, TypeError):
-            content_width = None
-
-        self.accent_dialog.title = ft.Text("Selecciona un matiz")
-        self.accent_dialog.content = ft.Container(
-            width=content_width,
-            content=ft.Column(
-                controls=section_controls,
-                spacing=8,
-                scroll=ft.ScrollMode.AUTO,
-            ),
-        )
-        self.accent_dialog.actions = [
-            ft.TextButton("Cerrar", on_click=lambda ev: self._close_accent_dialog())
-        ]
-        self.accent_dialog.open = True
-        self.page.dialog = self.accent_dialog
-        self.page.update()
-
-    def _on_accent_button_click(self, e: ft.ControlEvent):
-        """Cambio de color principal desde la grid de matices."""
-        value = e.control.data
-        # La validación se hace de forma implícita en SettingsService mediante AccentColorLiteral,
-        # aquí solo comprobamos que exista algún valor.
-        if not value:
-            return
-
-        updated = self.settings_service.update_settings(accent_color=value)
-        apply_theme_to_page(self.page, updated)
-
-        # Reconstruir la vista actual respetando la sección activa
-        if self.current_section == "tasks":
-            self._build_ui()
-            self.tasks_view.load_tasks()
-        elif self.current_section == "habits":
-            self._build_ui()
-            self.habits_view.load_habits()
-        elif self.current_section == "settings":
-            self._build_settings_view()
-
-        # Cerrar el diálogo de selección si está abierto
-        self._close_accent_dialog()
-        self.page.update()
-
-    def _close_accent_dialog(self):
-        """Cierra el diálogo de selección de matiz si está abierto."""
-        if hasattr(self, "accent_dialog"):
-            self.accent_dialog.open = False
-            self.page.update()
+    # ==================== MÉTODOS DE CONFIGURACIÓN (delegados a SettingsView) ====================
+    # Todos los métodos de configuración han sido movidos a settings_view
+    # Estos métodos ya no son necesarios aquí y se eliminan para evitar duplicación
+    # Si necesitas cambiar el tema o color, usa self.settings_view directamente
     
     # ==================== MÉTODOS DE HÁBITOS (delegados a HabitsView) ====================
     

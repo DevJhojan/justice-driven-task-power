@@ -234,6 +234,13 @@ class SettingsView:
             self.on_rebuild_tasks()
         if self.on_rebuild_habits:
             self.on_rebuild_habits()
+        # También reconstruir la vista de configuración si es necesario
+        if hasattr(self, '_on_rebuild_settings'):
+            self._on_rebuild_settings()
+    
+    def set_rebuild_settings_callback(self, callback: callable):
+        """Establece el callback para reconstruir la vista de configuración."""
+        self._on_rebuild_settings = callback
     
     def _handle_show_login(self):
         """Maneja la solicitud de mostrar login."""
