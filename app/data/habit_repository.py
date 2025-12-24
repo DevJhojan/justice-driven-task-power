@@ -336,10 +336,23 @@ class HabitRepository:
         conn = self.db.get_connection()
         cursor = conn.cursor()
         
-        # Normalizar fecha
+        # Normalizar fecha: convertir a datetime a medianoche y luego a string ISO
+        # Esto asegura que el formato coincida con el usado al crear (YYYY-MM-DDTHH:MM:SS)
         if isinstance(completion_date, datetime):
-            completion_date = completion_date.date()
-        completion_date_str = completion_date.isoformat()
+            completion_date_dt = completion_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        else:
+            completion_date_dt = datetime.combine(completion_date, datetime.min.time())
+        completion_date_str = completion_date_dt.isoformat()
+        
+        # Debug: verificar qué hay antes de eliminar
+        cursor.execute('''
+            SELECT id, completion_date FROM habit_completions 
+            WHERE habit_id = ? AND completion_date = ?
+        ''', (habit_id, completion_date_str))
+        existing = cursor.fetchall()
+        print(f"DEBUG delete_completion_by_date: habit_id={habit_id}, date={completion_date_str}, found={len(existing)} records")
+        for row in existing:
+            print(f"  - id={row['id']}, completion_date={row['completion_date']}")
         
         cursor.execute('''
             DELETE FROM habit_completions 
@@ -347,6 +360,7 @@ class HabitRepository:
         ''', (habit_id, completion_date_str))
         
         deleted = cursor.rowcount > 0
+        print(f"DEBUG delete_completion_by_date: deleted={deleted}, rowcount={cursor.rowcount}")
         
         conn.commit()
         conn.close()
@@ -367,10 +381,21 @@ class HabitRepository:
         conn = self.db.get_connection()
         cursor = conn.cursor()
         
-        # Normalizar fecha
+        # Normalizar fecha: convertir a datetime a medianoche y luego a string ISO
+        # Esto asegura que el formato coincida con el usado al crear (YYYY-MM-DDTHH:MM:SS)
         if isinstance(completion_date, datetime):
-            completion_date = completion_date.date()
-        completion_date_str = completion_date.isoformat()
+            completion_date_dt = completion_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        else:
+            completion_date_dt = datetime.combine(completion_date, datetime.min.time())
+        completion_date_str = completion_date_dt.isoformat()
+        
+        # Debug: verificar todas las fechas almacenadas para este hábito
+        cursor.execute('''
+            SELECT completion_date FROM habit_completions 
+            WHERE habit_id = ?
+        ''', (habit_id,))
+        all_dates = [row['completion_date'] for row in cursor.fetchall()]
+        print(f"DEBUG has_completion_for_date: habit_id={habit_id}, checking date={completion_date_str}, stored dates={all_dates}")
         
         cursor.execute('''
             SELECT COUNT(*) as count FROM habit_completions 
@@ -378,9 +403,11 @@ class HabitRepository:
         ''', (habit_id, completion_date_str))
         
         result = cursor.fetchone()
+        count = result['count'] if result else 0
+        print(f"DEBUG has_completion_for_date: count={count}")
         conn.close()
         
-        return result['count'] > 0
+        return count > 0
     
     def _row_to_habit(self, row) -> Habit:
         """

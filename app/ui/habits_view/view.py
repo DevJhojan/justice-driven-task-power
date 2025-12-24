@@ -7,7 +7,8 @@ from app.data.models import Habit
 from app.services.habit_service import HabitService
 from app.ui.widgets import create_habit_statistics_card
 
-from .utils import get_screen_width, is_desktop_platform
+# Nota: get_screen_width e is_desktop_platform están disponibles pero no se usan actualmente
+# Se mantienen en utils.py para uso futuro si es necesario
 from .habit_management import (
     load_habits_into_container,
     toggle_habit_completion,
@@ -234,7 +235,10 @@ class HabitsView:
         )
     
     def _go_back(self, e=None):
-        """Vuelve a la vista anterior."""
+        """Vuelve a la vista anterior y recarga los hábitos para actualizar métricas."""
+        # Recargar hábitos antes de volver para actualizar métricas (streak, cumplimiento, total)
+        self.load_habits()
+        
         if self.on_go_back:
             self.on_go_back(e)
         else:

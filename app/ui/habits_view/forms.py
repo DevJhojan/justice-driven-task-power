@@ -3,8 +3,10 @@ Módulo para la navegación y construcción de formularios de hábitos.
 """
 import flet as ft
 from typing import Optional
+from datetime import date
 from app.data.models import Habit
 from app.ui.habit_form import HabitForm
+from app.ui.habits_view.metrics import create_habit_metrics_view
 
 
 def navigate_to_habit_form(
@@ -96,10 +98,9 @@ def navigate_to_habit_details(
         habit: Hábito a mostrar.
         on_go_back: Callback para volver.
     """
-    # Obtener métricas completas
+    # Obtener métricas completas (100% offline, solo desde SQLite local)
+    # OFFLINE-FIRST: Todas las métricas se calculan desde la base de datos local
     metrics = habit_service.get_habit_metrics(habit.id)
-    weekly_progress = habit_service.get_weekly_progress(habit.id)
-    monthly_progress = habit_service.get_monthly_progress(habit.id)
     
     # Detectar el tema actual
     is_dark = page.theme_mode == ft.ThemeMode.DARK
@@ -132,7 +133,80 @@ def navigate_to_habit_details(
         bgcolor=ft.Colors.BLACK87 if is_dark else ft.Colors.RED_50
     )
     
-    # Construir contenido de detalles
+    # Contenedor para la vista de métricas (se actualizará dinámicamente)
+    metrics_container = ft.Container()
+    
+    # Usar función helper de utils para cargar completion_dates
+    from .utils import load_completion_dates as load_completion_dates_helper
+    
+    def load_completion_dates():
+        """Carga las fechas de cumplimiento actuales."""
+        return load_completion_dates_helper(habit_service, habit.id)
+    
+    # Callback para alternar cumplimiento (100% offline, solo SQLite local)
+    def toggle_completion(habit_id: int, completion_date: date):
+        """
+        Alterna el cumplimiento de un hábito para una fecha específica.
+        OFFLINE-FIRST: Solo opera en la base de datos local SQLite.
+        No hay llamadas a Firebase aquí.
+        """
+        # OFFLINE-FIRST: Solo operaciones locales en SQLite
+        habit_service.toggle_completion(habit_id, completion_date)
+        # No necesitamos reconstruir aquí porque el handler del calendario ya lo hace
+    
+    def rebuild_metrics_view():
+        """Reconstruye la vista de métricas con datos actualizados."""
+        try:
+            # OFFLINE-FIRST: Recargar el hábito completo desde SQLite local
+            # Esto asegura que todos los datos estén actualizados (completions, etc.)
+            updated_habit = habit_service.get_habit(habit.id)
+            if updated_habit:
+                # Actualizar el objeto habit con los datos frescos
+                habit.completions = updated_habit.completions
+                habit.updated_at = updated_habit.updated_at
+                # Usar el hábito actualizado
+                habit_to_use = updated_habit
+            else:
+                # Si no se encuentra, usar el original
+                habit_to_use = habit
+            
+            # Recargar fechas de cumplimiento
+            completion_dates = load_completion_dates()
+            
+            # Reconstruir la vista de métricas con el hábito actualizado
+            metrics_view = create_habit_metrics_view(
+                page=page,
+                habit=habit_to_use,
+                habit_service=habit_service,
+                completion_dates=completion_dates,
+                on_completion_toggle=toggle_completion,
+                on_refresh=rebuild_metrics_view
+            )
+            metrics_container.content = metrics_view
+            page.update()
+        except Exception as ex:
+            print(f"ERROR: Error al reconstruir métricas: {ex}")
+            import traceback
+            traceback.print_exc()
+            # Intentar actualizar de todas formas
+            page.update()
+    
+    # Cargar fechas iniciales
+    completion_dates = load_completion_dates()
+    
+    # Crear vista de métricas avanzadas inicial
+    metrics_view = create_habit_metrics_view(
+        page=page,
+        habit=habit,
+        habit_service=habit_service,
+        completion_dates=completion_dates,
+        on_completion_toggle=toggle_completion,
+        on_refresh=rebuild_metrics_view
+    )
+    
+    metrics_container.content = metrics_view
+    
+    # Construir contenido de detalles con métricas básicas y avanzadas
     details_content = ft.Container(
         content=ft.Column(
             [
@@ -143,9 +217,9 @@ def navigate_to_habit_details(
                     color=ft.Colors.GREY_500 if is_dark else ft.Colors.GREY_600
                 ),
                 ft.Divider(),
-                # Métricas principales
+                # Métricas principales (resumen)
                 ft.Text(
-                    "Métricas",
+                    "Resumen",
                     size=20,
                     weight=ft.FontWeight.BOLD,
                     color=ft.Colors.RED_400
@@ -211,7 +285,10 @@ def navigate_to_habit_details(
                 ft.Text(
                     f"Último cumplimiento: {metrics['last_completion_date'].strftime('%d/%m/%Y') if metrics['last_completion_date'] else 'Nunca'}",
                     size=14
-                )
+                ),
+                ft.Divider(),
+                # Métricas avanzadas (calendario y gráficas)
+                metrics_container
             ],
             spacing=16,
             scroll=ft.ScrollMode.AUTO
