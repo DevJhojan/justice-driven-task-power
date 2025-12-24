@@ -461,55 +461,77 @@ def create_charts_view(
         })
     
     # Crear barras (más grandes y visibles)
-    max_height = 120
+    max_height = 150
+    bar_width = 20
     bars = []
     for day_data in last_30_days:
-        height = max_height if day_data['completed'] else 8
+        height = max_height if day_data['completed'] else 10
         color = primary if day_data['completed'] else (ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700)
+        border_color = ft.Colors.GREY_400 if not is_dark else ft.Colors.GREY_600
         
         bars.append(
             ft.Container(
                 content=ft.Column(
                     [
                         ft.Container(
-                            width=14,
+                            width=bar_width,
                             height=height,
                             bgcolor=color,
-                            border_radius=7,
-                            border=ft.border.all(1, ft.Colors.GREY_400 if not day_data['completed'] and not is_dark else ft.Colors.GREY_600) if not day_data['completed'] else None
+                            border_radius=10,
+                            border=ft.border.all(2, border_color if not day_data['completed'] else primary),
+                            alignment=ft.alignment.center if day_data['completed'] else None
                         ),
+                        ft.Container(height=4),  # Espacio
                         ft.Text(
                             str(day_data['date'].day),
-                            size=10,
-                            weight=ft.FontWeight.BOLD if day_data['completed'] else None,
+                            size=11,
+                            weight=ft.FontWeight.BOLD if day_data['completed'] else ft.FontWeight.NORMAL,
                             text_align=ft.TextAlign.CENTER,
-                            color=ft.Colors.WHITE if is_dark else ft.Colors.BLACK87
+                            color=primary if day_data['completed'] else (ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400)
                         )
                     ],
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=4,
+                    spacing=0,
                     tight=True
                 ),
-                width=18,
-                tooltip=f"{day_data['date'].strftime('%d/%m/%Y')} - {'Completado' if day_data['completed'] else 'No completado'}"
+                width=bar_width + 4,
+                tooltip=f"{day_data['date'].strftime('%d/%m/%Y')} - {'✓ Completado' if day_data['completed'] else '✗ No completado'}"
             )
         )
     
     bar_chart = ft.Container(
-        content=ft.Row(
-            bars,
-            spacing=3,
-            alignment=ft.MainAxisAlignment.CENTER,
-            wrap=False,
-            scroll=ft.ScrollMode.HIDDEN
+        content=ft.Column(
+            [
+                ft.Text(
+                    "Últimos 30 Días",
+                    size=14,
+                    weight=ft.FontWeight.BOLD,
+                    text_align=ft.TextAlign.CENTER,
+                    color=primary
+                ),
+                ft.Container(height=8),
+                ft.Row(
+                    bars,
+                    spacing=4,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    wrap=False,
+                    scroll=ft.ScrollMode.HIDDEN
+                )
+            ],
+            spacing=0
         ),
-        padding=ft.padding.symmetric(vertical=10, horizontal=5),
-        border=ft.border.all(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700),
+        padding=ft.padding.symmetric(vertical=15, horizontal=10),
+        border=ft.border.all(2, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700),
         border_radius=8,
         bgcolor=ft.Colors.GREY_50 if not is_dark else ft.Colors.GREY_900
     )
     
     # Gráfica de progreso semanal - Últimas 8 semanas
+    # Ajustar según el tipo de hábito
+    is_daily = habit.frequency == 'daily'
+    target_days = 1 if is_daily else habit.target_days
+    max_height_weekly = 150
+    
     weekly_data = []
     for week_offset in range(7, -1, -1):
         week_start = today - timedelta(weeks=week_offset, days=today.weekday())
@@ -519,15 +541,25 @@ def create_charts_view(
         weekly_data.append({
             'week': f"Sem {week_offset + 1}",
             'completions': week_completions,
-            'target': habit.target_days
+            'target': target_days,
+            'week_start': week_start
         })
     
     # Crear gráfica de barras para semanas (más grande y clara)
-    max_completions = max([d['completions'] for d in weekly_data] + [habit.target_days] + [1])
+    max_completions = max([d['completions'] for d in weekly_data] + [target_days] + [1])
     week_bars = []
     for week_data in weekly_data:
-        height = int((week_data['completions'] / max_completions) * 120) if max_completions > 0 else 0
-        target_height = int((week_data['target'] / max_completions) * 120) if max_completions > 0 else 0
+        height = int((week_data['completions'] / max_completions) * max_height_weekly) if max_completions > 0 else 0
+        target_height = int((week_data['target'] / max_completions) * max_height_weekly) if max_completions > 0 else 0
+        
+        # Para hábitos diarios, no mostrar "1/1", solo el número de días completados
+        if is_daily:
+            completion_text = str(week_data['completions'])
+            tooltip_text = f"{week_data['week']}: {week_data['completions']} días completados"
+        else:
+            # Para hábitos semanales/personalizados, mostrar "completados/objetivo"
+            completion_text = f"{week_data['completions']}/{week_data['target']}"
+            tooltip_text = f"{week_data['week']}: {week_data['completions']}/{week_data['target']} días completados"
         
         week_bars.append(
             ft.Container(
@@ -535,29 +567,30 @@ def create_charts_view(
                     [
                         ft.Stack(
                             [
-                                # Barra de objetivo (fondo)
+                                # Barra de objetivo (fondo) - solo mostrar si no es diario
                                 ft.Container(
-                                    width=35,
-                                    height=target_height,
+                                    width=40,
+                                    height=target_height if not is_daily else 0,
                                     bgcolor=ft.Colors.ORANGE_200 if not is_dark else ft.Colors.ORANGE_800,
-                                    border_radius=6,
+                                    border_radius=8,
                                     bottom=0,
-                                    border=ft.border.all(1, ft.Colors.ORANGE_400 if not is_dark else ft.Colors.ORANGE_600)
+                                    border=ft.border.all(2, ft.Colors.ORANGE_400 if not is_dark else ft.Colors.ORANGE_600),
+                                    visible=not is_daily
                                 ),
                                 # Barra de completados (frente)
                                 ft.Container(
-                                    width=35,
-                                    height=height,
-                                    bgcolor=primary,
-                                    border_radius=6,
+                                    width=40,
+                                    height=max(height, 10) if height > 0 else 10,
+                                    bgcolor=primary if week_data['completions'] > 0 else (ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700),
+                                    border_radius=8,
                                     bottom=0,
-                                    border=ft.border.all(1, ft.Colors.RED_600 if not is_dark else ft.Colors.RED_800)
+                                    border=ft.border.all(2, primary if week_data['completions'] > 0 else (ft.Colors.GREY_400 if not is_dark else ft.Colors.GREY_600))
                                 )
                             ],
-                            width=35,
-                            height=120
+                            width=40,
+                            height=max_height_weekly
                         ),
-                        ft.Container(height=4),  # Espacio
+                        ft.Container(height=6),  # Espacio
                         ft.Text(
                             week_data['week'],
                             size=11,
@@ -566,8 +599,8 @@ def create_charts_view(
                             color=ft.Colors.WHITE if is_dark else ft.Colors.BLACK87
                         ),
                         ft.Text(
-                            f"{week_data['completions']}/{week_data['target']}",
-                            size=10,
+                            completion_text,
+                            size=12,
                             text_align=ft.TextAlign.CENTER,
                             color=primary,
                             weight=ft.FontWeight.BOLD
@@ -577,21 +610,40 @@ def create_charts_view(
                     spacing=2,
                     tight=True
                 ),
-                width=45,
-                tooltip=f"{week_data['week']}: {week_data['completions']}/{week_data['target']} completados"
+                width=50,
+                tooltip=tooltip_text
             )
         )
     
+    # Título para la gráfica semanal según el tipo de hábito
+    if is_daily:
+        weekly_title = "Últimas 8 Semanas - Días Completados"
+    else:
+        weekly_title = f"Últimas 8 Semanas - Días Completados/Objetivo ({target_days} días/semana)"
+    
     weekly_chart = ft.Container(
-        content=ft.Row(
-            week_bars,
-            spacing=6,
-            alignment=ft.MainAxisAlignment.CENTER,
-            wrap=False,
-            scroll=ft.ScrollMode.HIDDEN
+        content=ft.Column(
+            [
+                ft.Text(
+                    weekly_title,
+                    size=14,
+                    weight=ft.FontWeight.BOLD,
+                    text_align=ft.TextAlign.CENTER,
+                    color=primary
+                ),
+                ft.Container(height=8),
+                ft.Row(
+                    week_bars,
+                    spacing=8,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    wrap=False,
+                    scroll=ft.ScrollMode.HIDDEN
+                )
+            ],
+            spacing=0
         ),
-        padding=ft.padding.symmetric(vertical=10, horizontal=5),
-        border=ft.border.all(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700),
+        padding=ft.padding.symmetric(vertical=15, horizontal=10),
+        border=ft.border.all(2, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700),
         border_radius=8,
         bgcolor=ft.Colors.GREY_50 if not is_dark else ft.Colors.GREY_900
     )
@@ -606,11 +658,6 @@ def create_charts_view(
                     text_align=ft.TextAlign.CENTER
                 ),
                 ft.Divider(),
-                ft.Text(
-                    "Últimos 30 días",
-                    size=14,
-                    weight=ft.FontWeight.BOLD
-                ),
                 bar_chart,
                 ft.Divider(height=20),
                 ft.Text(
