@@ -234,7 +234,10 @@ class HabitsView:
         )
     
     def _go_back(self, e=None):
-        """Vuelve a la vista anterior."""
+        """Vuelve a la vista anterior y recarga los hábitos para actualizar métricas."""
+        # Recargar hábitos antes de volver para actualizar métricas (streak, cumplimiento, total)
+        self.load_habits()
+        
         if self.on_go_back:
             self.on_go_back(e)
         else:

@@ -38,33 +38,42 @@ def create_habit_metrics_view(
     metrics = habit_service.get_habit_metrics(habit.id)
     
     # Crear tabs para diferentes vistas
-    tabs = ft.Tabs(
-        selected_index=0,
-        tabs=[
-            ft.Tab(text="Calendario", icon=ft.Icons.CALENDAR_MONTH),
-            ft.Tab(text="Gráficas", icon=ft.Icons.BAR_CHART),
-            ft.Tab(text="Progreso", icon=ft.Icons.TRENDING_UP),
-        ],
-        expand=True
-    )
+    # Usar una lista mutable para preservar el índice de la pestaña seleccionada
+    selected_tab_index = [0]
     
-    # Contenido de las tabs
+    def on_tab_change(e):
+        """Preserva el índice de la pestaña seleccionada."""
+        selected_tab_index[0] = e.control.selected_index
+    
+    # Contenido de las tabs - crear con datos frescos
+    # IMPORTANTE: Recargar completion_dates desde la BD para asegurar datos actualizados
+    fresh_completions = habit_service.repository.get_completions(habit.id)
+    fresh_completion_dates = {c.completion_date.date() for c in fresh_completions}
+    
     calendar_content = create_calendar_view(
-        page, habit, habit_service, completion_dates, on_completion_toggle, on_refresh
+        page, habit, habit_service, fresh_completion_dates, on_completion_toggle, on_refresh
     )
     
     charts_content = create_charts_view(
-        page, habit, habit_service, completion_dates
+        page, habit, habit_service, fresh_completion_dates
     )
     
+    # Recargar métricas frescas
+    fresh_metrics = habit_service.get_habit_metrics(habit.id)
     progress_content = create_progress_view(
-        page, habit, habit_service, metrics
+        page, habit, habit_service, fresh_metrics
     )
     
-    # Asignar contenido a las tabs
-    tabs.tabs[0].content = calendar_content
-    tabs.tabs[1].content = charts_content
-    tabs.tabs[2].content = progress_content
+    tabs = ft.Tabs(
+        selected_index=selected_tab_index[0],
+        tabs=[
+            ft.Tab(text="Calendario", icon=ft.Icons.CALENDAR_MONTH, content=calendar_content),
+            ft.Tab(text="Gráficas", icon=ft.Icons.BAR_CHART, content=charts_content),
+            ft.Tab(text="Progreso", icon=ft.Icons.TRENDING_UP, content=progress_content),
+        ],
+        expand=True,
+        on_change=on_tab_change
+    )
     
     return ft.Container(
         content=tabs,
@@ -211,60 +220,80 @@ def create_calendar_view(
                 bg_color = ft.Colors.TRANSPARENT
                 text_color = ft.Colors.WHITE if is_dark else ft.Colors.BLACK87
             
-            def make_toggle_handler(d):
-                def handler(e):
-                    # OFFLINE-FIRST: Todo se maneja localmente en SQLite
-                    # No hay llamadas a Firebase aquí, solo operaciones locales
-                    try:
-                        # Alternar el cumplimiento en la base de datos local
-                        on_completion_toggle(habit.id, d)
-                        
-                        # Recargar datos frescos desde SQLite local
-                        completions = habit_service.repository.get_completions(habit.id)
-                        fresh_completion_dates = {c.completion_date.date() for c in completions}
-                        
-                        # Actualizar el set de completion_dates
-                        completion_dates.clear()
-                        completion_dates.update(fresh_completion_dates)
-                        
-                        # Reconstruir el calendario con datos frescos
-                        build_calendar(current_month[0], current_year[0])
-                        
-                        # Refrescar otras vistas (gráficas, etc.)
-                        on_refresh()
-                        
-                        # Actualizar la página
-                        page.update()
-                    except Exception as ex:
-                        # Si hay error, intentar actualizar el calendario de todas formas
-                        print(f"Error al alternar cumplimiento (offline): {ex}")
+            # Solo permitir toggle en días pasados o el día actual (no futuros)
+            if is_future:
+                # Día futuro: no se puede marcar
+                day_button = ft.Container(
+                    content=ft.Text(
+                        str(day),
+                        size=14,
+                        color=text_color,
+                        text_align=ft.TextAlign.CENTER
+                    ),
+                    width=40,
+                    height=40,
+                    bgcolor=bg_color,
+                    border_radius=20,
+                    alignment=ft.alignment.center,
+                    tooltip=f"{day_date.strftime('%d/%m/%Y')} - No se pueden marcar días futuros",
+                    opacity=0.4  # Hacer más visible que está deshabilitado
+                )
+            else:
+                # Día pasado o actual: se puede marcar
+                def make_toggle_handler(d):
+                    def handler(e):
+                        # OFFLINE-FIRST: Todo se maneja localmente en SQLite
+                        # No hay llamadas a Firebase aquí, solo operaciones locales
                         try:
-                            # Recargar datos y reconstruir
+                            # Alternar el cumplimiento en la base de datos local
+                            on_completion_toggle(habit.id, d)
+                            
+                            # Recargar datos frescos desde SQLite local
                             completions = habit_service.repository.get_completions(habit.id)
+                            fresh_completion_dates = {c.completion_date.date() for c in completions}
+                            
+                            # Actualizar el set de completion_dates
                             completion_dates.clear()
-                            completion_dates.update({c.completion_date.date() for c in completions})
+                            completion_dates.update(fresh_completion_dates)
+                            
+                            # Reconstruir el calendario con datos frescos
                             build_calendar(current_month[0], current_year[0])
+                            
+                            # Refrescar otras vistas (gráficas, etc.)
+                            on_refresh()
+                            
+                            # Actualizar la página
                             page.update()
-                        except Exception as ex2:
-                            print(f"Error al reconstruir calendario: {ex2}")
-                return handler
-            
-            day_button = ft.Container(
-                content=ft.Text(
-                    str(day),
-                    size=14,
-                    weight=ft.FontWeight.BOLD if is_today else None,
-                    color=text_color,
-                    text_align=ft.TextAlign.CENTER
-                ),
-                width=40,
-                height=40,
-                bgcolor=bg_color,
-                border_radius=20,
-                alignment=ft.alignment.center,
-                on_click=make_toggle_handler(day_date),
-                tooltip=f"{day_date.strftime('%d/%m/%Y')} - {'Completado' if is_completed else 'No completado'}"
-            )
+                        except Exception as ex:
+                            # Si hay error, intentar actualizar el calendario de todas formas
+                            print(f"Error al alternar cumplimiento (offline): {ex}")
+                            try:
+                                # Recargar datos y reconstruir
+                                completions = habit_service.repository.get_completions(habit.id)
+                                completion_dates.clear()
+                                completion_dates.update({c.completion_date.date() for c in completions})
+                                build_calendar(current_month[0], current_year[0])
+                                page.update()
+                            except Exception as ex2:
+                                print(f"Error al reconstruir calendario: {ex2}")
+                    return handler
+                
+                day_button = ft.Container(
+                    content=ft.Text(
+                        str(day),
+                        size=14,
+                        weight=ft.FontWeight.BOLD if is_today else None,
+                        color=text_color,
+                        text_align=ft.TextAlign.CENTER
+                    ),
+                    width=40,
+                    height=40,
+                    bgcolor=bg_color,
+                    border_radius=20,
+                    alignment=ft.alignment.center,
+                    on_click=make_toggle_handler(day_date),
+                    tooltip=f"{day_date.strftime('%d/%m/%Y')} - {'Completado' if is_completed else 'No completado'}"
+                )
             
             current_row.controls.append(day_button)
             
@@ -291,17 +320,92 @@ def create_calendar_view(
             horizontal_alignment=ft.CrossAxisAlignment.CENTER
         )
     
+    # Función para actualizar datos del calendario
+    def refresh_calendar_data(e):
+        """Recarga los datos del calendario desde la base de datos."""
+        print("DEBUG: Botón de actualizar presionado")
+        try:
+            print(f"DEBUG: Recargando datos para hábito {habit.id}")
+            # Recargar datos frescos desde SQLite
+            completions = habit_service.repository.get_completions(habit.id)
+            fresh_completion_dates = {c.completion_date.date() for c in completions}
+            print(f"DEBUG: Fechas encontradas: {len(fresh_completion_dates)} - {sorted(fresh_completion_dates)}")
+            
+            # Actualizar el set de completion_dates (esto es importante para las otras vistas)
+            completion_dates.clear()
+            completion_dates.update(fresh_completion_dates)
+            print(f"DEBUG: completion_dates actualizado: {len(completion_dates)} fechas")
+            
+            # Reconstruir el calendario con datos frescos
+            print("DEBUG: Reconstruyendo calendario...")
+            build_calendar(current_month[0], current_year[0])
+            
+            # Actualizar el contenedor del calendario explícitamente
+            calendar_container.update()
+            print("DEBUG: Contenedor del calendario actualizado")
+            
+            # Refrescar otras vistas (gráficas, progreso, etc.)
+            # Esto reconstruye toda la vista de métricas con los datos actualizados
+            print("DEBUG: Refrescando otras vistas...")
+            if on_refresh:
+                on_refresh()
+                print("DEBUG: on_refresh() ejecutado")
+            
+            # Actualizar la página
+            print("DEBUG: Actualizando página...")
+            page.update()
+            
+            # Mostrar mensaje de confirmación
+            print("DEBUG: Mostrando mensaje de confirmación...")
+            page.snack_bar = ft.SnackBar(
+                content=ft.Text("Datos actualizados correctamente"),
+                bgcolor=primary,
+                duration=2000
+            )
+            page.snack_bar.open = True
+            page.update()
+            print("DEBUG: Actualización completada")
+        except Exception as ex:
+            print(f"ERROR: Error al actualizar datos del calendario: {ex}")
+            import traceback
+            traceback.print_exc()
+            try:
+                page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"Error al actualizar: {str(ex)}"),
+                    bgcolor=ft.Colors.RED,
+                    duration=3000
+                )
+                page.snack_bar.open = True
+                page.update()
+            except:
+                pass
+    
+    # Botón de actualizar datos
+    refresh_button = ft.ElevatedButton(
+        "Actualizar datos",
+        icon=ft.Icons.REFRESH,
+        on_click=refresh_calendar_data,
+        bgcolor=primary,
+        color=ft.Colors.WHITE
+    )
+    
     # Construir calendario inicial
     build_calendar(current_month[0], current_year[0])
     
     return ft.Container(
         content=ft.Column(
             [
-                ft.Text(
-                    "Calendario de Cumplimientos",
-                    size=18,
-                    weight=ft.FontWeight.BOLD,
-                    text_align=ft.TextAlign.CENTER
+                ft.Row(
+                    [
+                        ft.Text(
+                            "Calendario de Cumplimientos",
+                            size=18,
+                            weight=ft.FontWeight.BOLD,
+                            expand=True
+                        ),
+                        refresh_button
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                 ),
                 ft.Text(
                     "Toca un día para marcar/desmarcar como completado",
@@ -333,7 +437,7 @@ def create_charts_view(
         page: Página de Flet
         habit: Hábito
         habit_service: Servicio de hábitos
-        completion_dates: Conjunto de fechas completadas
+        completion_dates: Conjunto de fechas completadas (se ignora, se recarga desde BD)
         
     Returns:
         Container con las gráficas
@@ -342,6 +446,10 @@ def create_charts_view(
     scheme = page.theme.color_scheme if page.theme else None
     primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_400
     
+    # OFFLINE-FIRST: Recargar datos frescos desde SQLite local
+    completions = habit_service.repository.get_completions(habit.id)
+    fresh_completion_dates = {c.completion_date.date() for c in completions}
+    
     # Gráfica de barras - Últimos 30 días
     today = date.today()
     last_30_days = []
@@ -349,7 +457,7 @@ def create_charts_view(
         day = today - timedelta(days=i)
         last_30_days.append({
             'date': day,
-            'completed': day in completion_dates
+            'completed': day in fresh_completion_dates
         })
     
     # Crear barras (más grandes y visibles)
@@ -407,7 +515,7 @@ def create_charts_view(
         week_start = today - timedelta(weeks=week_offset, days=today.weekday())
         week_end = week_start + timedelta(days=6)
         
-        week_completions = sum(1 for i in range(7) if (week_start + timedelta(days=i)) in completion_dates)
+        week_completions = sum(1 for i in range(7) if (week_start + timedelta(days=i)) in fresh_completion_dates)
         weekly_data.append({
             'week': f"Sem {week_offset + 1}",
             'completions': week_completions,
@@ -561,6 +669,9 @@ def create_progress_view(
     is_dark = page.theme_mode == ft.ThemeMode.DARK
     scheme = page.theme.color_scheme if page.theme else None
     primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_400
+    
+    # OFFLINE-FIRST: Recargar métricas frescas desde SQLite local
+    metrics = habit_service.get_habit_metrics(habit.id)
     
     # Obtener progreso mensual
     monthly = habit_service.get_monthly_progress(habit.id)
