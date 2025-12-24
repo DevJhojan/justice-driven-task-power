@@ -98,7 +98,8 @@ def navigate_to_habit_details(
         habit: Hábito a mostrar.
         on_go_back: Callback para volver.
     """
-    # Obtener métricas completas
+    # Obtener métricas completas (100% offline, solo desde SQLite local)
+    # OFFLINE-FIRST: Todas las métricas se calculan desde la base de datos local
     metrics = habit_service.get_habit_metrics(habit.id)
     
     # Detectar el tema actual
@@ -140,17 +141,16 @@ def navigate_to_habit_details(
         completions = habit_service.repository.get_completions(habit.id)
         return {c.completion_date.date() for c in completions}
     
-    # Callback para alternar cumplimiento
+    # Callback para alternar cumplimiento (100% offline, solo SQLite local)
     def toggle_completion(habit_id: int, completion_date: date):
-        """Alterna el cumplimiento de un hábito para una fecha específica."""
-        try:
-            # Alternar en la base de datos
-            result = habit_service.toggle_completion(habit_id, completion_date)
-            # No necesitamos reconstruir aquí porque el handler del calendario ya lo hace
-        except Exception as ex:
-            print(f"Error en toggle_completion: {ex}")
-            # Reconstruir la vista de todas formas para mostrar el estado actual
-            rebuild_metrics_view()
+        """
+        Alterna el cumplimiento de un hábito para una fecha específica.
+        OFFLINE-FIRST: Solo opera en la base de datos local SQLite.
+        No hay llamadas a Firebase aquí.
+        """
+        # OFFLINE-FIRST: Solo operaciones locales en SQLite
+        habit_service.toggle_completion(habit_id, completion_date)
+        # No necesitamos reconstruir aquí porque el handler del calendario ya lo hace
     
     def rebuild_metrics_view():
         """Reconstruye la vista de métricas con datos actualizados."""

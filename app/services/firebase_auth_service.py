@@ -387,7 +387,7 @@ class FirebaseAuthService:
         """
         return self.get_current_user() is not None
     
-    def get_id_token(self) -> Optional[str]:
+    def get_id_token(self, silent: bool = True) -> Optional[str]:
         """
         Obtiene el token de ID actual del usuario autenticado.
         Si el token ha expirado, intenta refrescarlo.
@@ -424,11 +424,16 @@ class FirebaseAuthService:
                             self.current_user = None
                             return None
                     except Exception as e:
-                        # Error inesperado, limpiar y requerir nuevo login
-                        print(f"Error inesperado al refrescar token: {e}")
-                        self._clear_auth_token()
-                        self.current_user = None
-                        return None
+                        # OFFLINE-FIRST: No limpiar tokens en caso de error, permitir funcionamiento offline
+                        error_msg = str(e)
+                        # No imprimir errores de cuota para evitar spam
+                        if "QUOTA_EXCEEDED" not in error_msg.upper():
+                            print(f"Error inesperado al refrescar token: {e}")
+                        # No limpiar tokens, permitir funcionamiento offline
+                        # self._clear_auth_token()  # Comentado para offline-first
+                        # self.current_user = None  # Comentado para offline-first
+                        # Retornar el token expirado en lugar de None para permitir offline
+                        return id_token
                 else:
                     # No hay refresh_token válido, limpiar y requerir nuevo login
                     self._clear_auth_token()
@@ -517,6 +522,12 @@ class FirebaseAuthService:
     
     def _refresh_token(self, refresh_token: str) -> Optional[Dict[str, Any]]:
         """
+        Refresca el token de autenticación de Firebase.
+        
+        OFFLINE-FIRST: Si falla, no lanza excepción, solo retorna None.
+        Esto permite que la app continúe funcionando offline.
+        """
+        """
         Refresca el token de autenticación usando Firebase REST API.
         
         Args:
@@ -546,7 +557,10 @@ class FirebaseAuthService:
                 # Token inválido o expirado, no intentar más
                 error_data = response.json() if response.text else {}
                 error_message = error_data.get('error', {}).get('message', 'Token inválido o expirado')
-                print(f"Token de refresco inválido o expirado: {error_message}")
+                # OFFLINE-FIRST: No imprimir errores de cuota para evitar spam
+                # La app debe funcionar offline sin problemas
+                if "QUOTA_EXCEEDED" not in error_message.upper():
+                    print(f"Token de refresco inválido o expirado: {error_message}")
                 return None
             
             response.raise_for_status()
@@ -576,12 +590,18 @@ class FirebaseAuthService:
                 except:
                     pass
                 error_message = error_data.get('error', {}).get('message', str(e))
-                print(f"Error al refrescar token (HTTP {e.response.status_code}): {error_message}")
+                # OFFLINE-FIRST: No imprimir errores de cuota para evitar spam
+                if "QUOTA_EXCEEDED" not in error_message.upper():
+                    print(f"Error al refrescar token (HTTP {e.response.status_code}): {error_message}")
             else:
-                print(f"Error de red al refrescar token: {e}")
+                # No imprimir errores de red, permitir funcionamiento offline
+                pass
             return None
         except Exception as e:
-            print(f"Error inesperado al refrescar token: {e}")
+            # OFFLINE-FIRST: No imprimir errores inesperados, permitir funcionamiento offline
+            error_msg = str(e)
+            if "QUOTA_EXCEEDED" not in error_msg.upper():
+                print(f"Error inesperado al refrescar token: {e}")
             return None
     
     def _clear_auth_token(self) -> None:

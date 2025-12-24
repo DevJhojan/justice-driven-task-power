@@ -186,9 +186,10 @@ def create_calendar_view(
             )
         
         # Agregar días del mes
-        # Recargar siempre desde la base de datos para tener datos frescos
+        # OFFLINE-FIRST: Recargar siempre desde SQLite local para tener datos frescos
         completions = habit_service.repository.get_completions(habit.id)
         current_completion_dates = {c.completion_date.date() for c in completions}
+        
         today = date.today()
         for day in range(1, days_in_month + 1):
             day_date = date(year, month, day)
@@ -212,22 +213,31 @@ def create_calendar_view(
             
             def make_toggle_handler(d):
                 def handler(e):
+                    # OFFLINE-FIRST: Todo se maneja localmente en SQLite
+                    # No hay llamadas a Firebase aquí, solo operaciones locales
                     try:
-                        # Alternar el cumplimiento en la base de datos
+                        # Alternar el cumplimiento en la base de datos local
                         on_completion_toggle(habit.id, d)
-                        # Reconstruir el calendario inmediatamente (recarga datos frescos de la BD)
-                        build_calendar(current_month[0], current_year[0])
-                        # Actualizar el set de completion_dates para otras vistas
+                        
+                        # Recargar datos frescos desde SQLite local
                         completions = habit_service.repository.get_completions(habit.id)
+                        fresh_completion_dates = {c.completion_date.date() for c in completions}
+                        
+                        # Actualizar el set de completion_dates
                         completion_dates.clear()
-                        completion_dates.update({c.completion_date.date() for c in completions})
+                        completion_dates.update(fresh_completion_dates)
+                        
+                        # Reconstruir el calendario con datos frescos
+                        build_calendar(current_month[0], current_year[0])
+                        
                         # Refrescar otras vistas (gráficas, etc.)
                         on_refresh()
+                        
                         # Actualizar la página
                         page.update()
                     except Exception as ex:
                         # Si hay error, intentar actualizar el calendario de todas formas
-                        print(f"Error al alternar cumplimiento: {ex}")
+                        print(f"Error al alternar cumplimiento (offline): {ex}")
                         try:
                             # Recargar datos y reconstruir
                             completions = habit_service.repository.get_completions(habit.id)

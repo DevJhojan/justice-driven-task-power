@@ -186,13 +186,30 @@ class HabitService:
         if completion_date is None:
             completion_date = date.today()
         
-        if self.repository.has_completion_for_date(habit_id, completion_date):
+        # Normalizar fecha (asegurar que es un objeto date, no datetime)
+        if isinstance(completion_date, datetime):
+            completion_date = completion_date.date()
+        
+        # Debug: verificar estado antes del toggle
+        has_completion = self.repository.has_completion_for_date(habit_id, completion_date)
+        print(f"DEBUG toggle_completion: habit_id={habit_id}, date={completion_date}, has_completion={has_completion}")
+        
+        if has_completion:
             # Existe, eliminarlo
-            self.repository.delete_completion_by_date(habit_id, completion_date)
+            deleted = self.repository.delete_completion_by_date(habit_id, completion_date)
+            print(f"DEBUG toggle_completion: deleted={deleted}")
+            # Verificar que se eliminó
+            has_after = self.repository.has_completion_for_date(habit_id, completion_date)
+            print(f"DEBUG toggle_completion: has_completion after delete={has_after}")
             return None
         else:
             # No existe, crearlo
-            return self.register_completion(habit_id, completion_date)
+            result = self.register_completion(habit_id, completion_date)
+            print(f"DEBUG toggle_completion: created completion id={result.id if result else None}")
+            # Verificar que se creó
+            has_after = self.repository.has_completion_for_date(habit_id, completion_date)
+            print(f"DEBUG toggle_completion: has_completion after create={has_after}")
+            return result
     
     def get_habit_metrics(self, habit_id: int) -> Dict:
         """
