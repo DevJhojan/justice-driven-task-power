@@ -50,7 +50,7 @@ def create_habit_metrics_view(
     
     # Contenido de las tabs
     calendar_content = create_calendar_view(
-        page, habit, completion_dates, on_completion_toggle, on_refresh
+        page, habit, habit_service, completion_dates, on_completion_toggle, on_refresh
     )
     
     charts_content = create_charts_view(
@@ -76,6 +76,7 @@ def create_habit_metrics_view(
 def create_calendar_view(
     page: ft.Page,
     habit: Habit,
+    habit_service,
     completion_dates: set,
     on_completion_toggle: Callable[[int, date], None],
     on_refresh: Callable[[], None]
@@ -86,6 +87,7 @@ def create_calendar_view(
     Args:
         page: Página de Flet
         habit: Hábito
+        habit_service: Servicio de hábitos para recargar datos
         completion_dates: Conjunto de fechas completadas
         on_completion_toggle: Callback para alternar cumplimiento
         on_refresh: Callback para refrescar
@@ -184,10 +186,13 @@ def create_calendar_view(
             )
         
         # Agregar días del mes
+        # Recargar siempre desde la base de datos para tener datos frescos
+        completions = habit_service.repository.get_completions(habit.id)
+        current_completion_dates = {c.completion_date.date() for c in completions}
         today = date.today()
         for day in range(1, days_in_month + 1):
             day_date = date(year, month, day)
-            is_completed = day_date in completion_dates
+            is_completed = day_date in current_completion_dates
             is_today = day_date == today
             is_future = day_date > today
             
@@ -207,15 +212,31 @@ def create_calendar_view(
             
             def make_toggle_handler(d):
                 def handler(e):
-                    on_completion_toggle(habit.id, d)
-                    # Actualizar el estado local
-                    if d in completion_dates:
-                        completion_dates.remove(d)
-                    else:
-                        completion_dates.add(d)
-                    build_calendar(current_month[0], current_year[0])
-                    on_refresh()
-                    page.update()
+                    try:
+                        # Alternar el cumplimiento en la base de datos
+                        on_completion_toggle(habit.id, d)
+                        # Reconstruir el calendario inmediatamente (recarga datos frescos de la BD)
+                        build_calendar(current_month[0], current_year[0])
+                        # Actualizar el set de completion_dates para otras vistas
+                        completions = habit_service.repository.get_completions(habit.id)
+                        completion_dates.clear()
+                        completion_dates.update({c.completion_date.date() for c in completions})
+                        # Refrescar otras vistas (gráficas, etc.)
+                        on_refresh()
+                        # Actualizar la página
+                        page.update()
+                    except Exception as ex:
+                        # Si hay error, intentar actualizar el calendario de todas formas
+                        print(f"Error al alternar cumplimiento: {ex}")
+                        try:
+                            # Recargar datos y reconstruir
+                            completions = habit_service.repository.get_completions(habit.id)
+                            completion_dates.clear()
+                            completion_dates.update({c.completion_date.date() for c in completions})
+                            build_calendar(current_month[0], current_year[0])
+                            page.update()
+                        except Exception as ex2:
+                            print(f"Error al reconstruir calendario: {ex2}")
                 return handler
             
             day_button = ft.Container(
@@ -321,11 +342,11 @@ def create_charts_view(
             'completed': day in completion_dates
         })
     
-    # Crear barras
-    max_height = 100
+    # Crear barras (más grandes y visibles)
+    max_height = 120
     bars = []
     for day_data in last_30_days:
-        height = max_height if day_data['completed'] else 5
+        height = max_height if day_data['completed'] else 8
         color = primary if day_data['completed'] else (ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700)
         
         bars.append(
@@ -333,31 +354,41 @@ def create_charts_view(
                 content=ft.Column(
                     [
                         ft.Container(
-                            width=8,
+                            width=14,
                             height=height,
                             bgcolor=color,
-                            border_radius=4
+                            border_radius=7,
+                            border=ft.border.all(1, ft.Colors.GREY_400 if not day_data['completed'] and not is_dark else ft.Colors.GREY_600) if not day_data['completed'] else None
                         ),
                         ft.Text(
-                            day_data['date'].day,
-                            size=8,
-                            text_align=ft.TextAlign.CENTER
+                            str(day_data['date'].day),
+                            size=10,
+                            weight=ft.FontWeight.BOLD if day_data['completed'] else None,
+                            text_align=ft.TextAlign.CENTER,
+                            color=ft.Colors.WHITE if is_dark else ft.Colors.BLACK87
                         )
                     ],
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=4,
                     tight=True
                 ),
-                width=12,
+                width=18,
                 tooltip=f"{day_data['date'].strftime('%d/%m/%Y')} - {'Completado' if day_data['completed'] else 'No completado'}"
             )
         )
     
-    bar_chart = ft.Row(
-        bars,
-        spacing=2,
-        alignment=ft.MainAxisAlignment.CENTER,
-        wrap=False
+    bar_chart = ft.Container(
+        content=ft.Row(
+            bars,
+            spacing=3,
+            alignment=ft.MainAxisAlignment.CENTER,
+            wrap=False,
+            scroll=ft.ScrollMode.HIDDEN
+        ),
+        padding=ft.padding.symmetric(vertical=10, horizontal=5),
+        border=ft.border.all(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700),
+        border_radius=8,
+        bgcolor=ft.Colors.GREY_50 if not is_dark else ft.Colors.GREY_900
     )
     
     # Gráfica de progreso semanal - Últimas 8 semanas
@@ -373,12 +404,12 @@ def create_charts_view(
             'target': habit.target_days
         })
     
-    # Crear gráfica de líneas para semanas
+    # Crear gráfica de barras para semanas (más grande y clara)
     max_completions = max([d['completions'] for d in weekly_data] + [habit.target_days] + [1])
     week_bars = []
     for week_data in weekly_data:
-        height = int((week_data['completions'] / max_completions) * 80) if max_completions > 0 else 0
-        target_height = int((week_data['target'] / max_completions) * 80) if max_completions > 0 else 0
+        height = int((week_data['completions'] / max_completions) * 120) if max_completions > 0 else 0
+        target_height = int((week_data['target'] / max_completions) * 120) if max_completions > 0 else 0
         
         week_bars.append(
             ft.Container(
@@ -386,52 +417,65 @@ def create_charts_view(
                     [
                         ft.Stack(
                             [
-                                # Barra de objetivo
+                                # Barra de objetivo (fondo)
                                 ft.Container(
-                                    width=30,
+                                    width=35,
                                     height=target_height,
-                                    bgcolor=ft.Colors.ORANGE_300 if not is_dark else ft.Colors.ORANGE_700,
-                                    border_radius=4,
-                                    bottom=0
+                                    bgcolor=ft.Colors.ORANGE_200 if not is_dark else ft.Colors.ORANGE_800,
+                                    border_radius=6,
+                                    bottom=0,
+                                    border=ft.border.all(1, ft.Colors.ORANGE_400 if not is_dark else ft.Colors.ORANGE_600)
                                 ),
-                                # Barra de completados
+                                # Barra de completados (frente)
                                 ft.Container(
-                                    width=30,
+                                    width=35,
                                     height=height,
                                     bgcolor=primary,
-                                    border_radius=4,
-                                    bottom=0
+                                    border_radius=6,
+                                    bottom=0,
+                                    border=ft.border.all(1, ft.Colors.RED_600 if not is_dark else ft.Colors.RED_800)
                                 )
                             ],
-                            width=30,
-                            height=80
+                            width=35,
+                            height=120
                         ),
+                        ft.Container(height=4),  # Espacio
                         ft.Text(
                             week_data['week'],
-                            size=10,
-                            text_align=ft.TextAlign.CENTER
+                            size=11,
+                            weight=ft.FontWeight.BOLD,
+                            text_align=ft.TextAlign.CENTER,
+                            color=ft.Colors.WHITE if is_dark else ft.Colors.BLACK87
                         ),
                         ft.Text(
                             f"{week_data['completions']}/{week_data['target']}",
-                            size=9,
+                            size=10,
                             text_align=ft.TextAlign.CENTER,
-                            color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
+                            color=primary,
+                            weight=ft.FontWeight.BOLD
                         )
                     ],
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=4,
+                    spacing=2,
                     tight=True
                 ),
-                width=40,
+                width=45,
                 tooltip=f"{week_data['week']}: {week_data['completions']}/{week_data['target']} completados"
             )
         )
     
-    weekly_chart = ft.Row(
-        week_bars,
-        spacing=4,
-        alignment=ft.MainAxisAlignment.CENTER,
-        wrap=False
+    weekly_chart = ft.Container(
+        content=ft.Row(
+            week_bars,
+            spacing=6,
+            alignment=ft.MainAxisAlignment.CENTER,
+            wrap=False,
+            scroll=ft.ScrollMode.HIDDEN
+        ),
+        padding=ft.padding.symmetric(vertical=10, horizontal=5),
+        border=ft.border.all(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700),
+        border_radius=8,
+        bgcolor=ft.Colors.GREY_50 if not is_dark else ft.Colors.GREY_900
     )
     
     return ft.Container(
@@ -449,12 +493,7 @@ def create_charts_view(
                     size=14,
                     weight=ft.FontWeight.BOLD
                 ),
-                ft.Container(
-                    content=bar_chart,
-                    padding=20,
-                    border=ft.border.all(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700),
-                    border_radius=8
-                ),
+                bar_chart,
                 ft.Divider(height=20),
                 ft.Text(
                     "Últimas 8 semanas",
@@ -481,12 +520,7 @@ def create_charts_view(
                     ],
                     alignment=ft.MainAxisAlignment.CENTER
                 ),
-                ft.Container(
-                    content=weekly_chart,
-                    padding=20,
-                    border=ft.border.all(1, ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700),
-                    border_radius=8
-                )
+                weekly_chart
             ],
             spacing=16,
             scroll=ft.ScrollMode.AUTO
@@ -523,6 +557,11 @@ def create_progress_view(
     
     # Obtener progreso semanal
     weekly = habit_service.get_weekly_progress(habit.id)
+    
+    # Calcular valores del progreso mensual
+    completed_days = monthly.get('completions_count', 0)
+    total_days = monthly.get('total_days', 1)
+    completion_percentage = (completed_days / total_days * 100) if total_days > 0 else 0.0
     
     return ft.Container(
         content=ft.Column(
@@ -599,18 +638,18 @@ def create_progress_view(
                                 weight=ft.FontWeight.BOLD
                             ),
                             ft.Text(
-                                f"{monthly['completed_days']}/{monthly['total_days']} días",
+                                f"{completed_days}/{total_days} días",
                                 size=24,
                                 weight=ft.FontWeight.BOLD,
                                 color=primary
                             ),
                             ft.ProgressBar(
-                                value=monthly['completed_days'] / monthly['total_days'] if monthly['total_days'] > 0 else 0,
+                                value=completion_percentage / 100.0,
                                 color=primary,
                                 bgcolor=ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700
                             ),
                             ft.Text(
-                                f"{monthly['completion_percentage']:.1f}% de cumplimiento",
+                                f"{completion_percentage:.1f}% de cumplimiento",
                                 size=12,
                                 color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
                             )

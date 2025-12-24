@@ -143,23 +143,33 @@ def navigate_to_habit_details(
     # Callback para alternar cumplimiento
     def toggle_completion(habit_id: int, completion_date: date):
         """Alterna el cumplimiento de un hábito para una fecha específica."""
-        habit_service.toggle_completion(habit_id, completion_date)
-        # Reconstruir la vista después de cambiar
-        rebuild_metrics_view()
+        try:
+            # Alternar en la base de datos
+            result = habit_service.toggle_completion(habit_id, completion_date)
+            # No necesitamos reconstruir aquí porque el handler del calendario ya lo hace
+        except Exception as ex:
+            print(f"Error en toggle_completion: {ex}")
+            # Reconstruir la vista de todas formas para mostrar el estado actual
+            rebuild_metrics_view()
     
     def rebuild_metrics_view():
         """Reconstruye la vista de métricas con datos actualizados."""
-        completion_dates = load_completion_dates()
-        metrics_view = create_habit_metrics_view(
-            page=page,
-            habit=habit,
-            habit_service=habit_service,
-            completion_dates=completion_dates,
-            on_completion_toggle=toggle_completion,
-            on_refresh=rebuild_metrics_view
-        )
-        metrics_container.content = metrics_view
-        page.update()
+        try:
+            completion_dates = load_completion_dates()
+            metrics_view = create_habit_metrics_view(
+                page=page,
+                habit=habit,
+                habit_service=habit_service,
+                completion_dates=completion_dates,
+                on_completion_toggle=toggle_completion,
+                on_refresh=rebuild_metrics_view
+            )
+            metrics_container.content = metrics_view
+            page.update()
+        except Exception as ex:
+            print(f"Error al reconstruir métricas: {ex}")
+            # Intentar actualizar de todas formas
+            page.update()
     
     # Cargar fechas iniciales
     completion_dates = load_completion_dates()
