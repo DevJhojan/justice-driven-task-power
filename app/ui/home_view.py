@@ -31,6 +31,7 @@ from app.ui.task_form import TaskForm
 from app.ui.habit_form import HabitForm
 from app.ui.tasks_view import TasksView
 from app.ui.habits_view import HabitsView
+from app.ui.settings_view import SettingsView
 
 
 class HomeView:
@@ -76,23 +77,25 @@ class HomeView:
             on_go_back=self._go_back
         )
         
+        # Inicializar vista de configuración como módulo separado
+        self.settings_view = SettingsView(
+            page=page,
+            settings_service=self.settings_service,
+            sync_service=self.sync_service,
+            firebase_auth_service=self.firebase_auth_service,
+            firebase_sync_service=self.firebase_sync_service,
+            firebase_available=FIREBASE_AVAILABLE,
+            firebase_import_error=_firebase_import_error if 'FIREBASE_AVAILABLE' in globals() and not FIREBASE_AVAILABLE else "",
+            on_go_back=self._go_back,
+            on_rebuild_tasks=lambda: (self._build_ui() if self.current_section == "tasks" else None, self.tasks_view.load_tasks() if self.current_section == "tasks" else None),
+            on_rebuild_habits=lambda: (self._build_ui() if self.current_section == "habits" else None, self.habits_view.load_habits() if self.current_section == "habits" else None)
+        )
+        
         # Secciones: "tasks", "habits", "settings"
         self.current_section = "tasks"
         self.stats_card = None
         self.habit_stats_card = None
         self.title_bar = None  # Guardar referencia a la barra de título
-        
-
-        # Diálogo para seleccionar matiz (paleta de colores)
-        # Debe tener al menos title, content o actions para que Flet no lance AssertionError.
-        self.accent_dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(""),
-            content=ft.Container(),
-            actions=[],
-        )
-        if self.accent_dialog not in self.page.overlay:
-            self.page.overlay.append(self.accent_dialog)
 
         
         # Variable para almacenar bytes del ZIP durante la exportación
@@ -237,12 +240,26 @@ class HomeView:
         elif self.current_section == "habits":
             # Usar HabitsView para construir la vista de hábitos
             main_view = self.habits_view.build_ui(self.title_bar, self.bottom_bar, self.home_view)
+        elif self.current_section == "settings":
+            # Usar SettingsView para construir la vista de configuración
+            settings_content = self.settings_view.build_ui()
+            main_view = ft.Container(
+                content=ft.Column(
+                    [
+                        self.title_bar,
+                        settings_content,
+                        self.bottom_bar
+                    ],
+                    spacing=0,
+                    expand=True
+                ),
+                expand=True
+            )
         else:
-            # Vista de configuración (se construirá en _build_settings_view)
-            main_view = ft.Container(content=ft.Text("Cargando configuración..."), expand=True)
+            main_view = ft.Container(content=ft.Text("Sección no encontrada"), expand=True)
         
-        # Actualizar la vista principal si es hábitos
-        if self.current_section == "habits" and self.home_view:
+        # Actualizar la vista principal si es hábitos o settings
+        if self.current_section in ["habits", "settings"] and self.home_view:
             is_dark = self.page.theme_mode == ft.ThemeMode.DARK
             bgcolor = ft.Colors.BLACK if is_dark else ft.Colors.GREY_50
             self.home_view.controls = [
@@ -405,7 +422,7 @@ class HomeView:
             self.habits_view.load_habits()
         elif section == "settings":
             # Mostrar la vista de configuración
-            self._build_settings_view()
+            self._build_ui()
         
         # Actualizar el título
         if self.title_bar:
