@@ -243,6 +243,12 @@ replace_icons() {
         return 0
     fi
     
+    # IMPORTANTE: Eliminar iconos antiguos de Flet para forzar el reemplazo
+    # Esto es crítico cuando cambias la versión y Flet regenera el proyecto
+    print_info "Eliminando iconos antiguos de Flet para forzar reemplazo..."
+    find "$ANDROID_RES_DIR" -name "ic_launcher.png" -type f -delete 2>/dev/null || true
+    find "$ANDROID_RES_DIR" -name "ic_launcher_foreground.png" -type f -delete 2>/dev/null || true
+    
     # Crear directorios si no existen
     mkdir -p "$ANDROID_RES_DIR/mipmap-mdpi"
     mkdir -p "$ANDROID_RES_DIR/mipmap-hdpi"
@@ -284,9 +290,25 @@ replace_icons() {
     
     if [ $icon_count -ge 5 ]; then
         print_success "Iconos personalizados reemplazados correctamente ($icon_count archivos creados)"
+        
+        # Verificar que los iconos son diferentes del de Flet (comparar tamaño del archivo)
+        # Los iconos de Flet suelen ser más pequeños que los personalizados
+        local sample_icon="$ANDROID_RES_DIR/mipmap-mdpi/ic_launcher.png"
+        if [ -f "$sample_icon" ]; then
+            local icon_size=$(stat -c%s "$sample_icon" 2>/dev/null || echo "0")
+            if [ "$icon_size" -lt 500 ]; then
+                print_warning "El icono parece ser muy pequeño ($icon_size bytes). Puede ser el icono por defecto de Flet."
+            else
+                print_success "Icono personalizado verificado (tamaño: ${icon_size} bytes)"
+            fi
+        fi
     else
         print_warning "Solo se crearon $icon_count iconos. Puede haber un problema."
     fi
+    
+    # Forzar actualización de timestamps para asegurar que Flutter detecte los cambios
+    touch "$ANDROID_RES_DIR"/mipmap-*/ic_launcher.png 2>/dev/null || true
+    touch "$ANDROID_RES_DIR"/drawable-*/ic_launcher_foreground.png 2>/dev/null || true
 }
 
 ################################################################################
@@ -591,6 +613,11 @@ build_apk() {
         fi
     fi
     
+    # IMPORTANTE: Reemplazar iconos personalizados INMEDIATAMENTE después de flet build
+    # Esto es crítico porque flet build puede regenerar los iconos por defecto cuando cambia la versión
+    print_info "Reemplazando iconos personalizados después de flet build..."
+    replace_icons
+    
     # Si flet build se ejecutó con parámetros de firma, verificar el APK generado directamente
     if [ -n "$SIGNING_KEYSTORE_PATH" ] && [ -f "$SIGNING_KEYSTORE_PATH" ]; then
         print_info "Flet build ejecutado con parámetros de firma. Verificando APK generado..."
@@ -736,10 +763,25 @@ build_apk() {
         # Verificar que el APK contiene los iconos personalizados
         print_info "Verificando iconos en el APK..."
         if command -v unzip &> /dev/null; then
+            local icon_found=false
             if unzip -l "$apk_path" 2>/dev/null | grep -q "res/mipmap.*/ic_launcher.png"; then
+                icon_found=true
                 print_success "Iconos encontrados en el APK"
-            else
+            fi
+            
+            # Verificar también los iconos foreground
+            if unzip -l "$apk_path" 2>/dev/null | grep -q "res/drawable.*/ic_launcher_foreground.png"; then
+                print_success "Iconos foreground encontrados en el APK"
+            fi
+            
+            if [ "$icon_found" = false ]; then
                 print_warning "No se encontraron iconos en el APK. Puede ser un problema de empaquetado."
+                print_info "Reemplazando iconos nuevamente y reconstruyendo..."
+                replace_icons
+                cd build/flutter
+                flutter build apk --release 2>&1 | tail -10
+                cd ../..
+                cp "$apk_path" build/apk/app-release.apk 2>/dev/null || true
             fi
         fi
         
@@ -858,6 +900,11 @@ build_aab() {
         fi
     fi
     
+    # IMPORTANTE: Reemplazar iconos personalizados INMEDIATAMENTE después de flet build
+    # Esto es crítico porque flet build puede regenerar los iconos por defecto cuando cambia la versión
+    print_info "Reemplazando iconos personalizados después de flet build..."
+    replace_icons
+    
     # Si flet build se ejecutó con parámetros de firma, verificar el AAB generado directamente
     if [ -n "$SIGNING_KEYSTORE_PATH" ] && [ -f "$SIGNING_KEYSTORE_PATH" ]; then
         print_info "Flet build ejecutado con parámetros de firma. Verificando AAB generado..."
@@ -917,8 +964,41 @@ build_aab() {
     # Verificar que los iconos se reemplazaron correctamente
     if [ -f "build/flutter/android/app/src/main/res/mipmap-mdpi/ic_launcher.png" ]; then
         print_success "Iconos personalizados verificados y listos para el build"
+        # Verificar que el icono es diferente del de Flet comparando tamaños
+        local icon_size=$(stat -c%s "build/flutter/android/app/src/main/res/mipmap-mdpi/ic_launcher.png" 2>/dev/null || echo "0")
+        if [ "$icon_size" -gt 1000 ]; then
+            print_success "Icono personalizado verificado (tamaño: ${icon_size} bytes)"
+        fi
     else
         print_warning "Los iconos personalizados no se encontraron. El AAB usará los iconos de Flet."
+    fi
+    
+    cd build/flutter
+    
+    # Asegurar que los iconos personalizados estén presentes ANTES del build
+    # Esto es crítico porque flutter build puede usar iconos en caché
+    cd ../..
+    print_info "Verificando y reemplazando iconos personalizados antes del build final..."
+    replace_icons
+    
+    # Verificar una vez más que los iconos están presentes
+    if [ ! -f "build/flutter/android/app/src/main/res/mipmap-mdpi/ic_launcher.png" ]; then
+        print_error "Los iconos personalizados no se pudieron crear. Abortando build."
+        return 1
+    fi
+    
+    cd build/flutter
+    
+    # Asegurar que los iconos personalizados estén presentes ANTES del build
+    # Esto es crítico porque flutter build puede usar iconos en caché
+    cd ../..
+    print_info "Verificando y reemplazando iconos personalizados antes del build final..."
+    replace_icons
+    
+    # Verificar una vez más que los iconos están presentes
+    if [ ! -f "build/flutter/android/app/src/main/res/mipmap-mdpi/ic_launcher.png" ]; then
+        print_error "Los iconos personalizados no se pudieron crear. Abortando build."
+        return 1
     fi
     
     cd build/flutter
@@ -1006,6 +1086,36 @@ build_aab() {
         mkdir -p build/aab
         cp "$aab_path" build/aab/app-release.aab
         print_success "AAB con firma de release copiado a build/aab/app-release.aab"
+        
+        # Verificar que el AAB contiene los iconos personalizados
+        print_info "Verificando iconos en el AAB..."
+        if command -v unzip &> /dev/null; then
+            local icon_found=false
+            if unzip -l "$aab_path" 2>/dev/null | grep -q "res/mipmap.*/ic_launcher.png"; then
+                icon_found=true
+                print_success "Iconos encontrados en el AAB"
+            fi
+            
+            # Verificar también los iconos foreground
+            if unzip -l "$aab_path" 2>/dev/null | grep -q "res/drawable.*/ic_launcher_foreground.png"; then
+                print_success "Iconos foreground encontrados en el AAB"
+            fi
+            
+            if [ "$icon_found" = false ]; then
+                print_warning "No se encontraron iconos en el AAB. Puede ser un problema de empaquetado."
+                print_info "Reemplazando iconos nuevamente y reconstruyendo..."
+                replace_icons
+                cd build/flutter
+                flutter build appbundle --release 2>&1 | tail -10
+                cd ../..
+                # Buscar el nuevo AAB
+                local new_aab=$(find build/flutter/build/app/outputs/bundle -name "*.aab" -type f 2>/dev/null | grep -v intermediary | head -1)
+                if [ -n "$new_aab" ] && [ -f "$new_aab" ]; then
+                    cp "$new_aab" build/aab/app-release.aab
+                    print_success "AAB reconstruido con iconos personalizados"
+                fi
+            fi
+        fi
         
         # Verificar la firma del AAB
         verify_release_signing "build/aab/app-release.aab" "aab"

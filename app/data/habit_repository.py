@@ -149,7 +149,7 @@ class HabitRepository:
     
     def delete(self, habit_id: int) -> bool:
         """
-        Elimina un hábito por su ID (borrado físico).
+        Elimina un hábito por su ID (borrado físico) y registra la eliminación para sincronización.
         Los cumplimientos se eliminan automáticamente por CASCADE.
         
         Args:
@@ -161,8 +161,26 @@ class HabitRepository:
         conn = self.db.get_connection()
         cursor = conn.cursor()
         
+        # Verificar que el hábito existe antes de eliminarlo
+        cursor.execute('SELECT id FROM habits WHERE id = ?', (habit_id,))
+        exists = cursor.fetchone() is not None
+        
+        if not exists:
+            conn.close()
+            return False
+        
+        # Eliminar el hábito
         cursor.execute('DELETE FROM habits WHERE id = ?', (habit_id,))
         deleted = cursor.rowcount > 0
+        
+        if deleted:
+            # Registrar la eliminación para sincronización
+            from datetime import datetime
+            deleted_at = datetime.now().isoformat()
+            cursor.execute('''
+                INSERT OR REPLACE INTO deleted_items (item_type, item_id, deleted_at, synced_at)
+                VALUES (?, ?, ?, NULL)
+            ''', ('habit', habit_id, deleted_at))
         
         conn.commit()
         conn.close()

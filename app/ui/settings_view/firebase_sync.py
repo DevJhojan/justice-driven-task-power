@@ -320,6 +320,20 @@ def show_sync_results_page(
                 subtitle=ft.Text("Datos remotos agregados localmente")
             ))
         
+        if sync_result.deletions_uploaded > 0:
+            stats.append(ft.ListTile(
+                leading=ft.Icon(ft.Icons.DELETE, color=ft.Colors.ORANGE),
+                title=ft.Text(f"Eliminaciones subidas: {sync_result.deletions_uploaded}"),
+                subtitle=ft.Text("Eliminaciones locales sincronizadas en Firebase")
+            ))
+        
+        if sync_result.deletions_downloaded > 0:
+            stats.append(ft.ListTile(
+                leading=ft.Icon(ft.Icons.DELETE, color=ft.Colors.RED),
+                title=ft.Text(f"Eliminaciones aplicadas: {sync_result.deletions_downloaded}"),
+                subtitle=ft.Text("Eliminaciones remotas aplicadas localmente")
+            ))
+        
         if not stats:
             stats.append(ft.Text(
                 "No hubo cambios que sincronizar. Los datos ya están actualizados.",

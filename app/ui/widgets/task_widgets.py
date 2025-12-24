@@ -117,48 +117,128 @@ def create_task_card(
         )
     ]
     
-    # Agregar subtareas si existen
+    # Agregar subtareas si existen con funcionalidad de desglose (expandir/colapsar)
     if task.subtasks and len(task.subtasks) > 0:
-        subtasks_list = _build_subtasks_list(
-            task.subtasks,
-            is_dark,
-            secondary,
-            on_toggle_subtask,
-            on_edit_subtask,
-            on_delete_subtask
+        # Contenedor para las subtareas (inicialmente colapsado)
+        subtasks_container = ft.Container(
+            content=ft.Column(
+                [],
+                spacing=4,
+                tight=True
+            ),
+            padding=ft.padding.only(left=40, top=4, bottom=4),
+            visible=False  # Inicialmente oculto
         )
         
-        if subtasks_list:
-            card_controls.append(
-                ft.Container(
-                    content=ft.Column(
-                        subtasks_list,
-                        spacing=4,
-                        tight=True
-                    ),
-                    padding=ft.padding.only(left=40, top=4, bottom=4),
-                )
-            )
-    
-    # Botón para agregar subtarea
-    if on_add_subtask:
-        def make_add_handler(task_id):
-            def handler(e):
-                on_add_subtask(task_id)
-            return handler
+        # Estado de expansión
+        expand_icon = ft.Icons.EXPAND_MORE
+        collapse_icon = ft.Icons.EXPAND_LESS
+        subtasks_expanded = [False]  # Usar lista para poder modificar desde el closure
         
+        # Crear el botón primero
+        expand_button = ft.IconButton(
+            icon=expand_icon,
+            icon_color=secondary,
+            icon_size=18,
+            tooltip="Mostrar subtareas",
+            width=32,
+            height=32
+        )
+        
+        def toggle_subtasks_display(e):
+            """Alterna la visualización de las subtareas."""
+            subtasks_expanded[0] = not subtasks_expanded[0]
+            subtasks_container.visible = subtasks_expanded[0]
+            
+            # Actualizar el icono del botón
+            if subtasks_expanded[0]:
+                expand_button.icon = collapse_icon
+                expand_button.tooltip = "Ocultar subtareas"
+            else:
+                expand_button.icon = expand_icon
+                expand_button.tooltip = "Mostrar subtareas"
+            
+            # Si se expande, construir las subtareas
+            if subtasks_expanded[0] and len(subtasks_container.content.controls) == 0:
+                subtasks_list = _build_subtasks_list(
+                    task.subtasks,
+                    is_dark,
+                    secondary,
+                    on_toggle_subtask,
+                    on_edit_subtask,
+                    on_delete_subtask
+                )
+                subtasks_container.content.controls = subtasks_list
+            
+            subtasks_container.update()
+            expand_button.update()
+        
+        # Asignar el handler después de definir la función
+        expand_button.on_click = toggle_subtasks_display
+        
+        # Contador de subtareas
+        completed_count = sum(1 for st in task.subtasks if st.completed)
+        total_count = len(task.subtasks)
+        subtasks_text = f"{completed_count}/{total_count} subtareas"
+        
+        # Fila con botón de expandir y contador
         card_controls.append(
-            ft.Container(
+            ft.Row(
+                [
+                    expand_button,
+                    ft.Text(
+                        subtasks_text,
+                        size=11 if is_desktop else 10,
+                        color=secondary if completed_count == total_count else (ft.Colors.GREY_600 if is_dark else ft.Colors.GREY_500),
+                        weight=ft.FontWeight.BOLD if completed_count == total_count else None
+                    )
+                ],
+                spacing=4,
+                alignment=ft.MainAxisAlignment.START
+            )
+        )
+        
+        # Contenedor de subtareas (inicialmente oculto)
+        card_controls.append(subtasks_container)
+        
+        # Botón para agregar subtarea (solo visible cuando hay subtareas)
+        if on_add_subtask:
+            add_subtask_button = ft.Container(
                 content=ft.TextButton(
                     icon=ft.Icons.ADD,
                     text="Agregar subtarea",
                     icon_color=secondary,
-                    on_click=make_add_handler(task.id),
+                    on_click=lambda e: on_add_subtask(task.id),
                     tooltip="Agregar subtarea"
                 ),
                 padding=ft.padding.only(left=40, top=4, bottom=4),
+                visible=False  # Inicialmente oculto
             )
-        )
+            
+            # Actualizar la función toggle para mostrar/ocultar el botón de agregar
+            original_toggle = toggle_subtasks_display
+            def toggle_with_add_button(e):
+                original_toggle(e)
+                add_subtask_button.visible = subtasks_expanded[0]
+                add_subtask_button.update()
+            
+            expand_button.on_click = toggle_with_add_button
+            card_controls.append(add_subtask_button)
+    else:
+        # Si no hay subtareas, mostrar el botón de agregar directamente
+        if on_add_subtask:
+            card_controls.append(
+                ft.Container(
+                    content=ft.TextButton(
+                        icon=ft.Icons.ADD,
+                        text="Agregar subtarea",
+                        icon_color=secondary,
+                        on_click=lambda e: on_add_subtask(task.id),
+                        tooltip="Agregar subtarea"
+                    ),
+                    padding=ft.padding.only(left=40, top=4, bottom=4),
+                )
+            )
     
     # Fila de acciones
     card_controls.append(

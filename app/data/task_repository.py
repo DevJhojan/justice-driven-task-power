@@ -147,7 +147,7 @@ class TaskRepository:
     
     def delete(self, task_id: int) -> bool:
         """
-        Elimina una tarea por su ID.
+        Elimina una tarea por su ID y registra la eliminación para sincronización.
         
         Args:
             task_id: ID de la tarea a eliminar.
@@ -158,8 +158,26 @@ class TaskRepository:
         conn = self.db.get_connection()
         cursor = conn.cursor()
         
+        # Verificar que la tarea existe antes de eliminarla
+        cursor.execute('SELECT id FROM tasks WHERE id = ?', (task_id,))
+        exists = cursor.fetchone() is not None
+        
+        if not exists:
+            conn.close()
+            return False
+        
+        # Eliminar la tarea
         cursor.execute('DELETE FROM tasks WHERE id = ?', (task_id,))
         deleted = cursor.rowcount > 0
+        
+        if deleted:
+            # Registrar la eliminación para sincronización
+            from datetime import datetime
+            deleted_at = datetime.now().isoformat()
+            cursor.execute('''
+                INSERT OR REPLACE INTO deleted_items (item_type, item_id, deleted_at, synced_at)
+                VALUES (?, ?, ?, NULL)
+            ''', ('task', task_id, deleted_at))
         
         conn.commit()
         conn.close()

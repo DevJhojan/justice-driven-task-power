@@ -53,6 +53,8 @@ class SyncResult:
     tasks_downloaded: int = 0
     habits_uploaded: int = 0
     habits_downloaded: int = 0
+    deletions_uploaded: int = 0
+    deletions_downloaded: int = 0
     errors: List[str] = None
     
     def __post_init__(self):
@@ -174,11 +176,13 @@ class FirebaseSyncService:
             upload_result = self._upload_local_data(user_id, id_token)
             result.tasks_uploaded = upload_result.get('tasks', 0)
             result.habits_uploaded = upload_result.get('habits', 0)
+            result.deletions_uploaded = upload_result.get('deletions', 0)
             
             # 2. Descargar datos remotos desde Firebase
             download_result = self._download_remote_data(user_id, id_token)
             result.tasks_downloaded = download_result.get('tasks', 0)
             result.habits_downloaded = download_result.get('habits', 0)
+            result.deletions_downloaded = download_result.get('deletions', 0)
             
             result.success = True
             
@@ -226,6 +230,7 @@ class FirebaseSyncService:
             upload_result = self._upload_local_data(user_id, id_token)
             result.tasks_uploaded = upload_result.get('tasks', 0)
             result.habits_uploaded = upload_result.get('habits', 0)
+            result.deletions_uploaded = upload_result.get('deletions', 0)
             result.success = True
         except Exception as e:
             error_msg = str(e)
@@ -269,6 +274,7 @@ class FirebaseSyncService:
             download_result = self._download_remote_data(user_id, id_token)
             result.tasks_downloaded = download_result.get('tasks', 0)
             result.habits_downloaded = download_result.get('habits', 0)
+            result.deletions_downloaded = download_result.get('deletions', 0)
             result.success = True
         except Exception as e:
             error_msg = str(e)
@@ -284,7 +290,7 @@ class FirebaseSyncService:
     
     def _upload_local_data(self, user_id: str, id_token: str) -> Dict[str, int]:
         """
-        Sube todos los datos locales desde SQLite a Firebase.
+        Sube todos los datos locales desde SQLite a Firebase, incluyendo eliminaciones.
         
         OFFLINE-FIRST: Los datos se leen desde SQLite (fuente de verdad local)
         y se suben a Firebase como respaldo. Si hay error, los datos locales
@@ -297,7 +303,7 @@ class FirebaseSyncService:
         Returns:
             Diccionario con conteo de elementos subidos
         """
-        uploaded = {'tasks': 0, 'habits': 0}
+        uploaded = {'tasks': 0, 'habits': 0, 'deletions': 0}
         
         try:
             # Subir tareas
@@ -311,6 +317,14 @@ class FirebaseSyncService:
             for habit in habits:
                 self._upload_habit(user_id, habit, id_token)
                 uploaded['habits'] += 1
+            
+            # Subir eliminaciones pendientes
+            deletions = self._get_pending_deletions()
+            for deletion in deletions:
+                self._upload_deletion(user_id, deletion, id_token)
+                uploaded['deletions'] += 1
+                # Marcar como sincronizada
+                self._mark_deletion_synced(deletion['item_type'], deletion['item_id'])
         
         except Exception as e:
             raise RuntimeError(f"Error al subir datos locales: {str(e)}")
@@ -324,7 +338,7 @@ class FirebaseSyncService:
         OFFLINE-FIRST: 
         - Los datos se fusionan de forma no destructiva en SQLite
         - Solo se actualizan datos locales si los remotos son más recientes (verifica timestamps)
-        - No se borran datos locales
+        - Aplica eliminaciones remotas localmente
         - Si hay error, los datos locales permanecen intactos
         
         Args:
@@ -334,7 +348,7 @@ class FirebaseSyncService:
         Returns:
             Diccionario con conteo de elementos descargados
         """
-        downloaded = {'tasks': 0, 'habits': 0}
+        downloaded = {'tasks': 0, 'habits': 0, 'deletions': 0}
         
         try:
             # Descargar tareas
@@ -348,6 +362,12 @@ class FirebaseSyncService:
             for habit_data in remote_habits:
                 if self._merge_habit(habit_data):
                     downloaded['habits'] += 1
+            
+            # Descargar y aplicar eliminaciones remotas
+            remote_deletions = self._download_deletions(user_id, id_token)
+            for deletion in remote_deletions:
+                if self._apply_deletion(deletion):
+                    downloaded['deletions'] += 1
         
         except Exception as e:
             raise RuntimeError(f"Error al descargar datos remotos: {str(e)}")
@@ -587,4 +607,205 @@ class FirebaseSyncService:
                 return True
         
         except Exception as e:
+            return False
+    
+    def _get_pending_deletions(self) -> List[Dict[str, Any]]:
+        """
+        Obtiene las eliminaciones pendientes de sincronizar desde la base de datos local.
+        
+        Returns:
+            Lista de diccionarios con información de eliminaciones pendientes
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute('''
+                SELECT item_type, item_id, deleted_at
+                FROM deleted_items
+                WHERE synced_at IS NULL
+                ORDER BY deleted_at ASC
+            ''')
+            
+            deletions = []
+            for row in cursor.fetchall():
+                deletions.append({
+                    'item_type': row['item_type'],
+                    'item_id': row['item_id'],
+                    'deleted_at': row['deleted_at']
+                })
+            
+            return deletions
+        finally:
+            conn.close()
+    
+    def _upload_deletion(self, user_id: str, deletion: Dict[str, Any], id_token: str) -> None:
+        """
+        Sube una eliminación a Firebase Realtime Database.
+        
+        Args:
+            user_id: ID del usuario autenticado
+            deletion: Diccionario con información de la eliminación (item_type, item_id, deleted_at)
+            id_token: Token de autenticación de Firebase
+        """
+        try:
+            item_type = deletion['item_type']
+            item_id = deletion['item_id']
+            deleted_at = deletion['deleted_at']
+            
+            # Estructura: /users/{userId}/deletions/{item_type}/{item_id}.json
+            path = f"users/{user_id}/deletions/{item_type}/{item_id}.json"
+            url = f"{self.database_url}/{path}"
+            
+            deletion_data = {
+                'item_type': item_type,
+                'item_id': item_id,
+                'deleted_at': deleted_at,
+                'synced_at': datetime.now().isoformat()
+            }
+            
+            response = requests.put(
+                url,
+                json=deletion_data,
+                params={'auth': id_token},
+                timeout=10
+            )
+            response.raise_for_status()
+            
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"Error al subir eliminación {item_type}/{item_id}: {str(e)}")
+    
+    def _mark_deletion_synced(self, item_type: str, item_id: int) -> None:
+        """
+        Marca una eliminación como sincronizada en la base de datos local.
+        
+        Args:
+            item_type: Tipo de elemento ('task' o 'habit')
+            item_id: ID del elemento eliminado
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            synced_at = datetime.now().isoformat()
+            cursor.execute('''
+                UPDATE deleted_items
+                SET synced_at = ?
+                WHERE item_type = ? AND item_id = ?
+            ''', (synced_at, item_type, item_id))
+            
+            conn.commit()
+        finally:
+            conn.close()
+    
+    def _download_deletions(self, user_id: str, id_token: str) -> List[Dict[str, Any]]:
+        """
+        Descarga todas las eliminaciones del usuario desde Firebase Realtime Database.
+        
+        Args:
+            user_id: ID del usuario autenticado
+            id_token: Token de autenticación de Firebase
+        
+        Returns:
+            Lista de diccionarios con datos de eliminaciones
+        """
+        try:
+            path = f"users/{user_id}/deletions.json"
+            url = f"{self.database_url}/{path}"
+            
+            response = requests.get(
+                url,
+                params={'auth': id_token},
+                timeout=10
+            )
+            response.raise_for_status()
+            
+            deletions_data = response.json()
+            if not deletions_data:
+                return []
+            
+            deletions = []
+            if isinstance(deletions_data, dict):
+                # Estructura: {item_type: {item_id: {deleted_at, synced_at}}}
+                for item_type, items in deletions_data.items():
+                    if isinstance(items, dict):
+                        for item_id, deletion_data in items.items():
+                            if isinstance(deletion_data, dict):
+                                deletion_data['item_type'] = item_type
+                                deletion_data['item_id'] = int(item_id)
+                                deletions.append(deletion_data)
+            
+            return deletions
+        
+        except requests.exceptions.RequestException as e:
+            if hasattr(e, 'response') and e.response is not None and e.response.status_code == 404:
+                # No hay eliminaciones aún, retornar lista vacía
+                return []
+            raise RuntimeError(f"Error al descargar eliminaciones: {str(e)}")
+    
+    def _apply_deletion(self, deletion: Dict[str, Any]) -> bool:
+        """
+        Aplica una eliminación remota localmente si es más reciente que la local.
+        
+        Args:
+            deletion: Diccionario con información de la eliminación remota
+        
+        Returns:
+            True si se aplicó la eliminación, False si se ignoró
+        """
+        try:
+            item_type = deletion.get('item_type')
+            item_id = deletion.get('item_id')
+            remote_deleted_at = deletion.get('deleted_at')
+            
+            if not item_type or not item_id or not remote_deleted_at:
+                return False
+            
+            # Verificar si el elemento existe localmente
+            conn = self.db.get_connection()
+            cursor = conn.cursor()
+            
+            try:
+                # Verificar si ya está eliminado localmente
+                cursor.execute('''
+                    SELECT deleted_at FROM deleted_items
+                    WHERE item_type = ? AND item_id = ?
+                ''', (item_type, item_id))
+                
+                local_deletion = cursor.fetchone()
+                
+                if local_deletion:
+                    local_deleted_at = local_deletion['deleted_at']
+                    # Solo aplicar si la eliminación remota es más reciente
+                    if remote_deleted_at <= local_deleted_at:
+                        return False
+                
+                # Aplicar la eliminación localmente
+                if item_type == 'task':
+                    # Eliminar la tarea
+                    cursor.execute('DELETE FROM tasks WHERE id = ?', (item_id,))
+                    deleted = cursor.rowcount > 0
+                elif item_type == 'habit':
+                    # Eliminar el hábito
+                    cursor.execute('DELETE FROM habits WHERE id = ?', (item_id,))
+                    deleted = cursor.rowcount > 0
+                else:
+                    return False
+                
+                if deleted:
+                    # Registrar la eliminación en deleted_items
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO deleted_items (item_type, item_id, deleted_at, synced_at)
+                        VALUES (?, ?, ?, ?)
+                    ''', (item_type, item_id, remote_deleted_at, datetime.now().isoformat()))
+                    
+                    conn.commit()
+                    return True
+                
+                return False
+            finally:
+                conn.close()
+        
+        except Exception as e:
+            # Error al aplicar eliminación, ignorar
             return False

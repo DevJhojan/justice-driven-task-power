@@ -228,6 +228,29 @@ class Database:
             ON habit_completions(habit_id)
         ''')
         
+        # Tabla para rastrear eliminaciones (para sincronización)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS deleted_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_type TEXT NOT NULL,
+                item_id INTEGER NOT NULL,
+                deleted_at TEXT NOT NULL,
+                synced_at TEXT,
+                UNIQUE(item_type, item_id)
+            )
+        ''')
+        
+        # Índice para mejorar consultas de eliminaciones
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_deleted_items_type_id 
+            ON deleted_items(item_type, item_id)
+        ''')
+        
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_deleted_items_synced 
+            ON deleted_items(synced_at)
+        ''')
+        
         cursor.execute('''
             CREATE INDEX IF NOT EXISTS idx_habit_completions_date 
             ON habit_completions(completion_date)
