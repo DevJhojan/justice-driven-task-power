@@ -5,7 +5,7 @@ import flet as ft
 from typing import Callable
 from datetime import date
 from app.data.models import Habit
-from ...utils import load_completion_dates
+from ..utils import load_completion_dates
 from .calendar import create_calendar_view
 from .charts import create_charts_view
 from .progress import create_progress_view

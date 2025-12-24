@@ -6,7 +6,7 @@ from datetime import date
 from typing import Callable
 from calendar import monthrange
 from app.data.models import Habit
-from ...utils import load_completion_dates
+from ..utils import load_completion_dates
 
 
 def create_calendar_view(

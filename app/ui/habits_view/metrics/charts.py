@@ -4,7 +4,7 @@ Vista de gráficas de progreso del hábito (últimos 30 días y últimas 8 seman
 import flet as ft
 from datetime import date, timedelta
 from app.data.models import Habit
-from ...utils import load_completion_dates
+from ..utils import load_completion_dates
 
 
 def create_charts_view(
