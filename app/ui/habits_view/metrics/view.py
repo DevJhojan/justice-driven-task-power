@@ -119,13 +119,8 @@ def create_habit_metrics_view(
         expand=True
     )
     
-    # Forzar actualización de la página para asegurar que las vistas se rendericen
-    # Esto es especialmente importante en móvil donde puede haber problemas de renderizado inicial
-    try:
-        metrics_container.update()
-        page.update()
-    except Exception as ex:
-        print(f"Advertencia al actualizar contenedor de métricas: {ex}")
+    # NO llamar a update() aquí - el contenedor se actualizará automáticamente cuando se agregue a la página
+    # Llamar a update() antes de agregar a la página causa el error "Container Control must be added to the page first"
     
     return metrics_container
 

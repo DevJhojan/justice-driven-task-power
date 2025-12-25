@@ -288,11 +288,7 @@ def create_charts_view(
         expand=True
     )
     
-    # Forzar actualización para asegurar renderizado en móvil
-    try:
-        charts_container.update()
-    except:
-        pass
+    # NO llamar a update() aquí - el contenedor se actualizará automáticamente cuando se agregue a la página
     
     return charts_container
 

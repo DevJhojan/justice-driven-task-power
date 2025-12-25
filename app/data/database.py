@@ -64,8 +64,9 @@ class Database:
                 test_file.write_text('test')
                 test_file.unlink()
                 
-                # MIGRACIÓN: Si existe una base de datos antigua en el directorio del proyecto,
-                # moverla a la nueva ubicación persistente
+                # MIGRACIÓN: Solo migrar datos si es una actualización (no primera instalación)
+                # La función _migrate_old_database verifica si hay datos antes de migrar
+                # Si es primera instalación, la base de datos se creará vacía
                 self._migrate_old_database(db_path)
                 
                 return db_path
@@ -80,47 +81,88 @@ class Database:
     
     def _migrate_old_database(self, new_db_path: str) -> None:
         """
-        Migra la base de datos antigua a la nueva ubicación persistente si existe.
-        Esto asegura que los datos no se pierdan al actualizar la app en Android.
+        Migra la base de datos antigua a la nueva ubicación persistente SOLO si es una actualización.
         
-        IMPORTANTE:
-        - Esta función se ejecuta automáticamente la primera vez que se usa
-          la nueva ubicación persistente en Android.
-        - Si existe una base de datos antigua, se copia a la nueva ubicación.
-        - La base de datos antigua se mantiene como respaldo.
+        IMPORTANTE - Comportamiento según tipo de instalación:
+        - PRIMERA INSTALACIÓN: La base de datos se crea vacía (sin datos)
+        - ACTUALIZACIÓN: Si existe una base de datos antigua con datos, se migra a la nueva ubicación
+        
+        Detección de instalación vs actualización:
+        - Si la base de datos en la ubicación persistente YA EXISTE → es una actualización (no hacer nada)
+        - Si NO EXISTE y hay una base de datos antigua con datos → es actualización desde versión antigua (migrar)
+        - Si NO EXISTE y NO hay base de datos antigua o está vacía → es primera instalación (crear vacía)
         
         Args:
             new_db_path: Ruta a la nueva ubicación de la base de datos.
         """
         new_path = Path(new_db_path)
         
-        # Si la nueva base de datos ya existe, no hacer nada
-        # (ya fue migrada o es la primera vez que se usa)
+        # Si la nueva base de datos ya existe en la ubicación persistente,
+        # es una actualización y los datos ya están ahí → no hacer nada
         if new_path.exists():
+            print("Actualización detectada: base de datos persistente ya existe, manteniendo datos existentes")
             return
         
-        # Buscar base de datos antigua en el directorio del proyecto
-        # (ubicación anterior que se borraba al actualizar)
+        # Si la nueva base de datos NO existe, verificar si es actualización desde versión antigua
+        # o primera instalación
+        
+        # En Android, la base de datos antigua estaría en el directorio del proyecto
+        # (que se borra al desinstalar, pero puede existir si se actualiza sin desinstalar)
         app_dir = Path(__file__).parent.parent.parent
         old_db_path = app_dir / 'tasks.db'
         
+        # SOLO migrar si existe una base de datos antigua CON DATOS REALES
+        # Si no hay datos, es una primera instalación → crear vacía
         if old_db_path.exists() and old_db_path.is_file() and old_db_path.stat().st_size > 0:
             try:
-                # Copiar la base de datos antigua a la nueva ubicación persistente
-                import shutil
-                shutil.copy2(old_db_path, new_db_path)
+                # Verificar que la base de datos antigua tiene datos reales (no solo tablas vacías)
+                import sqlite3
+                old_conn = sqlite3.connect(str(old_db_path))
+                old_cursor = old_conn.cursor()
                 
-                # Verificar que la copia fue exitosa
-                if new_path.exists() and new_path.stat().st_size > 0:
-                    # La migración fue exitosa
-                    # La base de datos antigua se mantiene como respaldo
-                    # (se puede eliminar manualmente después de verificar que todo funciona)
+                # Verificar si tiene datos (tablas con contenido)
+                has_tasks = False
+                has_habits = False
+                
+                try:
+                    old_cursor.execute("SELECT COUNT(*) FROM tasks")
+                    task_count = old_cursor.fetchone()[0]
+                    has_tasks = task_count > 0
+                except:
                     pass
-            except Exception:
-                # Si falla la migración, continuar con la nueva base de datos
-                # (se creará vacía pero no perderemos funcionalidad)
-                # Esto puede ocurrir si hay problemas de permisos o espacio
+                
+                try:
+                    old_cursor.execute("SELECT COUNT(*) FROM habits")
+                    habit_count = old_cursor.fetchone()[0]
+                    has_habits = habit_count > 0
+                except:
+                    pass
+                
+                old_conn.close()
+                
+                # SOLO migrar si hay datos reales (tareas o hábitos)
+                # Si no hay datos, es una primera instalación → crear vacía
+                if has_tasks or has_habits:
+                    # Es una actualización desde versión antigua: copiar la base de datos antigua
+                    import shutil
+                    shutil.copy2(old_db_path, new_db_path)
+                    
+                    # Verificar que la copia fue exitosa
+                    if new_path.exists() and new_path.stat().st_size > 0:
+                        print(f"Migración exitosa: datos migrados desde {old_db_path} a {new_db_path}")
+                    else:
+                        print(f"Advertencia: La migración puede no haber sido completa")
+                else:
+                    # No hay datos, es una primera instalación → crear vacía
+                    print("Primera instalación detectada: base de datos se creará vacía (sin datos)")
+            except Exception as e:
+                # Si falla la verificación o migración, crear base de datos vacía
+                # (primera instalación o error en migración)
+                print(f"Primera instalación o error en migración: {e}. Base de datos se creará vacía.")
                 pass
+        else:
+            # No existe base de datos antigua o está vacía → primera instalación
+            print("Primera instalación detectada: base de datos se creará vacía (sin datos)")
     
     def _ensure_db_directory(self):
         """Asegura que el directorio de la base de datos existe."""

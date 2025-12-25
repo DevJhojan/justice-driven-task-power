@@ -310,11 +310,7 @@ def create_calendar_view(
         # Si por alguna razón no se construyó, intentar construir de nuevo
         build_calendar(current_month[0], current_year[0])
     
-    # Forzar actualización del contenedor para asegurar renderizado en móvil
-    try:
-        calendar_container.update()
-    except:
-        pass
+    # NO llamar a update() aquí - el contenedor se actualizará automáticamente cuando se agregue a la página
     
     return ft.Container(
         content=ft.Column(

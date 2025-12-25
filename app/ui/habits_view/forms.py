@@ -206,12 +206,8 @@ def navigate_to_habit_details(
     
     metrics_container.content = metrics_view
     
-    # Forzar actualización de la página y el contenedor para asegurar renderizado en móvil
-    try:
-        metrics_container.update()
-        page.update()
-    except Exception as ex:
-        print(f"Advertencia al actualizar métricas iniciales: {ex}")
+    # NO llamar a update() aquí - el contenedor se actualizará automáticamente cuando se agregue a la página
+    # Llamar a update() antes de agregar a la página causa el error "Container Control must be added to the page first"
     
     # Construir contenido de detalles con métricas básicas y avanzadas
     # IMPORTANTE: Separar el resumen (scrolleable) de los tabs (expandibles)
