@@ -23,6 +23,9 @@ class HabitRepository:
         """
         Crea un nuevo hábito en la base de datos.
         
+        IMPORTANTE: Si el hábito tiene un ID, intenta insertarlo (útil para sincronización).
+        Esto evita duplicados cuando se sincronizan datos desde Firebase.
+        
         Args:
             habit: Hábito a crear.
             
@@ -34,22 +37,49 @@ class HabitRepository:
         
         now = datetime.now().isoformat()
         
-        cursor.execute('''
-            INSERT INTO habits (title, description, frequency, target_days, active, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            habit.title,
-            habit.description,
-            habit.frequency,
-            habit.target_days,
-            1 if habit.active else 0,
-            now,
-            now
-        ))
+        # Si el hábito tiene un ID, intentar insertarlo (útil para sincronización)
+        if habit.id is not None:
+            # Verificar si ya existe un hábito con ese ID
+            cursor.execute('SELECT id FROM habits WHERE id = ?', (habit.id,))
+            if cursor.fetchone():
+                # Ya existe, actualizar en lugar de crear
+                conn.close()
+                return self.update(habit)
+            
+            # Insertar con ID específico
+            cursor.execute('''
+                INSERT INTO habits (id, title, description, frequency, target_days, active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                habit.id,
+                habit.title,
+                habit.description,
+                habit.frequency,
+                habit.target_days,
+                1 if habit.active else 0,
+                habit.created_at.isoformat() if habit.created_at else now,
+                habit.updated_at.isoformat() if habit.updated_at else now
+            ))
+        else:
+            # Insertar sin ID (auto-increment)
+            cursor.execute('''
+                INSERT INTO habits (title, description, frequency, target_days, active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                habit.title,
+                habit.description,
+                habit.frequency,
+                habit.target_days,
+                1 if habit.active else 0,
+                now,
+                now
+            ))
+            habit.id = cursor.lastrowid
         
-        habit.id = cursor.lastrowid
-        habit.created_at = datetime.now()
-        habit.updated_at = datetime.now()
+        if not habit.created_at:
+            habit.created_at = datetime.now()
+        if not habit.updated_at:
+            habit.updated_at = datetime.now()
         
         conn.commit()
         conn.close()

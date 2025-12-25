@@ -55,6 +55,9 @@ class SyncResult:
     habits_downloaded: int = 0
     deletions_uploaded: int = 0
     deletions_downloaded: int = 0
+    tasks_skipped: int = 0  # Tareas que no necesitaban sincronización
+    habits_skipped: int = 0  # Hábitos que no necesitaban sincronización
+    no_changes: bool = False  # True si no hay cambios para sincronizar
     errors: List[str] = None
     
     def __post_init__(self):
@@ -174,17 +177,28 @@ class FirebaseSyncService:
             return result
         
         try:
-            # 1. Subir datos locales a Firebase (desde SQLite)
+            # 1. Subir datos locales a Firebase (desde SQLite) - SOLO si han cambiado
             upload_result = self._upload_local_data(user_id, id_token)
             result.tasks_uploaded = upload_result.get('tasks', 0)
             result.habits_uploaded = upload_result.get('habits', 0)
             result.deletions_uploaded = upload_result.get('deletions', 0)
+            result.tasks_skipped = upload_result.get('tasks_skipped', 0)
+            result.habits_skipped = upload_result.get('habits_skipped', 0)
             
             # 2. Descargar datos remotos desde Firebase
             download_result = self._download_remote_data(user_id, id_token)
             result.tasks_downloaded = download_result.get('tasks', 0)
             result.habits_downloaded = download_result.get('habits', 0)
             result.deletions_downloaded = download_result.get('deletions', 0)
+            
+            # 3. Verificar si hubo cambios para sincronizar
+            total_changes = (
+                result.tasks_uploaded + result.habits_uploaded + result.deletions_uploaded +
+                result.tasks_downloaded + result.habits_downloaded + result.deletions_downloaded
+            )
+            
+            if total_changes == 0:
+                result.no_changes = True
             
             result.success = True
             
@@ -233,6 +247,17 @@ class FirebaseSyncService:
             result.tasks_uploaded = upload_result.get('tasks', 0)
             result.habits_uploaded = upload_result.get('habits', 0)
             result.deletions_uploaded = upload_result.get('deletions', 0)
+            result.tasks_skipped = upload_result.get('tasks_skipped', 0)
+            result.habits_skipped = upload_result.get('habits_skipped', 0)
+            
+            # Verificar si hubo cambios para sincronizar
+            total_changes = (
+                result.tasks_uploaded + result.habits_uploaded + result.deletions_uploaded
+            )
+            
+            if total_changes == 0:
+                result.no_changes = True
+            
             result.success = True
         except Exception as e:
             error_msg = str(e)
@@ -292,7 +317,15 @@ class FirebaseSyncService:
     
     def _upload_local_data(self, user_id: str, id_token: str) -> Dict[str, int]:
         """
-        Sube todos los datos locales desde SQLite a Firebase, incluyendo eliminaciones.
+        Sube datos locales desde SQLite a Firebase SOLO si han cambiado o no existen en la nube.
+        
+        ALGORITMO DE SINCRONIZACIÓN INTELIGENTE:
+        1. Descarga datos remotos para comparar
+        2. Compara cada dato local con su versión remota
+        3. Solo sube si:
+           - No existe en la nube (nuevo)
+           - Ha sido modificado localmente (updated_at local > updated_at remoto)
+        4. Evita duplicados usando IDs únicos persistentes
         
         OFFLINE-FIRST: Los datos se leen desde SQLite (fuente de verdad local)
         y se suben a Firebase como respaldo. Si hay error, los datos locales
@@ -303,24 +336,52 @@ class FirebaseSyncService:
             id_token: Token de autenticación de Firebase
         
         Returns:
-            Diccionario con conteo de elementos subidos
+            Diccionario con conteo de elementos subidos y omitidos
         """
-        uploaded = {'tasks': 0, 'habits': 0, 'deletions': 0}
+        uploaded = {'tasks': 0, 'habits': 0, 'deletions': 0, 'tasks_skipped': 0, 'habits_skipped': 0}
         
         try:
-            # Subir tareas
+            # PASO 1: Descargar datos remotos para comparar
+            remote_tasks_dict = {}
+            remote_habits_dict = {}
+            
+            try:
+                remote_tasks = self._download_tasks(user_id, id_token)
+                for task_data in remote_tasks:
+                    task_id = task_data.get('id')
+                    if task_id:
+                        remote_tasks_dict[task_id] = task_data
+            except:
+                pass  # Si falla, asumir que no hay datos remotos
+            
+            try:
+                remote_habits = self._download_habits(user_id, id_token)
+                for habit_data in remote_habits:
+                    habit_id = habit_data.get('id')
+                    if habit_id:
+                        remote_habits_dict[habit_id] = habit_data
+            except:
+                pass  # Si falla, asumir que no hay datos remotos
+            
+            # PASO 2: Comparar y subir tareas solo si han cambiado
             tasks = self.task_service.get_all_tasks()
             for task in tasks:
-                self._upload_task(user_id, task, id_token)
-                uploaded['tasks'] += 1
+                if self._should_upload_task(task, remote_tasks_dict.get(task.id)):
+                    self._upload_task(user_id, task, id_token)
+                    uploaded['tasks'] += 1
+                else:
+                    uploaded['tasks_skipped'] += 1
             
-            # Subir hábitos
+            # PASO 3: Comparar y subir hábitos solo si han cambiado
             habits = self.habit_service.get_all_habits()
             for habit in habits:
-                self._upload_habit(user_id, habit, id_token)
-                uploaded['habits'] += 1
+                if self._should_upload_habit(habit, remote_habits_dict.get(habit.id)):
+                    self._upload_habit(user_id, habit, id_token)
+                    uploaded['habits'] += 1
+                else:
+                    uploaded['habits_skipped'] += 1
             
-            # Subir eliminaciones pendientes
+            # PASO 4: Subir eliminaciones pendientes (siempre se suben si están pendientes)
             deletions = self._get_pending_deletions()
             for deletion in deletions:
                 self._upload_deletion(user_id, deletion, id_token)
@@ -375,6 +436,76 @@ class FirebaseSyncService:
             raise RuntimeError(f"Error al descargar datos remotos: {str(e)}")
         
         return downloaded
+    
+    def _should_upload_task(self, local_task: Task, remote_task_data: Optional[Dict[str, Any]]) -> bool:
+        """
+        Determina si una tarea local debe subirse a la nube.
+        
+        CRITERIOS DE SINCRONIZACIÓN:
+        - Si no existe en la nube (remote_task_data es None) -> SUBIR (nuevo)
+        - Si existe pero local es más reciente (updated_at local > updated_at remoto) -> SUBIR (modificado)
+        - Si existe y remoto es igual o más reciente -> NO SUBIR (sin cambios o remoto más nuevo)
+        
+        Args:
+            local_task: Tarea local
+            remote_task_data: Datos de la tarea remota (None si no existe)
+        
+        Returns:
+            True si debe subirse, False si no necesita sincronización
+        """
+        # Si no existe en la nube, debe subirse
+        if remote_task_data is None:
+            return True
+        
+        # Comparar timestamps para detectar cambios
+        local_updated = local_task.updated_at.isoformat() if local_task.updated_at else None
+        remote_updated = remote_task_data.get('updated_at')
+        
+        if not local_updated:
+            # Sin timestamp local, subir por seguridad
+            return True
+        
+        if not remote_updated:
+            # Sin timestamp remoto, subir por seguridad
+            return True
+        
+        # Solo subir si la versión local es más reciente
+        return local_updated > remote_updated
+    
+    def _should_upload_habit(self, local_habit: Habit, remote_habit_data: Optional[Dict[str, Any]]) -> bool:
+        """
+        Determina si un hábito local debe subirse a la nube.
+        
+        CRITERIOS DE SINCRONIZACIÓN:
+        - Si no existe en la nube (remote_habit_data es None) -> SUBIR (nuevo)
+        - Si existe pero local es más reciente (updated_at local > updated_at remoto) -> SUBIR (modificado)
+        - Si existe y remoto es igual o más reciente -> NO SUBIR (sin cambios o remoto más nuevo)
+        
+        Args:
+            local_habit: Hábito local
+            remote_habit_data: Datos del hábito remoto (None si no existe)
+        
+        Returns:
+            True si debe subirse, False si no necesita sincronización
+        """
+        # Si no existe en la nube, debe subirse
+        if remote_habit_data is None:
+            return True
+        
+        # Comparar timestamps para detectar cambios
+        local_updated = local_habit.updated_at.isoformat() if local_habit.updated_at else None
+        remote_updated = remote_habit_data.get('updated_at')
+        
+        if not local_updated:
+            # Sin timestamp local, subir por seguridad
+            return True
+        
+        if not remote_updated:
+            # Sin timestamp remoto, subir por seguridad
+            return True
+        
+        # Solo subir si la versión local es más reciente
+        return local_updated > remote_updated
     
     def _upload_task(self, user_id: str, task: Task, id_token: str) -> None:
         """
@@ -507,6 +638,9 @@ class FirebaseSyncService:
             if isinstance(habits_data, dict):
                 for habit_id, habit_data in habits_data.items():
                     if isinstance(habit_data, dict):
+                        # Asegurar que el ID del hábito esté presente en los datos
+                        if 'id' not in habit_data or habit_data['id'] is None:
+                            habit_data['id'] = int(habit_id) if habit_id.isdigit() else None
                         habits.append(habit_data)
             
             return habits
@@ -606,16 +740,28 @@ class FirebaseSyncService:
                         return True
                 return False
             else:
-                # Hábito no existe localmente, crearlo
+                # Hábito no existe localmente, crearlo con el ID remoto para evitar duplicados
                 habit = Habit.from_dict(remote_habit_data)
-                habit.id = None
-                self.habit_service.create_habit(
-                    habit.title,
-                    habit.description,
-                    habit.frequency,
-                    habit.target_days
-                )
-                return True
+                # IMPORTANTE: Mantener el ID remoto para evitar duplicaciones
+                remote_id = remote_habit_data.get('id')
+                if remote_id:
+                    # Usar el repositorio directamente para crear con ID específico
+                    # El repositorio ahora soporta crear con ID específico
+                    from app.data.habit_repository import HabitRepository
+                    habit_repo = HabitRepository(self.db)
+                    # Crear hábito con ID remoto (el repositorio maneja la verificación de duplicados)
+                    habit.id = remote_id
+                    created_habit = habit_repo.create(habit)
+                    return True
+                else:
+                    # Sin ID remoto, crear normalmente
+                    self.habit_service.create_habit(
+                        habit.title,
+                        habit.description,
+                        habit.frequency,
+                        habit.target_days
+                    )
+                    return True
         
         except Exception as e:
             return False

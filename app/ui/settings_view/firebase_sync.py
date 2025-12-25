@@ -334,13 +334,68 @@ def show_sync_results_page(
                 subtitle=ft.Text("Eliminaciones remotas aplicadas localmente")
             ))
         
-        if not stats:
+        # Verificar si no hay cambios para sincronizar
+        if hasattr(sync_result, 'no_changes') and sync_result.no_changes:
+            stats = [
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            ft.Icon(
+                                ft.Icons.CHECK_CIRCLE,
+                                size=64,
+                                color=ft.Colors.GREEN if not is_dark else ft.Colors.GREEN_300
+                            ),
+                            ft.Text(
+                                "Los datos no han sido modificados",
+                                size=20,
+                                weight=ft.FontWeight.BOLD,
+                                text_align=ft.TextAlign.CENTER
+                            ),
+                            ft.Text(
+                                "No es necesario sincronizar.",
+                                size=16,
+                                text_align=ft.TextAlign.CENTER,
+                                color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
+                            ),
+                            ft.Divider(height=20),
+                            ft.Text(
+                                "Todos los datos locales y remotos están sincronizados.",
+                                size=14,
+                                text_align=ft.TextAlign.CENTER,
+                                color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
+                            )
+                        ],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=12
+                    ),
+                    padding=40,
+                    alignment=ft.alignment.center
+                )
+            ]
+        elif not stats:
             stats.append(ft.Text(
                 "No hubo cambios que sincronizar. Los datos ya están actualizados.",
                 size=14,
                 color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400,
                 text_align=ft.TextAlign.CENTER
             ))
+        
+        # Mostrar elementos omitidos si los hay (y no es el caso de "no_changes")
+        if not (hasattr(sync_result, 'no_changes') and sync_result.no_changes):
+            if hasattr(sync_result, 'tasks_skipped') and sync_result.tasks_skipped > 0:
+                stats.append(ft.Divider(height=10))
+                stats.append(ft.ListTile(
+                    leading=ft.Icon(ft.Icons.SKIP_NEXT, color=ft.Colors.GREY),
+                    title=ft.Text(f"Tareas omitidas (sin cambios): {sync_result.tasks_skipped}"),
+                    subtitle=ft.Text("Estas tareas no fueron modificadas localmente")
+                ))
+            
+            if hasattr(sync_result, 'habits_skipped') and sync_result.habits_skipped > 0:
+                stats.append(ft.ListTile(
+                    leading=ft.Icon(ft.Icons.SKIP_NEXT, color=ft.Colors.GREY),
+                    title=ft.Text(f"Hábitos omitidos (sin cambios): {sync_result.habits_skipped}"),
+                    subtitle=ft.Text("Estos hábitos no fueron modificados localmente")
+                ))
         
         content_controls.extend(stats)
         
