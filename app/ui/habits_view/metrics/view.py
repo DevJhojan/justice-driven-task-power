@@ -84,27 +84,48 @@ def create_habit_metrics_view(
         page, habit, habit_service, fresh_metrics
     )
     
+    # Crear tabs directamente - en móvil Flet debería manejar esto correctamente
+    # pero necesitamos asegurar que el contenido de cada tab tenga expand=True
     tabs = ft.Tabs(
         selected_index=selected_tab_index[0],
         tabs=[
-            ft.Tab(text="Calendario", icon=ft.Icons.CALENDAR_MONTH, content=calendar_content),
-            ft.Tab(text="Gráficas", icon=ft.Icons.BAR_CHART, content=charts_content),
-            ft.Tab(text="Progreso", icon=ft.Icons.TRENDING_UP, content=progress_content),
+            ft.Tab(
+                text="Calendario", 
+                icon=ft.Icons.CALENDAR_MONTH, 
+                content=ft.Container(content=calendar_content, expand=True)
+            ),
+            ft.Tab(
+                text="Gráficas", 
+                icon=ft.Icons.BAR_CHART, 
+                content=ft.Container(content=charts_content, expand=True)
+            ),
+            ft.Tab(
+                text="Progreso", 
+                icon=ft.Icons.TRENDING_UP, 
+                content=ft.Container(content=progress_content, expand=True)
+            ),
         ],
         expand=True,
-        on_change=on_tab_change
+        on_change=on_tab_change,
+        # Asegurar que los tabs sean scrollables en móvil si es necesario
+        scrollable=True
+    )
+    
+    # Contenedor principal - CRÍTICO: debe tener expand=True y no estar dentro de un Column con scroll
+    # que limite su altura
+    metrics_container = ft.Container(
+        content=tabs,
+        padding=ft.padding.only(left=10, right=10, top=10, bottom=10),
+        expand=True
     )
     
     # Forzar actualización de la página para asegurar que las vistas se rendericen
     # Esto es especialmente importante en móvil donde puede haber problemas de renderizado inicial
     try:
+        metrics_container.update()
         page.update()
-    except:
-        pass
+    except Exception as ex:
+        print(f"Advertencia al actualizar contenedor de métricas: {ex}")
     
-    return ft.Container(
-        content=tabs,
-        padding=20,
-        expand=True
-    )
+    return metrics_container
 

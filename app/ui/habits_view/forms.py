@@ -214,7 +214,9 @@ def navigate_to_habit_details(
         print(f"Advertencia al actualizar métricas iniciales: {ex}")
     
     # Construir contenido de detalles con métricas básicas y avanzadas
-    details_content = ft.Container(
+    # IMPORTANTE: Separar el resumen (scrolleable) de los tabs (expandibles)
+    # Los tabs NO deben estar dentro de un Column con scroll en móvil
+    summary_section = ft.Container(
         content=ft.Column(
             [
                 # Descripción
@@ -294,13 +296,31 @@ def navigate_to_habit_details(
                     size=14
                 ),
                 ft.Divider(),
-                # Métricas avanzadas (calendario y gráficas)
-                metrics_container
             ],
             spacing=16,
             scroll=ft.ScrollMode.AUTO
         ),
-        padding=20,
+        padding=ft.padding.only(left=20, right=20, top=20, bottom=10)
+    )
+    
+    # Separar las métricas avanzadas (tabs) del contenido scrolleable
+    # Esto es CRÍTICO en móvil: los tabs no funcionan bien dentro de un Column con scroll
+    metrics_section = ft.Container(
+        content=metrics_container,
+        expand=True,
+        padding=ft.padding.only(left=10, right=10, top=10, bottom=20)
+    )
+    
+    # Construir el contenido principal: resumen scrolleable arriba, tabs expandibles abajo
+    details_content = ft.Container(
+        content=ft.Column(
+            [
+                summary_section,
+                metrics_section
+            ],
+            spacing=0,
+            expand=True
+        ),
         expand=True
     )
     
