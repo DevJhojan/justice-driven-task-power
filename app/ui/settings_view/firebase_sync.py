@@ -334,6 +334,42 @@ def show_sync_results_page(
                 subtitle=ft.Text("Eliminaciones remotas aplicadas localmente")
             ))
         
+        # Sincronización granular
+        if hasattr(sync_result, 'completions_uploaded') and sync_result.completions_uploaded > 0:
+            stats.append(ft.ListTile(
+                leading=ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.BLUE),
+                title=ft.Text(f"Completions de hábitos subidas: {sync_result.completions_uploaded}"),
+                subtitle=ft.Text("Sincronización granular: solo cambios en calendario")
+            ))
+        
+        if hasattr(sync_result, 'completions_downloaded') and sync_result.completions_downloaded > 0:
+            stats.append(ft.ListTile(
+                leading=ft.Icon(ft.Icons.CHECK_CIRCLE, color=ft.Colors.GREEN),
+                title=ft.Text(f"Completions de hábitos descargadas: {sync_result.completions_downloaded}"),
+                subtitle=ft.Text("Sincronización granular: solo cambios en calendario")
+            ))
+        
+        if hasattr(sync_result, 'subtasks_uploaded') and sync_result.subtasks_uploaded > 0:
+            stats.append(ft.ListTile(
+                leading=ft.Icon(ft.Icons.LIST, color=ft.Colors.BLUE),
+                title=ft.Text(f"Subtareas subidas: {sync_result.subtasks_uploaded}"),
+                subtitle=ft.Text("Sincronización granular: solo subtareas modificadas")
+            ))
+        
+        if hasattr(sync_result, 'subtasks_downloaded') and sync_result.subtasks_downloaded > 0:
+            stats.append(ft.ListTile(
+                leading=ft.Icon(ft.Icons.LIST, color=ft.Colors.GREEN),
+                title=ft.Text(f"Subtareas descargadas: {sync_result.subtasks_downloaded}"),
+                subtitle=ft.Text("Sincronización granular: solo subtareas modificadas")
+            ))
+        
+        if hasattr(sync_result, 'fields_updated') and sync_result.fields_updated > 0:
+            stats.append(ft.ListTile(
+                leading=ft.Icon(ft.Icons.EDIT, color=ft.Colors.ORANGE),
+                title=ft.Text(f"Campos actualizados: {sync_result.fields_updated}"),
+                subtitle=ft.Text("Sincronización granular: solo campos modificados")
+            ))
+        
         # Verificar si no hay cambios para sincronizar
         if hasattr(sync_result, 'no_changes') and sync_result.no_changes:
             stats = [
@@ -372,6 +408,41 @@ def show_sync_results_page(
                     alignment=ft.alignment.center
                 )
             ]
+        elif hasattr(sync_result, 'changes_summary') and sync_result.changes_summary:
+            # Mostrar resumen específico de cambios
+            summary_text = ft.Container(
+                content=ft.Column(
+                    [
+                        ft.Text(
+                            "Cambios sincronizados:",
+                            size=16,
+                            weight=ft.FontWeight.BOLD,
+                            color=primary_color
+                        ),
+                        ft.Divider(height=10),
+                        *[
+                            ft.Row(
+                                [
+                                    ft.Icon(ft.Icons.CHECK, size=16, color=ft.Colors.GREEN),
+                                    ft.Text(
+                                        change,
+                                        size=14,
+                                        expand=True
+                                    )
+                                ],
+                                spacing=8
+                            )
+                            for change in sync_result.changes_summary
+                        ]
+                    ],
+                    spacing=8
+                ),
+                padding=20,
+                bgcolor=ft.Colors.GREEN_50 if not is_dark else ft.Colors.GREEN_900,
+                border_radius=8,
+                border=ft.border.all(1, ft.Colors.GREEN_300 if not is_dark else ft.Colors.GREEN_700)
+            )
+            stats.insert(0, summary_text)
         elif not stats:
             stats.append(ft.Text(
                 "No hubo cambios que sincronizar. Los datos ya están actualizados.",

@@ -1,10 +1,17 @@
-# Algoritmo de Sincronización Inteligente
+# Algoritmo de Sincronización Inteligente y Granular
 
 ## Problema Resuelto
 
-**Problema anterior**: Los datos se duplicaban en Firebase al sincronizar, incluso cuando no habían cambiado.
+**Problema anterior**: 
+1. Los datos se duplicaban en Firebase al sincronizar, incluso cuando no habían cambiado.
+2. Se sincronizaban objetos completos cuando solo había cambiado una parte (ej: marcar un día en el calendario subía todo el hábito).
+3. Sincronización ineficiente que consumía ancho de banda innecesariamente.
 
-**Solución implementada**: Sistema de sincronización inteligente que compara datos locales vs remotos antes de subir, evitando duplicados y sincronizando solo cuando es necesario.
+**Solución implementada**: 
+1. Sistema de sincronización inteligente que compara datos locales vs remotos antes de subir.
+2. **Sincronización granular**: Solo sincroniza los campos/entidades que han cambiado.
+3. **Diff a nivel de campo**: Calcula diferencias campo por campo, no objeto por objeto.
+4. **Sub-entidades separadas**: Completions de hábitos y subtareas se sincronizan independientemente.
 
 ---
 

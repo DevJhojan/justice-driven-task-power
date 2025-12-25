@@ -45,6 +45,61 @@ from app.services.habit_service import HabitService
 from app.services.firebase_auth_service import FirebaseAuthService
 
 
+def _field_diff(local_dict: Dict[str, Any], remote_dict: Dict[str, Any], exclude_fields: List[str] = None) -> Dict[str, Any]:
+    """
+    Calcula la diferencia a nivel de campo entre dos diccionarios.
+    
+    Retorna un diccionario con solo los campos que han cambiado.
+    Si un campo no existe en remote_dict, se considera como cambio.
+    
+    Args:
+        local_dict: Diccionario con datos locales
+        remote_dict: Diccionario con datos remotos (puede ser None)
+        exclude_fields: Lista de campos a excluir del diff (ej: 'completions', 'subtasks')
+    
+    Returns:
+        Diccionario con solo los campos modificados
+    """
+    if exclude_fields is None:
+        exclude_fields = ['completions', 'subtasks', 'synced_at', 'userId']  # Campos que se sincronizan por separado
+    
+    if remote_dict is None:
+        # No existe en remoto, retornar todos los campos (excepto excluidos)
+        return {k: v for k, v in local_dict.items() if k not in exclude_fields}
+    
+    diff = {}
+    for key, local_value in local_dict.items():
+        if key in exclude_fields:
+            continue  # Estos campos se sincronizan por separado
+        
+        remote_value = remote_dict.get(key)
+        
+        # Comparar valores
+        if local_value != remote_value:
+            diff[key] = local_value
+    
+    return diff
+
+
+def _has_field_changes(local_dict: Dict[str, Any], remote_dict: Optional[Dict[str, Any]], exclude_fields: List[str] = None) -> bool:
+    """
+    Verifica si hay cambios a nivel de campo entre dos diccionarios.
+    
+    Args:
+        local_dict: Diccionario con datos locales
+        remote_dict: Diccionario con datos remotos (puede ser None)
+        exclude_fields: Lista de campos a excluir del diff
+    
+    Returns:
+        True si hay cambios, False si no
+    """
+    if remote_dict is None:
+        return True  # No existe en remoto, hay cambios
+    
+    diff = _field_diff(local_dict, remote_dict, exclude_fields)
+    return len(diff) > 0
+
+
 @dataclass
 class SyncResult:
     """Resultado de una operación de sincronización."""
@@ -57,12 +112,27 @@ class SyncResult:
     deletions_downloaded: int = 0
     tasks_skipped: int = 0  # Tareas que no necesitaban sincronización
     habits_skipped: int = 0  # Hábitos que no necesitaban sincronización
+    # Sincronización granular
+    completions_uploaded: int = 0  # Completions de hábitos subidos
+    completions_downloaded: int = 0  # Completions de hábitos descargados
+    subtasks_uploaded: int = 0  # Subtareas subidas
+    subtasks_downloaded: int = 0  # Subtareas descargadas
+    fields_updated: int = 0  # Campos individuales actualizados
     no_changes: bool = False  # True si no hay cambios para sincronizar
+    # Detalles específicos de cambios (para feedback preciso)
+    changes_summary: List[str] = None  # Lista de cambios específicos
     errors: List[str] = None
     
     def __post_init__(self):
         if self.errors is None:
             self.errors = []
+        if self.changes_summary is None:
+            self.changes_summary = []
+    
+    def add_change(self, message: str):
+        """Agrega un mensaje de cambio específico."""
+        if message and message not in self.changes_summary:
+            self.changes_summary.append(message)
 
 
 class FirebaseSyncService:
@@ -177,28 +247,75 @@ class FirebaseSyncService:
             return result
         
         try:
-            # 1. Subir datos locales a Firebase (desde SQLite) - SOLO si han cambiado
+            # 1. Subir datos locales a Firebase (desde SQLite) - SOLO si han cambiado (granular)
             upload_result = self._upload_local_data(user_id, id_token)
             result.tasks_uploaded = upload_result.get('tasks', 0)
             result.habits_uploaded = upload_result.get('habits', 0)
             result.deletions_uploaded = upload_result.get('deletions', 0)
             result.tasks_skipped = upload_result.get('tasks_skipped', 0)
             result.habits_skipped = upload_result.get('habits_skipped', 0)
+            # Sincronización granular
+            result.subtasks_uploaded = upload_result.get('subtasks', 0)
+            result.completions_uploaded = upload_result.get('completions', 0)
+            result.fields_updated = upload_result.get('fields_updated', 0)
             
-            # 2. Descargar datos remotos desde Firebase
+            # 2. Descargar datos remotos desde Firebase (granular)
             download_result = self._download_remote_data(user_id, id_token)
             result.tasks_downloaded = download_result.get('tasks', 0)
             result.habits_downloaded = download_result.get('habits', 0)
             result.deletions_downloaded = download_result.get('deletions', 0)
+            # Sincronización granular
+            result.subtasks_downloaded = download_result.get('subtasks', 0)
+            result.completions_downloaded = download_result.get('completions', 0)
             
             # 3. Verificar si hubo cambios para sincronizar
             total_changes = (
                 result.tasks_uploaded + result.habits_uploaded + result.deletions_uploaded +
-                result.tasks_downloaded + result.habits_downloaded + result.deletions_downloaded
+                result.tasks_downloaded + result.habits_downloaded + result.deletions_downloaded +
+                result.subtasks_uploaded + result.completions_uploaded +
+                result.subtasks_downloaded + result.completions_downloaded
             )
+            
+            # Generar resumen de cambios específicos
+            if result.tasks_uploaded > 0:
+                if result.tasks_uploaded == 1:
+                    result.add_change("Se agregó una nueva tarea")
+                else:
+                    result.add_change(f"Se agregaron {result.tasks_uploaded} nuevas tareas")
+            
+            if result.habits_uploaded > 0:
+                if result.habits_uploaded == 1:
+                    result.add_change("Se agregó un nuevo hábito")
+                else:
+                    result.add_change(f"Se agregaron {result.habits_uploaded} nuevos hábitos")
+            
+            if result.fields_updated > 0:
+                if result.fields_updated == 1:
+                    result.add_change("Se actualizó un campo")
+                else:
+                    result.add_change(f"Se actualizaron {result.fields_updated} campos")
+            
+            if result.completions_uploaded > 0:
+                if result.completions_uploaded == 1:
+                    result.add_change("Se sincronizó un evento de calendario")
+                else:
+                    result.add_change(f"Se sincronizaron {result.completions_uploaded} eventos de calendario")
+            
+            if result.subtasks_uploaded > 0:
+                if result.subtasks_uploaded == 1:
+                    result.add_change("Se sincronizó una subtarea")
+                else:
+                    result.add_change(f"Se sincronizaron {result.subtasks_uploaded} subtareas")
+            
+            if result.deletions_uploaded > 0:
+                if result.deletions_uploaded == 1:
+                    result.add_change("Se eliminó un elemento")
+                else:
+                    result.add_change(f"Se eliminaron {result.deletions_uploaded} elementos")
             
             if total_changes == 0:
                 result.no_changes = True
+                result.add_change("No hay cambios para sincronizar")
             
             result.success = True
             
@@ -363,23 +480,57 @@ class FirebaseSyncService:
             except:
                 pass  # Si falla, asumir que no hay datos remotos
             
-            # PASO 2: Comparar y subir tareas solo si han cambiado
+            # PASO 2: Comparar y subir tareas solo si han cambiado (granular)
             tasks = self.task_service.get_all_tasks()
             for task in tasks:
-                if self._should_upload_task(task, remote_tasks_dict.get(task.id)):
-                    self._upload_task(user_id, task, id_token)
-                    uploaded['tasks'] += 1
+                remote_task = remote_tasks_dict.get(task.id)
+                if self._should_upload_task(task, remote_task):
+                    # Verificar qué campos cambiaron para mensaje específico
+                    if remote_task:
+                        diff = _field_diff(task.to_dict(), remote_task, exclude_fields=['subtasks', 'synced_at', 'userId'])
+                        if diff:
+                            # Solo subir si realmente hay cambios
+                            if self._upload_task(user_id, task, id_token, remote_task):
+                                uploaded['tasks'] += 1
+                                uploaded['fields_updated'] = uploaded.get('fields_updated', 0) + len(diff)
+                        else:
+                            uploaded['tasks_skipped'] += 1
+                    else:
+                        # Nueva tarea
+                        if self._upload_task(user_id, task, id_token, remote_task):
+                            uploaded['tasks'] += 1
                 else:
                     uploaded['tasks_skipped'] += 1
+                
+                # Sincronizar subtareas por separado (granular)
+                subtasks_uploaded = self._upload_subtasks(user_id, task, id_token, remote_task)
+                uploaded['subtasks'] = uploaded.get('subtasks', 0) + subtasks_uploaded
             
-            # PASO 3: Comparar y subir hábitos solo si han cambiado
+            # PASO 3: Comparar y subir hábitos solo si han cambiado (granular)
             habits = self.habit_service.get_all_habits()
             for habit in habits:
-                if self._should_upload_habit(habit, remote_habits_dict.get(habit.id)):
-                    self._upload_habit(user_id, habit, id_token)
-                    uploaded['habits'] += 1
+                remote_habit = remote_habits_dict.get(habit.id)
+                if self._should_upload_habit(habit, remote_habit):
+                    # Verificar qué campos cambiaron para mensaje específico
+                    if remote_habit:
+                        diff = _field_diff(habit.to_dict(), remote_habit, exclude_fields=['completions', 'synced_at', 'userId'])
+                        if diff:
+                            # Solo subir si realmente hay cambios
+                            if self._upload_habit(user_id, habit, id_token, remote_habit):
+                                uploaded['habits'] += 1
+                                uploaded['fields_updated'] = uploaded.get('fields_updated', 0) + len(diff)
+                        else:
+                            uploaded['habits_skipped'] += 1
+                    else:
+                        # Nuevo hábito
+                        if self._upload_habit(user_id, habit, id_token, remote_habit):
+                            uploaded['habits'] += 1
                 else:
                     uploaded['habits_skipped'] += 1
+                
+                # Sincronizar completions por separado (granular)
+                completions_uploaded = self._upload_completions(user_id, habit, id_token, remote_habit)
+                uploaded['completions'] = uploaded.get('completions', 0) + completions_uploaded
             
             # PASO 4: Subir eliminaciones pendientes (siempre se suben si están pendientes)
             deletions = self._get_pending_deletions()
@@ -411,20 +562,32 @@ class FirebaseSyncService:
         Returns:
             Diccionario con conteo de elementos descargados
         """
-        downloaded = {'tasks': 0, 'habits': 0, 'deletions': 0}
+        downloaded = {'tasks': 0, 'habits': 0, 'deletions': 0, 'subtasks': 0, 'completions': 0}
         
         try:
-            # Descargar tareas
+            # Descargar tareas (sin subtareas, se descargan por separado)
             remote_tasks = self._download_tasks(user_id, id_token)
             for task_data in remote_tasks:
                 if self._merge_task(task_data):
                     downloaded['tasks'] += 1
+                
+                # Descargar subtareas por separado (granular)
+                task_id = task_data.get('id')
+                if task_id:
+                    subtasks_count = self._download_subtasks(user_id, task_id, id_token)
+                    downloaded['subtasks'] += subtasks_count
             
-            # Descargar hábitos
+            # Descargar hábitos (sin completions, se descargan por separado)
             remote_habits = self._download_habits(user_id, id_token)
             for habit_data in remote_habits:
                 if self._merge_habit(habit_data):
                     downloaded['habits'] += 1
+                
+                # Descargar completions por separado (granular)
+                habit_id = habit_data.get('id')
+                if habit_id:
+                    completions_count = self._download_completions(user_id, habit_id, id_token)
+                    downloaded['completions'] += completions_count
             
             # Descargar y aplicar eliminaciones remotas
             remote_deletions = self._download_deletions(user_id, id_token)
@@ -439,12 +602,11 @@ class FirebaseSyncService:
     
     def _should_upload_task(self, local_task: Task, remote_task_data: Optional[Dict[str, Any]]) -> bool:
         """
-        Determina si una tarea local debe subirse a la nube.
+        Determina si una tarea local debe subirse a la nube (solo campos del hábito, no subtareas).
         
-        CRITERIOS DE SINCRONIZACIÓN:
-        - Si no existe en la nube (remote_task_data es None) -> SUBIR (nuevo)
-        - Si existe pero local es más reciente (updated_at local > updated_at remoto) -> SUBIR (modificado)
-        - Si existe y remoto es igual o más reciente -> NO SUBIR (sin cambios o remoto más nuevo)
+        SINCRONIZACIÓN GRANULAR:
+        - Verifica cambios a nivel de campo (title, description, priority, etc.)
+        - Las subtareas se sincronizan por separado
         
         Args:
             local_task: Tarea local
@@ -457,29 +619,17 @@ class FirebaseSyncService:
         if remote_task_data is None:
             return True
         
-        # Comparar timestamps para detectar cambios
-        local_updated = local_task.updated_at.isoformat() if local_task.updated_at else None
-        remote_updated = remote_task_data.get('updated_at')
-        
-        if not local_updated:
-            # Sin timestamp local, subir por seguridad
-            return True
-        
-        if not remote_updated:
-            # Sin timestamp remoto, subir por seguridad
-            return True
-        
-        # Solo subir si la versión local es más reciente
-        return local_updated > remote_updated
+        # Verificar cambios a nivel de campo (excluyendo subtareas)
+        local_dict = local_task.to_dict()
+        return _has_field_changes(local_dict, remote_task_data, exclude_fields=['subtasks', 'synced_at', 'userId'])
     
     def _should_upload_habit(self, local_habit: Habit, remote_habit_data: Optional[Dict[str, Any]]) -> bool:
         """
-        Determina si un hábito local debe subirse a la nube.
+        Determina si un hábito local debe subirse a la nube (solo campos del hábito, no completions).
         
-        CRITERIOS DE SINCRONIZACIÓN:
-        - Si no existe en la nube (remote_habit_data es None) -> SUBIR (nuevo)
-        - Si existe pero local es más reciente (updated_at local > updated_at remoto) -> SUBIR (modificado)
-        - Si existe y remoto es igual o más reciente -> NO SUBIR (sin cambios o remoto más nuevo)
+        SINCRONIZACIÓN GRANULAR:
+        - Verifica cambios a nivel de campo (title, description, frequency, etc.)
+        - Las completions se sincronizan por separado
         
         Args:
             local_habit: Hábito local
@@ -492,78 +642,285 @@ class FirebaseSyncService:
         if remote_habit_data is None:
             return True
         
-        # Comparar timestamps para detectar cambios
-        local_updated = local_habit.updated_at.isoformat() if local_habit.updated_at else None
-        remote_updated = remote_habit_data.get('updated_at')
-        
-        if not local_updated:
-            # Sin timestamp local, subir por seguridad
-            return True
-        
-        if not remote_updated:
-            # Sin timestamp remoto, subir por seguridad
-            return True
-        
-        # Solo subir si la versión local es más reciente
-        return local_updated > remote_updated
+        # Verificar cambios a nivel de campo (excluyendo completions)
+        local_dict = local_habit.to_dict()
+        return _has_field_changes(local_dict, remote_habit_data, exclude_fields=['completions', 'synced_at', 'userId'])
     
-    def _upload_task(self, user_id: str, task: Task, id_token: str) -> None:
+    def _upload_task(self, user_id: str, task: Task, id_token: str, remote_task_data: Optional[Dict[str, Any]] = None) -> None:
         """
         Sube una tarea a Firebase Realtime Database usando REST API.
+        
+        SINCRONIZACIÓN GRANULAR:
+        - Solo sube los campos que han cambiado (diff a nivel de campo)
+        - Las subtareas se sincronizan por separado
         
         Args:
             user_id: ID del usuario autenticado
             task: Tarea a subir
             id_token: Token de autenticación de Firebase
+            remote_task_data: Datos remotos para calcular diff (opcional)
         """
         try:
             task_dict = task.to_dict()
+            
+            # Calcular diff: solo campos modificados (excluyendo subtareas)
+            if remote_task_data:
+                task_dict = _field_diff(task_dict, remote_task_data, exclude_fields=['subtasks', 'synced_at', 'userId'])
+                # Si no hay cambios, no subir
+                if not task_dict:
+                    return
+            
+            # Agregar metadatos
             task_dict['userId'] = user_id
             task_dict['synced_at'] = datetime.now().isoformat()
+            task_dict['id'] = task.id  # Asegurar que el ID esté presente
             
             # Usar Firebase Realtime Database REST API
             # Estructura: /users/{userId}/tasks/{taskId}.json?auth={id_token}
             path = f"users/{user_id}/tasks/{task.id}.json"
             url = f"{self.database_url}/{path}"
             
-            response = requests.put(
-                url,
-                json=task_dict,
-                params={'auth': id_token},
-                timeout=10
-            )
+            # Usar PATCH para actualizar solo campos modificados, o PUT si es nuevo
+            if remote_task_data:
+                # Actualizar solo campos modificados
+                response = requests.patch(
+                    url,
+                    json=task_dict,
+                    params={'auth': id_token},
+                    timeout=10
+                )
+            else:
+                # Nueva tarea, subir completa
+                response = requests.put(
+                    url,
+                    json=task_dict,
+                    params={'auth': id_token},
+                    timeout=10
+                )
             response.raise_for_status()
         
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Error al subir tarea {task.id}: {str(e)}")
     
-    def _upload_habit(self, user_id: str, habit: Habit, id_token: str) -> None:
+    def _upload_habit(self, user_id: str, habit: Habit, id_token: str, remote_habit_data: Optional[Dict[str, Any]] = None) -> bool:
         """
         Sube un hábito a Firebase Realtime Database usando REST API.
+        
+        SINCRONIZACIÓN GRANULAR:
+        - Solo sube los campos que han cambiado (diff a nivel de campo)
+        - Las completions se sincronizan por separado
         
         Args:
             user_id: ID del usuario autenticado
             habit: Hábito a subir
             id_token: Token de autenticación de Firebase
+            remote_habit_data: Datos remotos para calcular diff (opcional)
+        
+        Returns:
+            True si se subió algo, False si no había cambios
         """
         try:
             habit_dict = habit.to_dict()
+            
+            # Calcular diff: solo campos modificados (excluyendo completions)
+            if remote_habit_data:
+                habit_dict = _field_diff(habit_dict, remote_habit_data, exclude_fields=['completions', 'synced_at', 'userId'])
+                # Si no hay cambios, no subir
+                if not habit_dict:
+                    return False
+            
+            # Agregar metadatos
             habit_dict['userId'] = user_id
             habit_dict['synced_at'] = datetime.now().isoformat()
+            habit_dict['id'] = habit.id  # Asegurar que el ID esté presente
             
             path = f"users/{user_id}/habits/{habit.id}.json"
             url = f"{self.database_url}/{path}"
             
-            response = requests.put(
-                url,
-                json=habit_dict,
-                params={'auth': id_token},
-                timeout=10
-            )
+            # Usar PATCH para actualizar solo campos modificados, o PUT si es nuevo
+            if remote_habit_data:
+                # Actualizar solo campos modificados
+                response = requests.patch(
+                    url,
+                    json=habit_dict,
+                    params={'auth': id_token},
+                    timeout=10
+                )
+            else:
+                # Nuevo hábito, subir completo
+                response = requests.put(
+                    url,
+                    json=habit_dict,
+                    params={'auth': id_token},
+                    timeout=10
+                )
             response.raise_for_status()
+            return True
         
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Error al subir hábito {habit.id}: {str(e)}")
+    
+    def _upload_completions(self, user_id: str, habit: Habit, id_token: str, remote_habit_data: Optional[Dict[str, Any]] = None) -> int:
+        """
+        Sincroniza completions de un hábito por separado (sincronización granular).
+        
+        Solo sube/actualiza completions que han cambiado o no existen en la nube.
+        
+        Args:
+            user_id: ID del usuario autenticado
+            habit: Hábito local
+            id_token: Token de autenticación de Firebase
+            remote_habit_data: Datos remotos del hábito (opcional)
+        
+        Returns:
+            Número de completions subidas
+        """
+        uploaded_count = 0
+        
+        try:
+            # Obtener completions locales
+            from app.data.habit_repository import HabitRepository
+            habit_repo = HabitRepository(self.db)
+            local_completions = habit_repo.get_completions(habit.id)
+            
+            # Obtener completions remotos
+            remote_completions_dict = {}
+            if remote_habit_data:
+                remote_completions_list = remote_habit_data.get('completions', [])
+                for comp in remote_completions_list:
+                    comp_id = comp.get('id')
+                    if comp_id:
+                        remote_completions_dict[comp_id] = comp
+            
+            # Sincronizar cada completion local
+            for local_completion in local_completions:
+                remote_completion = remote_completions_dict.get(local_completion.id) if local_completion.id else None
+                
+                # Subir si no existe en remoto o si es más reciente
+                should_upload = False
+                if remote_completion is None:
+                    should_upload = True  # No existe en remoto
+                elif local_completion.created_at:
+                    remote_created = remote_completion.get('created_at')
+                    if remote_created:
+                        local_created_str = local_completion.created_at.isoformat()
+                        if local_created_str > remote_created:
+                            should_upload = True  # Local es más reciente
+                    else:
+                        should_upload = True  # Remoto no tiene timestamp
+                
+                if should_upload:
+                    # Subir completion individual
+                    completion_dict = local_completion.to_dict()
+                    completion_dict['userId'] = user_id
+                    completion_dict['synced_at'] = datetime.now().isoformat()
+                    
+                    # Estructura: /users/{userId}/habits/{habitId}/completions/{completionId}.json
+                    completion_id = local_completion.id or f"temp_{datetime.now().timestamp()}"
+                    path = f"users/{user_id}/habits/{habit.id}/completions/{completion_id}.json"
+                    url = f"{self.database_url}/{path}"
+                    
+                    response = requests.put(
+                        url,
+                        json=completion_dict,
+                        params={'auth': id_token},
+                        timeout=10
+                    )
+                    response.raise_for_status()
+                    uploaded_count += 1
+        
+        except Exception as e:
+            # No fallar toda la sincronización por un error en completions
+            print(f"Advertencia: Error al sincronizar completions del hábito {habit.id}: {str(e)}")
+        
+        return uploaded_count
+    
+    def _upload_subtasks(self, user_id: str, task: Task, id_token: str, remote_task_data: Optional[Dict[str, Any]] = None) -> int:
+        """
+        Sincroniza subtareas de una tarea por separado (sincronización granular).
+        
+        Solo sube/actualiza subtareas que han cambiado o no existen en la nube.
+        
+        Args:
+            user_id: ID del usuario autenticado
+            task: Tarea local
+            id_token: Token de autenticación de Firebase
+            remote_task_data: Datos remotos de la tarea (opcional)
+        
+        Returns:
+            Número de subtareas subidas
+        """
+        uploaded_count = 0
+        
+        try:
+            # Obtener subtareas locales
+            local_subtasks = task.subtasks if task.subtasks else []
+            
+            # Obtener subtareas remotas
+            remote_subtasks_dict = {}
+            if remote_task_data:
+                remote_subtasks_list = remote_task_data.get('subtasks', [])
+                for subtask in remote_subtasks_list:
+                    subtask_id = subtask.get('id')
+                    if subtask_id:
+                        remote_subtasks_dict[subtask_id] = subtask
+            
+            # Sincronizar cada subtarea local
+            for local_subtask in local_subtasks:
+                remote_subtask = remote_subtasks_dict.get(local_subtask.id) if local_subtask.id else None
+                
+                # Verificar si debe subirse (diff a nivel de campo)
+                should_upload = False
+                if remote_subtask is None:
+                    should_upload = True  # No existe en remoto
+                else:
+                    # Verificar cambios a nivel de campo
+                    local_subtask_dict = local_subtask.to_dict()
+                    if _has_field_changes(local_subtask_dict, remote_subtask, exclude_fields=['synced_at', 'userId']):
+                        should_upload = True
+                
+                if should_upload:
+                    # Calcular diff si existe remoto
+                    subtask_dict = local_subtask.to_dict()
+                    if remote_subtask:
+                        subtask_dict = _field_diff(subtask_dict, remote_subtask, exclude_fields=['synced_at', 'userId'])
+                        if not subtask_dict:
+                            continue  # No hay cambios
+                    
+                    # Agregar metadatos
+                    subtask_dict['userId'] = user_id
+                    subtask_dict['synced_at'] = datetime.now().isoformat()
+                    subtask_dict['id'] = local_subtask.id
+                    subtask_dict['task_id'] = task.id
+                    
+                    # Estructura: /users/{userId}/tasks/{taskId}/subtasks/{subtaskId}.json
+                    subtask_id = local_subtask.id or f"temp_{datetime.now().timestamp()}"
+                    path = f"users/{user_id}/tasks/{task.id}/subtasks/{subtask_id}.json"
+                    url = f"{self.database_url}/{path}"
+                    
+                    # Usar PATCH si existe remoto, PUT si es nuevo
+                    if remote_subtask:
+                        response = requests.patch(
+                            url,
+                            json=subtask_dict,
+                            params={'auth': id_token},
+                            timeout=10
+                        )
+                    else:
+                        response = requests.put(
+                            url,
+                            json=subtask_dict,
+                            params={'auth': id_token},
+                            timeout=10
+                        )
+                    response.raise_for_status()
+                    uploaded_count += 1
+        
+        except Exception as e:
+            # No fallar toda la sincronización por un error en subtareas
+            print(f"Advertencia: Error al sincronizar subtareas de la tarea {task.id}: {str(e)}")
+        
+        return uploaded_count
     
     def _download_tasks(self, user_id: str, id_token: str) -> List[Dict[str, Any]]:
         """
@@ -650,6 +1007,167 @@ class FirebaseSyncService:
                 # No hay datos aún, retornar lista vacía
                 return []
             raise RuntimeError(f"Error al descargar hábitos: {str(e)}")
+    
+    def _download_completions(self, user_id: str, habit_id: int, id_token: str) -> int:
+        """
+        Descarga completions de un hábito desde Firebase (sincronización granular).
+        
+        Args:
+            user_id: ID del usuario autenticado
+            habit_id: ID del hábito
+            id_token: Token de autenticación de Firebase
+        
+        Returns:
+            Número de completions descargadas
+        """
+        downloaded_count = 0
+        
+        try:
+            # Estructura: /users/{userId}/habits/{habitId}/completions.json
+            path = f"users/{user_id}/habits/{habit_id}/completions.json"
+            url = f"{self.database_url}/{path}"
+            
+            response = requests.get(
+                url,
+                params={'auth': id_token},
+                timeout=10
+            )
+            response.raise_for_status()
+            
+            completions_data = response.json()
+            if not completions_data:
+                return 0
+            
+            # Procesar cada completion
+            from app.data.habit_repository import HabitRepository
+            habit_repo = HabitRepository(self.db)
+            
+            if isinstance(completions_data, dict):
+                for completion_id, completion_data in completions_data.items():
+                    if isinstance(completion_data, dict):
+                        # Crear completion desde datos remotos
+                        completion = HabitCompletion.from_dict(completion_data)
+                        completion.habit_id = habit_id
+                        
+                        # Verificar si ya existe localmente
+                        local_completion = None
+                        if completion.id:
+                            try:
+                                # Buscar por ID
+                                local_completions = habit_repo.get_completions(habit_id)
+                                local_completion = next((c for c in local_completions if c.id == completion.id), None)
+                            except:
+                                pass
+                        
+                        if local_completion:
+                            # Ya existe, comparar timestamps
+                            local_created = local_completion.created_at.isoformat() if local_completion.created_at else None
+                            remote_created = completion_data.get('created_at')
+                            
+                            if remote_created and local_created:
+                                if remote_created > local_created:
+                                    # Remoto es más reciente, actualizar
+                                    habit_repo.delete_completion(local_completion.id)
+                                    habit_repo.create_completion(completion)
+                                    downloaded_count += 1
+                        else:
+                            # No existe localmente, crear
+                            # Verificar si existe por fecha (evitar duplicados)
+                            completion_date = completion.completion_date.date() if completion.completion_date else None
+                            if completion_date and not habit_repo.has_completion_for_date(habit_id, completion_date):
+                                habit_repo.create_completion(completion)
+                                downloaded_count += 1
+        
+        except requests.exceptions.RequestException as e:
+            if hasattr(e, 'response') and e.response is not None and e.response.status_code == 404:
+                # No hay completions aún
+                return 0
+            # No fallar toda la sincronización por un error en completions
+            print(f"Advertencia: Error al descargar completions del hábito {habit_id}: {str(e)}")
+        
+        return downloaded_count
+    
+    def _download_subtasks(self, user_id: str, task_id: int, id_token: str) -> int:
+        """
+        Descarga subtareas de una tarea desde Firebase (sincronización granular).
+        
+        Args:
+            user_id: ID del usuario autenticado
+            task_id: ID de la tarea
+            id_token: Token de autenticación de Firebase
+        
+        Returns:
+            Número de subtareas descargadas
+        """
+        downloaded_count = 0
+        
+        try:
+            # Estructura: /users/{userId}/tasks/{taskId}/subtasks.json
+            path = f"users/{user_id}/tasks/{task_id}/subtasks.json"
+            url = f"{self.database_url}/{path}"
+            
+            response = requests.get(
+                url,
+                params={'auth': id_token},
+                timeout=10
+            )
+            response.raise_for_status()
+            
+            subtasks_data = response.json()
+            if not subtasks_data:
+                return 0
+            
+            # Obtener tarea local
+            try:
+                local_task = self.task_service.get_task(task_id)
+            except:
+                return 0  # Tarea no existe localmente
+            
+            # Procesar cada subtarea
+            if isinstance(subtasks_data, dict):
+                for subtask_id, subtask_data in subtasks_data.items():
+                    if isinstance(subtask_data, dict):
+                        # Crear subtarea desde datos remotos
+                        subtask = SubTask.from_dict(subtask_data)
+                        subtask.task_id = task_id
+                        
+                        # Verificar si ya existe localmente
+                        local_subtask = None
+                        if subtask.id:
+                            local_subtask = next((s for s in local_task.subtasks if s.id == subtask.id), None)
+                        
+                        if local_subtask:
+                            # Ya existe, comparar timestamps y actualizar si remoto es más reciente
+                            local_updated = local_subtask.updated_at.isoformat() if local_subtask.updated_at else None
+                            remote_updated = subtask_data.get('updated_at')
+                            
+                            if remote_updated and local_updated:
+                                if remote_updated > local_updated:
+                                    # Remoto es más reciente, actualizar
+                                    # Aplicar diff: solo campos modificados
+                                    local_dict = local_subtask.to_dict()
+                                    diff = _field_diff(subtask_data, local_dict, exclude_fields=['synced_at', 'userId'])
+                                    if diff:
+                                        # Actualizar campos modificados
+                                        for key, value in diff.items():
+                                            setattr(local_subtask, key, value)
+                                        self.task_repository.update(local_task)
+                                        downloaded_count += 1
+                        else:
+                            # No existe localmente, crear
+                            if subtask.id:
+                                # Crear con ID específico
+                                self.task_repository._sync_subtasks(task_id, [subtask])
+                                downloaded_count += 1
+        
+        except requests.exceptions.RequestException as e:
+            if hasattr(e, 'response') and e.response is not None and e.response.status_code == 404:
+                # No hay subtareas aún
+                return 0
+            # No fallar toda la sincronización por un error en subtareas
+            print(f"Advertencia: Error al descargar subtareas de la tarea {task_id}: {str(e)}")
+        
+        return downloaded_count
     
     def _merge_task(self, remote_task_data: Dict[str, Any]) -> bool:
         """
