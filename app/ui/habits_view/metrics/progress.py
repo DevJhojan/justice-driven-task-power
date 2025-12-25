@@ -37,6 +37,19 @@ def create_progress_view(
     # Obtener progreso semanal
     weekly = habit_service.get_weekly_progress(habit.id)
     
+    # Calcular el objetivo semanal correcto según la frecuencia del hábito
+    # Para hábitos diarios: objetivo es 7 días por semana
+    # Para hábitos semanales/personalizados: objetivo es habit.target_days
+    if habit.frequency == 'daily':
+        weekly_target = 7  # Una semana tiene 7 días
+    else:
+        # Para weekly o custom, usar el target_days del hábito
+        weekly_target = habit.target_days
+    
+    # Asegurar que weekly_target esté en el rango correcto
+    if weekly_target < 1 or weekly_target > 7:
+        weekly_target = 7 if habit.frequency == 'daily' else habit.target_days
+    
     # Calcular valores del progreso mensual
     completed_days = monthly.get('completions_count', 0)
     total_days = monthly.get('total_days', 1)
@@ -90,15 +103,20 @@ def create_progress_view(
                                 weight=ft.FontWeight.BOLD
                             ),
                             ft.Text(
-                                f"{weekly['completions_count']}/{weekly['target_days']} días",
+                                f"{weekly['completions_count']}/{weekly_target} días",
                                 size=24,
                                 weight=ft.FontWeight.BOLD,
                                 color=primary
                             ),
                             ft.ProgressBar(
-                                value=weekly['completions_count'] / weekly['target_days'] if weekly['target_days'] > 0 else 0,
+                                value=weekly['completions_count'] / weekly_target if weekly_target > 0 else 0,
                                 color=primary,
                                 bgcolor=ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700
+                            ),
+                            ft.Text(
+                                f"Objetivo: {weekly_target} días por semana" if habit.frequency != 'daily' else "Objetivo: 7 días por semana",
+                                size=12,
+                                color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
                             )
                         ],
                         spacing=8
