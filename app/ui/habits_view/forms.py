@@ -206,6 +206,13 @@ def navigate_to_habit_details(
     
     metrics_container.content = metrics_view
     
+    # Forzar actualización de la página y el contenedor para asegurar renderizado en móvil
+    try:
+        metrics_container.update()
+        page.update()
+    except Exception as ex:
+        print(f"Advertencia al actualizar métricas iniciales: {ex}")
+    
     # Construir contenido de detalles con métricas básicas y avanzadas
     details_content = ft.Container(
         content=ft.Column(

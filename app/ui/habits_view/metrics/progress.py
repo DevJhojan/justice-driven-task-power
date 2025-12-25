@@ -42,7 +42,7 @@ def create_progress_view(
     total_days = monthly.get('total_days', 1)
     completion_percentage = (completed_days / total_days * 100) if total_days > 0 else 0.0
     
-    return ft.Container(
+    progress_container = ft.Container(
         content=ft.Column(
             [
                 ft.Text(
@@ -141,9 +141,18 @@ def create_progress_view(
                 )
             ],
             spacing=16,
-            scroll=ft.ScrollMode.AUTO
+            scroll=ft.ScrollMode.AUTO,
+            expand=True
         ),
         padding=20,
         expand=True
     )
+    
+    # Forzar actualización para asegurar renderizado en móvil
+    try:
+        progress_container.update()
+    except:
+        pass
+    
+    return progress_container
 

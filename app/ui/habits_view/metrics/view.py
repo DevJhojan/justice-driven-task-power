@@ -50,7 +50,16 @@ def create_habit_metrics_view(
     
     # Contenido de las tabs - crear con datos frescos
     # IMPORTANTE: Recargar completion_dates desde la BD para asegurar datos actualizados
-    fresh_completion_dates = load_completion_dates(habit_service, habit.id)
+    # Esto es crítico en móvil donde los datos pueden no estar sincronizados
+    try:
+        fresh_completion_dates = load_completion_dates(habit_service, habit.id)
+        print(f"DEBUG: Cargados {len(fresh_completion_dates)} fechas de cumplimiento para hábito {habit.id}")
+    except Exception as ex:
+        print(f"ERROR: Error al cargar completion_dates: {ex}")
+        import traceback
+        traceback.print_exc()
+        # Usar el set vacío como fallback
+        fresh_completion_dates = set()
     
     calendar_content = create_calendar_view(
         page, habit, habit_service, fresh_completion_dates, on_completion_toggle, on_refresh
@@ -61,7 +70,16 @@ def create_habit_metrics_view(
     )
     
     # Recargar métricas frescas
-    fresh_metrics = habit_service.get_habit_metrics(habit.id)
+    try:
+        fresh_metrics = habit_service.get_habit_metrics(habit.id)
+        print(f"DEBUG: Métricas cargadas para hábito {habit.id}: streak={fresh_metrics.get('streak', 0)}")
+    except Exception as ex:
+        print(f"ERROR: Error al cargar métricas: {ex}")
+        import traceback
+        traceback.print_exc()
+        # Usar métricas vacías como fallback
+        fresh_metrics = {'streak': 0, 'completion_percentage': 0.0, 'total_completions': 0, 'current_streak_start': None, 'last_completion_date': None}
+    
     progress_content = create_progress_view(
         page, habit, habit_service, fresh_metrics
     )
@@ -76,6 +94,13 @@ def create_habit_metrics_view(
         expand=True,
         on_change=on_tab_change
     )
+    
+    # Forzar actualización de la página para asegurar que las vistas se rendericen
+    # Esto es especialmente importante en móvil donde puede haber problemas de renderizado inicial
+    try:
+        page.update()
+    except:
+        pass
     
     return ft.Container(
         content=tabs,

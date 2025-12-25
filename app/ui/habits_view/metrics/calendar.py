@@ -305,6 +305,17 @@ def create_calendar_view(
     # Construir calendario inicial
     build_calendar(current_month[0], current_year[0])
     
+    # Asegurar que el contenedor del calendario esté visible y tenga contenido
+    if calendar_container.content is None:
+        # Si por alguna razón no se construyó, intentar construir de nuevo
+        build_calendar(current_month[0], current_year[0])
+    
+    # Forzar actualización del contenedor para asegurar renderizado en móvil
+    try:
+        calendar_container.update()
+    except:
+        pass
+    
     return ft.Container(
         content=ft.Column(
             [
@@ -330,7 +341,8 @@ def create_calendar_view(
                 calendar_container
             ],
             spacing=16,
-            scroll=ft.ScrollMode.AUTO
+            scroll=ft.ScrollMode.AUTO,
+            expand=True
         ),
         padding=20,
         expand=True

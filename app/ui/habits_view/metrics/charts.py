@@ -241,7 +241,7 @@ def create_charts_view(
         bgcolor=ft.Colors.GREY_50 if not is_dark else ft.Colors.GREY_900
     )
     
-    return ft.Container(
+    charts_container = ft.Container(
         content=ft.Column(
             [
                 ft.Text(
@@ -281,9 +281,18 @@ def create_charts_view(
                 weekly_chart
             ],
             spacing=16,
-            scroll=ft.ScrollMode.AUTO
+            scroll=ft.ScrollMode.AUTO,
+            expand=True
         ),
         padding=20,
         expand=True
     )
+    
+    # Forzar actualización para asegurar renderizado en móvil
+    try:
+        charts_container.update()
+    except:
+        pass
+    
+    return charts_container
 
