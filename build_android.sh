@@ -616,14 +616,20 @@ build_apk() {
         print_warning "Construyendo sin parámetros de firma (se aplicará después)"
     fi
     
-    # Intentar ejecutar flet build apk, pero continuar si falla (el proyecto puede ya existir)
+    # Ejecutar flet build apk para crear/actualizar el proyecto Flutter
+    print_info "Ejecutando flet build apk para crear/actualizar el proyecto Flutter..."
     if ! eval "$flet_cmd" 2>&1; then
-        print_warning "flet build apk falló o el proyecto ya existe. Continuando con el build..."
+        print_warning "flet build apk falló. Verificando si el proyecto Flutter existe..."
         # Verificar que el proyecto Flutter existe
         if [ ! -d "build/flutter" ]; then
-            print_error "El proyecto Flutter no existe. Necesitas ejecutar 'flet build apk' manualmente primero."
+            print_error "El proyecto Flutter no existe y flet build apk falló."
+            print_error "Asegúrate de que Flet está instalado correctamente: pip install flet>=0.28.0"
             return 1
+        else
+            print_info "El proyecto Flutter existe. Continuando con el build..."
         fi
+    else
+        print_success "flet build apk completado exitosamente"
     fi
     
     # IMPORTANTE: Reemplazar iconos personalizados INMEDIATAMENTE después de flet build
@@ -903,14 +909,20 @@ build_aab() {
         print_warning "Construyendo sin parámetros de firma (se aplicará después)"
     fi
     
-    # Intentar ejecutar flet build aab, pero continuar si falla (el proyecto puede ya existir)
+    # Ejecutar flet build aab para crear/actualizar el proyecto Flutter
+    print_info "Ejecutando flet build aab para crear/actualizar el proyecto Flutter..."
     if ! eval "$flet_cmd" 2>&1; then
-        print_warning "flet build aab falló o el proyecto ya existe. Continuando con el build..."
+        print_warning "flet build aab falló. Verificando si el proyecto Flutter existe..."
         # Verificar que el proyecto Flutter existe
         if [ ! -d "build/flutter" ]; then
-            print_error "El proyecto Flutter no existe. Necesitas ejecutar 'flet build aab' manualmente primero."
+            print_error "El proyecto Flutter no existe y flet build aab falló."
+            print_error "Asegúrate de que Flet está instalado correctamente: pip install flet>=0.28.0"
             return 1
+        else
+            print_info "El proyecto Flutter existe. Continuando con el build..."
         fi
+    else
+        print_success "flet build aab completado exitosamente"
     fi
     
     # IMPORTANTE: Reemplazar iconos personalizados INMEDIATAMENTE después de flet build
@@ -984,20 +996,6 @@ build_aab() {
         fi
     else
         print_warning "Los iconos personalizados no se encontraron. El AAB usará los iconos de Flet."
-    fi
-    
-    cd build/flutter
-    
-    # Asegurar que los iconos personalizados estén presentes ANTES del build
-    # Esto es crítico porque flutter build puede usar iconos en caché
-    cd ../..
-    print_info "Verificando y reemplazando iconos personalizados antes del build final..."
-    replace_icons
-    
-    # Verificar una vez más que los iconos están presentes
-    if [ ! -f "build/flutter/android/app/src/main/res/mipmap-mdpi/ic_launcher.png" ]; then
-        print_error "Los iconos personalizados no se pudieron crear. Abortando build."
-        return 1
     fi
     
     cd build/flutter
