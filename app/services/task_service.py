@@ -121,6 +121,35 @@ class TaskService:
         """
         return self.repository.toggle_complete(task_id)
     
+    def update_task_status(self, task_id: int, status: str) -> Optional[Task]:
+        """
+        Actualiza el status de una tarea (para vista Kanban).
+        
+        Args:
+            task_id: ID de la tarea.
+            status: Nuevo status ('backlog', 'in_progress', 'completed').
+            
+        Returns:
+            Tarea actualizada o None si no existe.
+        """
+        task = self.repository.get_by_id(task_id)
+        if not task:
+            return None
+        
+        valid_statuses = ['backlog', 'in_progress', 'completed']
+        if status not in valid_statuses:
+            return task
+        
+        task.status = status
+        # Si el status es 'completed', marcar como completada
+        if status == 'completed':
+            task.completed = True
+        else:
+            # Si cambia de completed a otro status, desmarcar completada
+            task.completed = False
+        
+        return self.repository.update(task)
+    
     def get_statistics(self) -> dict:
         """
         Obtiene estadísticas de las tareas.

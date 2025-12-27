@@ -214,6 +214,15 @@ class Database:
         except sqlite3.OperationalError:
             pass  # La columna ya existe
         
+        # Migración: agregar columna status si no existe (para vista Kanban)
+        try:
+            cursor.execute('ALTER TABLE tasks ADD COLUMN status TEXT')
+            # Inicializar status basado en completed
+            cursor.execute("UPDATE tasks SET status = 'completed' WHERE completed = 1")
+            cursor.execute("UPDATE tasks SET status = 'backlog' WHERE completed = 0 AND status IS NULL")
+        except sqlite3.OperationalError:
+            pass  # La columna ya existe
+        
         # Migración: convertir prioridades antiguas a Matriz de Eisenhower
         # 'high' -> 'urgent_important', 'medium' -> 'not_urgent_important', 'low' -> 'not_urgent_not_important'
         try:

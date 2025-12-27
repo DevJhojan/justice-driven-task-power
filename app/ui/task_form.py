@@ -35,10 +35,10 @@ class TaskForm:
             label="Descripción",
             hint_text="Ingresa una descripción (opcional)",
             multiline=True,
-            min_lines=3,
+            min_lines=1,
             max_lines=5,
             expand=True,
-            value=task.description if task else ""
+            value=task.description if task and task.description else ""
         )
         
         self.priority_dropdown = ft.Dropdown(
@@ -77,28 +77,38 @@ class TaskForm:
         """
         title = "Editar Tarea" if self.task else "Nueva Tarea"
         
+        # Construir lista de campos
+        form_fields = [
+            ft.Text(
+                title,
+                size=24,
+                weight=ft.FontWeight.BOLD,
+                color=ft.Colors.RED_400
+            ),
+            ft.Divider(),
+            self.title_field,
+        ]
+        
+        # Solo mostrar campo de descripción si tiene contenido o si es nueva tarea
+        # Si es edición y está vacío, no mostrar el campo para evitar espacios en blanco
+        if not self.task or (self.task and self.task.description and self.task.description.strip()):
+            form_fields.append(self.description_field)
+        
+        form_fields.extend([
+            self.priority_dropdown,
+            ft.Row(
+                [
+                    self.save_button,
+                    self.cancel_button
+                ],
+                alignment=ft.MainAxisAlignment.END,
+                spacing=8
+            )
+        ])
+        
         return ft.Container(
             content=ft.Column(
-                [
-                    ft.Text(
-                        title,
-                        size=24,
-                        weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.RED_400
-                    ),
-                    ft.Divider(),
-                    self.title_field,
-                    self.description_field,
-                    self.priority_dropdown,
-                    ft.Row(
-                        [
-                            self.save_button,
-                            self.cancel_button
-                        ],
-                        alignment=ft.MainAxisAlignment.END,
-                        spacing=8
-                    )
-                ],
+                form_fields,
                 spacing=16,
                 scroll=ft.ScrollMode.AUTO
             ),

@@ -515,180 +515,103 @@ class HomeView:
         self.page.update()
     
 
-    def _show_storage_permission_dialog(self):
-        """Muestra una página informativa sobre permisos de almacenamiento en Android/iOS."""
-        if self.page.platform != ft.PagePlatform.ANDROID and self.page.platform != ft.PagePlatform.IOS:
-            return  # Solo en móvil
-
-        # Crear página de permisos
+    def _show_splash_screen(self):
+        """Muestra una pantalla de carga con el logo de la aplicación y una barra de progreso."""
+        import threading
+        
+        # Crear página de splash screen
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        scheme = self.page.theme.color_scheme if self.page.theme else None
-        primary_color = scheme.primary if scheme and scheme.primary else ft.Colors.BLUE_700
+        bg_color = ft.Colors.BLACK if is_dark else ft.Colors.WHITE
         
-        def test_permission(e):
-            """Intenta activar el FilePicker para solicitar permisos."""
-            try:
-                # Usar el export_file_picker para activar permisos
-                # Esto debería mostrar el diálogo de permisos de Android
-                self.export_file_picker.save_file(file_name="test_permission.zip")
+        # Barra de progreso
+        progress_bar = ft.ProgressBar(
+            value=0,
+            width=300,
+            height=8,
+            color=ft.Colors.BLUE_700 if not is_dark else ft.Colors.BLUE_300,
+            bgcolor=ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700
+        )
+        
+        # Cargar imagen del logo desde assets
+        # En Flet, cuando se especifica assets_dir="assets", las rutas deben empezar con "/"
+        logo_image = ft.Image(
+            src="/app_icon.png",
+            width=200,
+            height=200,
+            fit=ft.ImageFit.CONTAIN,
+            error_content=ft.Icon(
+                ft.Icons.TASK_ALT,
+                size=150,
+                color=ft.Colors.BLUE_700 if not is_dark else ft.Colors.BLUE_300
+            )
+        )
+        
+        def close_splash_screen():
+            """Cierra la pantalla de carga y vuelve a la vista principal."""
+            if len(self.page.views) > 1:
+                self.page.views.pop()
+            if self.page.views:
+                self.page.go(self.page.views[-1].route)
+            self.page.update()
+        
+        def update_progress():
+            """Actualiza la barra de progreso en el hilo principal."""
+            self.page.update()
+        
+        def animate_progress(duration_seconds=3):
+            """Anima la barra de progreso durante el tiempo especificado."""
+            import time
+            start_time = time.time()
+            update_interval = 0.05  # Actualizar cada 50ms
+            
+            while True:
+                elapsed = time.time() - start_time
+                progress = min(elapsed / duration_seconds, 1.0)
+                progress_bar.value = progress
+                # Usar run_task para actualizar la UI desde el hilo principal
+                self.page.run_task(update_progress)
                 
-                # Mostrar mensaje informativo
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Si aparece un diálogo de permisos, acepta para continuar."),
-                    bgcolor=ft.Colors.BLUE,
-                    duration=3000
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
-            except Exception as ex:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Error al solicitar permisos: {str(ex)}"),
-                    bgcolor=ft.Colors.RED,
-                    duration=4000
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
+                if progress >= 1.0:
+                    break
+                
+                time.sleep(update_interval)
+            
+            # Esperar un momento adicional antes de cerrar
+            time.sleep(0.2)
+            # Cerrar desde el hilo principal
+            self.page.run_task(close_splash_screen)
         
-        def close_permission_page(e):
-            """Cierra la página de permisos y vuelve a la vista principal."""
-            self._go_back()
-        
-        # Botones
-        test_button = ft.ElevatedButton(
-            text="Probar permisos ahora",
-            icon=ft.Icons.STORAGE,
-            on_click=test_permission,
-            expand=True,
-            height=50,
-            bgcolor=primary_color,
-            color=ft.Colors.WHITE
-        )
-        
-        understood_button = ft.OutlinedButton(
-            text="Entendido",
-            icon=ft.Icons.CHECK,
-            on_click=close_permission_page,
-            expand=True,
-            height=50,
-            style=ft.ButtonStyle(color=primary_color)
-        )
-        
-        # Construir la página
-        permission_view = ft.View(
-            route="/storage-permissions",
-            appbar=ft.AppBar(
-                title=ft.Text("Permisos de almacenamiento"),
-                leading=ft.IconButton(
-                    icon=ft.Icons.ARROW_BACK,
-                    on_click=close_permission_page
-                ),
-                bgcolor=primary_color
-            ),
-            padding=20,
-            scroll=ft.ScrollMode.AUTO,
+        # Construir la vista de splash
+        splash_view = ft.View(
+            route="/splash",
             controls=[
                 ft.Container(
                     content=ft.Column(
                         [
-                            ft.Icon(
-                                ft.Icons.STORAGE,
-                                size=64,
-                                color=primary_color
-                            ),
-                            ft.Text(
-                                "Permisos de almacenamiento",
-                                size=24,
-                                weight=ft.FontWeight.BOLD,
-                                text_align=ft.TextAlign.CENTER
-                            ),
-                            ft.Divider(height=20),
-                            ft.Text(
-                                "Para usar las funciones de importar y exportar datos, "
-                                "la aplicación necesita acceso al almacenamiento de tu dispositivo.",
-                                size=16,
-                                text_align=ft.TextAlign.CENTER
-                            ),
-                            ft.Divider(height=20),
-                            ft.Container(
-                                content=ft.Column(
-                                    [
-                                        ft.Row(
-                                            [
-                                                ft.Icon(ft.Icons.INFO_OUTLINE, color=ft.Colors.BLUE),
-                                                ft.Text(
-                                                    "¿Cuándo se solicitan?",
-                                                    size=16,
-                                                    weight=ft.FontWeight.BOLD
-                                                )
-                                            ],
-                                            spacing=10
-                                        ),
-                                        ft.Text(
-                                            "Los permisos se solicitarán automáticamente cuando uses "
-                                            "las funciones de importar o exportar por primera vez.",
-                                            size=14,
-                                            color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
-                                        )
-                                    ],
-                                    spacing=10
-                                ),
-                                padding=15,
-                                bgcolor=ft.Colors.BLUE_50 if not is_dark else ft.Colors.BLUE_900,
-                                border_radius=10,
-                                border=ft.border.all(1, ft.Colors.BLUE_200 if not is_dark else ft.Colors.BLUE_700)
-                            ),
-                            ft.Divider(height=20),
-                            ft.Container(
-                                content=ft.Column(
-                                    [
-                                        ft.Row(
-                                            [
-                                                ft.Icon(ft.Icons.LIGHTBULB_OUTLINE, color=ft.Colors.ORANGE),
-                                                ft.Text(
-                                                    "Recomendación",
-                                                    size=16,
-                                                    weight=ft.FontWeight.BOLD
-                                                )
-                                            ],
-                                            spacing=10
-                                        ),
-                                        ft.Text(
-                                            "Guarda los backups en la carpeta 'Descargas' "
-                                            "para mayor compatibilidad con diferentes dispositivos Android.",
-                                            size=14,
-                                            color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
-                                        )
-                                    ],
-                                    spacing=10
-                                ),
-                                padding=15,
-                                bgcolor=ft.Colors.ORANGE_50 if not is_dark else ft.Colors.ORANGE_900,
-                                border_radius=10,
-                                border=ft.border.all(1, ft.Colors.ORANGE_200 if not is_dark else ft.Colors.ORANGE_700)
-                            ),
-                            ft.Divider(height=30),
-                            ft.Column(
-                                [
-                                    test_button,
-                                    understood_button
-                                ],
-                                spacing=10,
-                                horizontal_alignment=ft.CrossAxisAlignment.STRETCH
-                            )
+                            logo_image,
+                            ft.Container(height=50),
+                            progress_bar
                         ],
-                        spacing=15,
-                        horizontal_alignment=ft.CrossAxisAlignment.STRETCH
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        spacing=20
                     ),
-                    padding=20,
-                    border_radius=10,
-                    bgcolor=ft.Colors.GREY_900 if is_dark else ft.Colors.GREY_100
+                    expand=True,
+                    bgcolor=bg_color,
+                    padding=40,
+                    alignment=ft.alignment.center
                 )
-            ]
+            ],
+            bgcolor=bg_color
         )
         
-        self.page.views.append(permission_view)
-        self.page.go("/storage-permissions")
+        self.page.views.append(splash_view)
+        self.page.go("/splash")
         self.page.update()
+        
+        # Iniciar animación de la barra de progreso en un hilo separado
+        progress_thread = threading.Thread(target=animate_progress, args=(3,), daemon=True)
+        progress_thread.start()
     
     # ==================== MÉTODOS DE CONFIGURACIÓN (delegados a SettingsView) ====================
     # Todos los métodos de configuración han sido movidos a settings_view

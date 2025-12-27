@@ -80,6 +80,7 @@ class Task:
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
     priority: str  # 'urgent_important', 'not_urgent_important', 'urgent_not_important', 'not_urgent_not_important'
+    status: Optional[str] = None  # 'backlog', 'in_progress', 'completed' - para vista Kanban
     subtasks: List[SubTask] = field(default_factory=list)  # Lista de subtareas
     
     def __post_init__(self):
@@ -92,6 +93,9 @@ class Task:
             self.updated_at = datetime.now()
         if not self.priority:
             self.priority = 'not_urgent_important'  # Por defecto: No Urgente e Importante
+        if self.status is None:
+            # Si está completada, status es 'completed', sino 'backlog'
+            self.status = 'completed' if self.completed else 'backlog'
         if self.subtasks is None:
             self.subtasks = []
     
@@ -105,6 +109,7 @@ class Task:
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'priority': self.priority,
+            'status': self.status,
             'subtasks': [st.to_dict() for st in self.subtasks]
         }
     
@@ -123,14 +128,21 @@ class Task:
         if data.get('subtasks'):
             subtasks = [SubTask.from_dict(st) for st in data['subtasks']]
         
+        completed = bool(data.get('completed', False))
+        status = data.get('status')
+        if status is None:
+            # Si no hay status, usar completed para determinarlo
+            status = 'completed' if completed else 'backlog'
+        
         return cls(
             id=data.get('id'),
             title=data.get('title', ''),
             description=data.get('description', ''),
-            completed=bool(data.get('completed', False)),
+            completed=completed,
             created_at=created_at,
             updated_at=updated_at,
             priority=data.get('priority', 'not_urgent_important'),
+            status=status,
             subtasks=subtasks
         )
 

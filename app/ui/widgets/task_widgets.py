@@ -13,6 +13,122 @@ from .utils import (
 )
 
 
+def _build_description_with_expand(
+    title: str,
+    description: str,
+    sizes: dict,
+    title_style: ft.TextStyle,
+    description_color,
+    secondary
+) -> ft.Column:
+    """
+    Construye la descripción con efecto de desglose.
+    Muestra solo las primeras 3 palabras y un botón "..." para expandir.
+    
+    Args:
+        title: Título de la tarea.
+        description: Descripción de la tarea.
+        sizes: Tamaños responsive.
+        title_style: Estilo del título.
+        description_color: Color de la descripción.
+        secondary: Color secundario.
+    
+    Returns:
+        Column con el título y descripción con efecto de desglose.
+    """
+    column_controls = [
+        ft.Text(
+            title,
+            size=sizes['title_size'],
+            weight=ft.FontWeight.BOLD,
+            style=title_style,
+            expand=True,
+            max_lines=3,
+            overflow=ft.TextOverflow.ELLIPSIS,
+            selectable=True
+        )
+    ]
+    
+    # Si hay descripción, agregar con efecto de desglose
+    if description:
+        words = description.split()
+        description_expanded = [False]  # Usar lista para poder modificar desde el closure
+        
+        # Si tiene más de 3 palabras, mostrar solo las primeras 3
+        if len(words) > 3:
+            preview_text = " ".join(words[:3])
+            full_text = description
+            
+            # Texto de descripción (inicialmente solo preview)
+            description_text = ft.Text(
+                preview_text,
+                size=sizes['description_size'],
+                color=description_color,
+                style=title_style,
+                selectable=True,
+                expand=True
+            )
+            
+            # Botón "..."
+            expand_button = ft.TextButton(
+                text="...",
+                on_click=None,  # Se asignará después
+                tooltip="Ver más",
+                style=ft.ButtonStyle(
+                    color=secondary,
+                    text_style=ft.TextStyle(size=sizes['description_size'], weight=ft.FontWeight.BOLD),
+                    padding=ft.padding.symmetric(horizontal=4, vertical=0)
+                )
+            )
+            
+            def toggle_description(e):
+                """Alterna entre vista previa y descripción completa."""
+                description_expanded[0] = not description_expanded[0]
+                if description_expanded[0]:
+                    description_text.value = full_text
+                    expand_button.text = "Ver menos"
+                    expand_button.tooltip = "Ver menos"
+                else:
+                    description_text.value = preview_text
+                    expand_button.text = "..."
+                    expand_button.tooltip = "Ver más"
+                description_text.update()
+                expand_button.update()
+            
+            expand_button.on_click = toggle_description
+            
+            # Fila con descripción y botón
+            column_controls.append(
+                ft.Row(
+                    [
+                        description_text,
+                        expand_button
+                    ],
+                    spacing=4,
+                    wrap=False,
+                    vertical_alignment=ft.CrossAxisAlignment.START
+                )
+            )
+        else:
+            # Si tiene 3 palabras o menos, mostrar completa sin botón
+            column_controls.append(
+                ft.Text(
+                    description,
+                    size=sizes['description_size'],
+                    color=description_color,
+                    style=title_style,
+                    selectable=True
+                )
+            )
+    
+    return ft.Column(
+        column_controls,
+        expand=True,
+        spacing=6,
+        tight=False
+    )
+
+
 def create_task_card(
     task: Task,
     on_toggle,
@@ -80,31 +196,13 @@ def create_task_card(
                     height=sizes['icon_size'] + 8
                 ),
                 ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text(
-                                task.title,
-                                size=sizes['title_size'],
-                                weight=ft.FontWeight.BOLD,
-                                style=title_style,
-                                expand=True,
-                                max_lines=3,
-                                overflow=ft.TextOverflow.ELLIPSIS,
-                                selectable=True
-                            ),
-                            ft.Text(
-                                task.description if task.description else "Sin descripción",
-                                size=sizes['description_size'],
-                                color=description_color,
-                                style=title_style if task.completed else None,
-                                max_lines=4,
-                                overflow=ft.TextOverflow.ELLIPSIS,
-                                selectable=True
-                            ),
-                        ],
-                        expand=True,
-                        spacing=6 if is_desktop else 4,
-                        tight=False
+                    content=_build_description_with_expand(
+                        task.title,
+                        task.description if task.description and task.description.strip() else "",
+                        sizes,
+                        title_style,
+                        description_color,
+                        secondary
                     ),
                     expand=True,
                     padding=0
@@ -118,7 +216,9 @@ def create_task_card(
     ]
     
     # Agregar subtareas si existen con funcionalidad de desglose (expandir/colapsar)
-    if task.subtasks and len(task.subtasks) > 0:
+    # Filtrar subtareas vacías (sin título o con título vacío)
+    valid_subtasks = [st for st in task.subtasks if st.title and st.title.strip()] if task.subtasks else []
+    if valid_subtasks and len(valid_subtasks) > 0:
         # Contenedor para las subtareas (inicialmente colapsado)
         subtasks_container = ft.Container(
             content=ft.Column(
@@ -161,7 +261,7 @@ def create_task_card(
             # Si se expande, construir las subtareas
             if subtasks_expanded[0] and len(subtasks_container.content.controls) == 0:
                 subtasks_list = _build_subtasks_list(
-                    task.subtasks,
+                    valid_subtasks,
                     is_dark,
                     secondary,
                     on_toggle_subtask,
@@ -176,9 +276,9 @@ def create_task_card(
         # Asignar el handler después de definir la función
         expand_button.on_click = toggle_subtasks_display
         
-        # Contador de subtareas
-        completed_count = sum(1 for st in task.subtasks if st.completed)
-        total_count = len(task.subtasks)
+        # Contador de subtareas (solo contar subtareas válidas)
+        completed_count = sum(1 for st in valid_subtasks if st.completed)
+        total_count = len(valid_subtasks)
         subtasks_text = f"{completed_count}/{total_count} subtareas"
         
         # Fila con botón de expandir y contador
@@ -326,7 +426,10 @@ def _build_subtasks_list(
     """
     subtasks_list = []
     
-    for subtask in subtasks:
+    # Filtrar subtareas vacías (sin título o con título vacío)
+    valid_subtasks = [st for st in subtasks if st.title and st.title.strip()]
+    
+    for subtask in valid_subtasks:
         subtask_icon = ft.Icons.CHECK_CIRCLE if subtask.completed else ft.Icons.RADIO_BUTTON_UNCHECKED
         subtask_color = secondary if subtask.completed else ft.Colors.GREY_600
         subtask_text_color = ft.Colors.GREY_400 if subtask.completed else (ft.Colors.WHITE if is_dark else ft.Colors.BLACK87)

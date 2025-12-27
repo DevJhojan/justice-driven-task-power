@@ -151,9 +151,9 @@ def build_priority_navigation_bar(
     button_spacing = 8 if is_wide_screen else 4  # Reducido de 10/6 a 8/4
     
     # Crear Row con botones de prioridad, botón de vista y botón de agregar
-    # Si está en modo lista_normal, solo mostrar botón de vista y agregar
+    # Si está en modo lista_normal o kanban, solo mostrar botón de vista y agregar (sin prioridades)
     row_controls = []
-    if current_view_mode != "lista_normal":
+    if current_view_mode not in ("lista_normal", "kanban"):
         row_controls = buttons.copy()
     if view_button:
         row_controls.append(view_button)

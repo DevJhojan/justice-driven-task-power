@@ -111,8 +111,29 @@ class TasksView:
                 expand=True,
                 width=None
             )
+        elif self.current_view_mode == "kanban":
+            # Modo Kanban: crear contenedor para las 3 columnas (Backlog, En progreso, Completado)
+            kanban_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
+            self.priority_containers['urgent_important'] = kanban_container
+            
+            # Padding responsive para el contenedor principal
+            main_padding = ft.padding.only(
+                bottom=24 if is_desktop else 16,
+                left=16 if is_desktop else 12,
+                right=16 if is_desktop else 12,
+                top=16 if is_desktop else 12
+            )
+            
+            # Contenedor principal con scroll
+            self.main_scroll_container = ft.Container(
+                content=kanban_container,
+                padding=main_padding,
+                expand=True,
+                width=None
+            )
+            self.main_scroll_listview = None  # No se usa en kanban
         else:
-            # Construir las 4 secciones de prioridad (modo Matriz de Eisenhower o Kanban)
+            # Construir las 4 secciones de prioridad (modo Matriz de Eisenhower - lista_4do)
             priority_sections = [
                 build_priority_section(
                     self.page,
@@ -206,7 +227,8 @@ class TasksView:
             self._show_add_subtask_dialog,
             self._delete_subtask,
             self._edit_subtask,
-            self.current_view_mode
+            self.current_view_mode,
+            on_status_change=self.load_tasks  # Recargar tareas después de cambiar status
         )
     
     def _filter_priority_tasks(self, priority: str, filter_completed: Optional[bool]):
@@ -312,6 +334,26 @@ class TasksView:
                 width=None
             )
             self.main_scroll_listview = None  # No se usa en lista_normal
+        elif self.current_view_mode == "kanban":
+            # Modo Kanban: crear contenedor para las 3 columnas
+            kanban_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
+            self.priority_containers['urgent_important'] = kanban_container
+            
+            # Padding responsive
+            main_padding = ft.padding.only(
+                bottom=24 if is_desktop else 16,
+                left=16 if is_desktop else 12,
+                right=16 if is_desktop else 12,
+                top=16 if is_desktop else 12
+            )
+            
+            self.main_scroll_container = ft.Container(
+                content=kanban_container,
+                padding=main_padding,
+                expand=True,
+                width=None
+            )
+            self.main_scroll_listview = None  # No se usa en kanban
         else:
             # Reconstruir las 4 secciones de prioridad
             priority_sections = [
@@ -385,28 +427,21 @@ class TasksView:
         # Obtener el índice de la sección
         target_index = PRIORITY_ORDER.get(priority, 0)
         
-        # Hacer scroll al índice correspondiente usando la referencia directa al ListView
+        # Hacer scroll usando offset (scroll_to solo acepta offset, no index)
         if self.main_scroll_listview:
             try:
-                # Intentar usar scroll_to con index (más preciso)
+                # Calcular offset aproximado basado en el índice
+                # Cada sección tiene aproximadamente 500px de altura
+                estimated_offset = target_index * 500
                 self.main_scroll_listview.scroll_to(
-                    index=target_index,
+                    offset=estimated_offset,
                     duration=500,
                     curve=ft.AnimationCurve.EASE_OUT
                 )
-            except (AttributeError, TypeError) as e:
-                # Si scroll_to con index no está disponible o falla, usar offset
-                print(f"Intentando scroll con offset (index no disponible): {e}")
-                try:
-                    # Calcular offset aproximado
-                    estimated_offset = target_index * 500
-                    self.main_scroll_listview.scroll_to(
-                        offset=estimated_offset,
-                        duration=500,
-                        curve=ft.AnimationCurve.EASE_OUT
-                    )
-                except Exception as e2:
-                    print(f"Error en scroll_to: {e2}")
+            except Exception:
+                # Si falla el scroll, simplemente ignorar el error
+                # Es una funcionalidad de conveniencia, no crítica
+                pass
         
         self.page.update()
     

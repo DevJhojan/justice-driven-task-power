@@ -33,6 +33,7 @@ class GoalsView:
         self.current_frequency_filter: Optional[str] = None  # None=all, o una frecuencia específica
         self.editing_goal: Optional[Goal] = None
         self.goals_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
+        self.filter_buttons: dict = {}  # Referencias a los botones de filtro
     
     def build_ui(self, title_bar=None, bottom_bar=None, home_view=None) -> ft.Container:
         """
@@ -79,23 +80,24 @@ class GoalsView:
         }
         
         # Botones de filtro
-        filter_buttons = []
+        filter_buttons_list = []
+        self.filter_buttons = {}  # Resetear referencias
         for freq, label in frequency_labels.items():
-            filter_buttons.append(
-                ft.ElevatedButton(
-                    text=label,
-                    on_click=lambda e, f=freq: self._filter_goals(f),
-                    bgcolor=active_bg if self.current_frequency_filter == freq else inactive_bg,
-                    color=text_color,
-                    height=36,
-                    style=ft.ButtonStyle(
-                        shape=ft.RoundedRectangleBorder(radius=8)
-                    )
+            button = ft.ElevatedButton(
+                text=label,
+                on_click=lambda e, f=freq: self._filter_goals(f),
+                bgcolor=active_bg if self.current_frequency_filter == freq else inactive_bg,
+                color=text_color,
+                height=36,
+                style=ft.ButtonStyle(
+                    shape=ft.RoundedRectangleBorder(radius=8)
                 )
             )
+            filter_buttons_list.append(button)
+            self.filter_buttons[freq] = button  # Guardar referencia
         
         filter_row = ft.Row(
-            filter_buttons,
+            filter_buttons_list,
             spacing=8,
             scroll=ft.ScrollMode.AUTO,
             wrap=True
@@ -154,7 +156,24 @@ class GoalsView:
     def _filter_goals(self, frequency: Optional[str]):
         """Filtra los objetivos por frecuencia."""
         self.current_frequency_filter = frequency
+        self._update_filter_button_colors()
         self.load_goals()
+    
+    def _update_filter_button_colors(self):
+        """Actualiza los colores de los botones de filtro según el filtro activo."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        scheme = self.page.theme.color_scheme if self.page.theme else None
+        primary = scheme.primary if scheme and scheme.primary else ft.Colors.RED_700
+        active_bg = primary
+        inactive_bg = ft.Colors.GREY_800 if is_dark else ft.Colors.GREY_100
+        
+        # Actualizar colores de todos los botones
+        for freq, button in self.filter_buttons.items():
+            if button:
+                button.bgcolor = active_bg if self.current_frequency_filter == freq else inactive_bg
+        
+        # Actualizar la página para reflejar los cambios
+        self.page.update()
     
     def _show_new_goal_form(self, e):
         """Navega a la vista del formulario para crear un nuevo objetivo."""

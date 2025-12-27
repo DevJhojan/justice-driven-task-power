@@ -44,28 +44,32 @@ class TaskRepository:
                 return self.update(task)
             
             # Insertar con ID específico
+            status = task.status if task.status else ('completed' if task.completed else 'backlog')
             cursor.execute('''
-                INSERT INTO tasks (id, title, description, completed, priority, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (id, title, description, completed, priority, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 task.id,
                 task.title,
                 task.description,
                 1 if task.completed else 0,
                 task.priority,
+                status,
                 task.created_at.isoformat() if task.created_at else now,
                 task.updated_at.isoformat() if task.updated_at else now
             ))
         else:
             # Insertar sin ID (auto-increment)
+            status = task.status if task.status else ('completed' if task.completed else 'backlog')
             cursor.execute('''
-                INSERT INTO tasks (title, description, completed, priority, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (title, description, completed, priority, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
                 task.title,
                 task.description,
                 1 if task.completed else 0,
                 task.priority,
+                status,
                 now,
                 now
             ))
@@ -151,39 +155,47 @@ class TaskRepository:
         
         now = datetime.now().isoformat()
         
+        status = task.status if task.status else ('completed' if task.completed else 'backlog')
         cursor.execute('''
             UPDATE tasks 
-            SET title = ?, description = ?, completed = ?, priority = ?, updated_at = ?
+            SET title = ?, description = ?, completed = ?, priority = ?, status = ?, updated_at = ?
             WHERE id = ?
         ''', (
             task.title,
             task.description,
             1 if task.completed else 0,
             task.priority,
+            status,
             now,
             task.id
         ))
         
         task.updated_at = datetime.now()
         
-        # Sincronizar subtareas si están presentes
+        # Sincronizar subtareas si están presentes (usando la misma conexión)
         if task.subtasks is not None:
-            self._sync_subtasks(task.id, task.subtasks)
+            self._sync_subtasks(task.id, task.subtasks, conn)
         
         conn.commit()
         conn.close()
         
         return task
     
-    def _sync_subtasks(self, task_id: int, remote_subtasks: List[SubTask]) -> None:
+    def _sync_subtasks(self, task_id: int, remote_subtasks: List[SubTask], conn=None) -> None:
         """
         Sincroniza las subtareas de una tarea con las subtareas remotas.
         
         Args:
             task_id: ID de la tarea
             remote_subtasks: Lista de subtareas remotas a sincronizar
+            conn: Conexión a la base de datos (opcional, si no se proporciona se crea una nueva)
         """
-        conn = self.db.get_connection()
+        if conn is None:
+            conn = self.db.get_connection()
+            should_close = True
+        else:
+            should_close = False
+        
         cursor = conn.cursor()
         
         # Obtener subtareas locales actuales
@@ -251,8 +263,13 @@ class TaskRepository:
                         now
                     ))
         
-        conn.commit()
-        conn.close()
+        # Solo hacer commit y cerrar si creamos la conexión nosotros mismos
+        if should_close:
+            conn.commit()
+            conn.close()
+        else:
+            # Si la conexión fue pasada, solo hacer commit (la cierra el método que la creó)
+            conn.commit()
     
     def delete(self, task_id: int) -> bool:
         """
@@ -471,6 +488,15 @@ class TaskRepository:
         if row['updated_at']:
             updated_at = datetime.fromisoformat(row['updated_at'])
         
+        # Acceder a status de forma segura (la columna puede no existir en bases de datos antiguas)
+        try:
+            status = row['status']
+        except (KeyError, IndexError):
+            status = None
+        
+        if status is None:
+            status = 'completed' if bool(row['completed']) else 'backlog'
+        
         return Task(
             id=row['id'],
             title=row['title'],
@@ -479,6 +505,7 @@ class TaskRepository:
             created_at=created_at,
             updated_at=updated_at,
             priority=row['priority'],
+            status=status,
             subtasks=[]  # Se cargarán después
         )
     

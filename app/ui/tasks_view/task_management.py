@@ -21,7 +21,8 @@ def load_tasks_into_containers(
     on_add_subtask: callable,
     on_delete_subtask: callable,
     on_edit_subtask: callable,
-    view_mode: str = "lista_normal"
+    view_mode: str = "lista_normal",
+    on_status_change: callable = None
 ):
     """
     Carga las tareas desde la base de datos y las distribuye por prioridad.
@@ -39,6 +40,7 @@ def load_tasks_into_containers(
         on_delete_subtask: Callback para eliminar subtarea.
         on_edit_subtask: Callback para editar subtarea.
         view_mode: Modo de vista ('lista_normal', 'lista_4do', 'kanban').
+        on_status_change: Callback opcional para recargar tareas después de cambiar status (solo para kanban).
     """
     # Cargar todas las tareas sin filtro global
     all_tasks = task_service.get_all_tasks(None)
@@ -73,8 +75,24 @@ def load_tasks_into_containers(
                     alignment=ft.alignment.center
                 )
             )
+    elif view_mode == "kanban":
+        # Modo Kanban: distribuir todas las tareas en 3 columnas (Backlog, En progreso, Completado)
+        # Limpiar todos los contenedores de prioridad
+        for priority in priority_containers:
+            priority_containers[priority].controls.clear()
+        
+        # Usar el contenedor de urgent_important como contenedor para las 3 columnas Kanban
+        kanban_container = priority_containers['urgent_important']
+        
+        # Renderizar las 3 columnas Kanban con todas las tareas
+        _render_kanban_3_columns(
+            kanban_container, all_tasks, page, task_service,
+            on_toggle, on_edit, on_delete,
+            on_toggle_subtask, on_add_subtask, on_delete_subtask, on_edit_subtask,
+            on_status_change
+        )
     else:
-        # Modo Matriz de Eisenhower o Kanban: distribuir tareas por prioridad
+        # Modo Matriz de Eisenhower (lista_4do): distribuir tareas por prioridad
         # Limpiar todos los contenedores de prioridad
         for priority in priority_containers:
             priority_containers[priority].controls.clear()
@@ -116,12 +134,7 @@ def load_tasks_into_containers(
                         on_toggle, on_edit, on_delete,
                         on_toggle_subtask, on_add_subtask, on_delete_subtask, on_edit_subtask
                     )
-                elif view_mode == "kanban":
-                    _render_kanban(
-                        container, priority_tasks, page,
-                        on_toggle, on_edit, on_delete,
-                        on_toggle_subtask, on_add_subtask, on_delete_subtask, on_edit_subtask
-                    )
+                # kanban ya se maneja antes en el flujo principal
                 else:
                     # Fallback a lista normal
                     _render_lista_normal(
@@ -374,6 +387,317 @@ def _render_kanban(
         [
             ft.Container(
                 content=pending_column,
+                expand=True,
+                bgcolor=bg_color,
+                border=ft.border.all(1, border_color),
+                border_radius=8,
+                padding=8,
+                margin=ft.margin.only(right=8)
+            ),
+            ft.Container(
+                content=completed_column,
+                expand=True,
+                bgcolor=bg_color,
+                border=ft.border.all(1, border_color),
+                border_radius=8,
+                padding=8
+            )
+        ],
+        spacing=8,
+        scroll=ft.ScrollMode.AUTO if not is_desktop else ft.ScrollMode.HIDDEN,
+        expand=True
+    )
+    
+    container.controls.append(kanban_row)
+
+
+def _render_kanban_3_columns(
+    container: ft.Column,
+    tasks: list,
+    page: ft.Page,
+    task_service: TaskService,
+    on_toggle: callable,
+    on_edit: callable,
+    on_delete: callable,
+    on_toggle_subtask: callable,
+    on_add_subtask: callable,
+    on_delete_subtask: callable,
+    on_edit_subtask: callable,
+    on_status_change: callable = None
+):
+    """Renderiza las tareas en vista Kanban con 3 columnas: Backlog, En progreso, Completado."""
+    is_dark = page.theme_mode == ft.ThemeMode.DARK
+    is_desktop = is_desktop_platform(page)
+    
+    # Separar tareas por estado usando el campo status
+    backlog_tasks = []
+    in_progress_tasks = []
+    completed_tasks = []
+    
+    for task in tasks:
+        status = task.status if task.status else ('completed' if task.completed else 'backlog')
+        if status == 'completed':
+            completed_tasks.append(task)
+        elif status == 'in_progress':
+            in_progress_tasks.append(task)
+        else:  # backlog o None
+            backlog_tasks.append(task)
+    
+    # Función para manejar el cambio de status
+    def _handle_status_change(task_id: int, new_status: str):
+        """Maneja el cambio de status de una tarea."""
+        task_service.update_task_status(task_id, new_status)
+        # Si hay un callback, llamarlo para recargar las tareas
+        if on_status_change:
+            on_status_change()
+        else:
+            page.update()
+    
+    # Función auxiliar para crear tarjeta con botones de movimiento
+    def create_kanban_card_with_buttons(task, current_status):
+        """Crea una tarjeta de tarea con botones para mover entre columnas."""
+        card = create_task_card(
+            task,
+            on_toggle=on_toggle,
+            on_edit=on_edit,
+            on_delete=on_delete,
+            on_toggle_subtask=on_toggle_subtask,
+            on_add_subtask=on_add_subtask,
+            on_delete_subtask=on_delete_subtask,
+            on_edit_subtask=on_edit_subtask,
+            page=page
+        )
+        
+        # Crear botones de movimiento
+        move_buttons = []
+        
+        # Botón para mover a la izquierda (estado anterior)
+        if current_status == 'in_progress':
+            move_buttons.append(
+                ft.IconButton(
+                    icon=ft.Icons.ARROW_BACK,
+                    icon_color=ft.Colors.BLUE if not is_dark else ft.Colors.BLUE_300,
+                    icon_size=20,
+                    on_click=lambda e, tid=task.id: _handle_status_change(tid, 'backlog'),
+                    tooltip="Mover a Backlog",
+                    width=32,
+                    height=32
+                )
+            )
+        elif current_status == 'completed':
+            move_buttons.append(
+                ft.IconButton(
+                    icon=ft.Icons.ARROW_BACK,
+                    icon_color=ft.Colors.ORANGE if not is_dark else ft.Colors.ORANGE_300,
+                    icon_size=20,
+                    on_click=lambda e, tid=task.id: _handle_status_change(tid, 'in_progress'),
+                    tooltip="Mover a En progreso",
+                    width=32,
+                    height=32
+                )
+            )
+        
+        # Botón para mover a la derecha (estado siguiente)
+        if current_status == 'backlog':
+            move_buttons.append(
+                ft.IconButton(
+                    icon=ft.Icons.ARROW_FORWARD,
+                    icon_color=ft.Colors.ORANGE if not is_dark else ft.Colors.ORANGE_300,
+                    icon_size=20,
+                    on_click=lambda e, tid=task.id: _handle_status_change(tid, 'in_progress'),
+                    tooltip="Mover a En progreso",
+                    width=32,
+                    height=32
+                )
+            )
+        elif current_status == 'in_progress':
+            move_buttons.append(
+                ft.IconButton(
+                    icon=ft.Icons.ARROW_FORWARD,
+                    icon_color=ft.Colors.GREEN if not is_dark else ft.Colors.GREEN_300,
+                    icon_size=20,
+                    on_click=lambda e, tid=task.id: _handle_status_change(tid, 'completed'),
+                    tooltip="Mover a Completado",
+                    width=32,
+                    height=32
+                )
+            )
+        
+        if move_buttons:
+            # Envolver la tarjeta con botones
+            return ft.Column(
+                [
+                    card,
+                    ft.Row(
+                        move_buttons,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        spacing=8
+                    )
+                ],
+                spacing=4
+            )
+        return card
+    
+    # Colores para las columnas
+    bg_color = ft.Colors.BLACK87 if is_dark else ft.Colors.GREY_100
+    border_color = ft.Colors.GREY_700 if is_dark else ft.Colors.GREY_300
+    
+    # Crear columna de Backlog
+    backlog_controls = [
+        ft.Container(
+            content=ft.Text(
+                "Backlog",
+                size=16,
+                weight=ft.FontWeight.BOLD,
+                color=ft.Colors.BLUE if not is_dark else ft.Colors.BLUE_300
+            ),
+            padding=12,
+            bgcolor=ft.Colors.BLUE_50 if not is_dark else ft.Colors.BLUE_900,
+            border=ft.border.only(bottom=ft.BorderSide(2, ft.Colors.BLUE))
+        )
+    ]
+    
+    if backlog_tasks:
+        backlog_controls.extend([
+            ft.Container(
+                content=create_kanban_card_with_buttons(task, 'backlog'),
+                margin=ft.margin.only(bottom=8)
+            )
+            for task in backlog_tasks
+        ])
+    else:
+        backlog_controls.append(
+            ft.Container(
+                content=ft.Text(
+                    "No hay tareas en backlog",
+                    size=14,
+                    color=ft.Colors.GREY_500,
+                    text_align=ft.TextAlign.CENTER
+                ),
+                padding=20,
+                alignment=ft.alignment.center
+            )
+        )
+    
+    backlog_column = ft.Column(
+        backlog_controls,
+        spacing=0,
+        scroll=ft.ScrollMode.AUTO,
+        expand=True
+    )
+    
+    # Crear columna de En progreso
+    in_progress_controls = [
+        ft.Container(
+            content=ft.Text(
+                "En progreso",
+                size=16,
+                weight=ft.FontWeight.BOLD,
+                color=ft.Colors.ORANGE if not is_dark else ft.Colors.ORANGE_300
+            ),
+            padding=12,
+            bgcolor=ft.Colors.ORANGE_50 if not is_dark else ft.Colors.ORANGE_900,
+            border=ft.border.only(bottom=ft.BorderSide(2, ft.Colors.ORANGE))
+        )
+    ]
+    
+    if in_progress_tasks:
+        in_progress_controls.extend([
+            ft.Container(
+                content=create_kanban_card_with_buttons(task, 'in_progress'),
+                margin=ft.margin.only(bottom=8)
+            )
+            for task in in_progress_tasks
+        ])
+    else:
+        in_progress_controls.append(
+            ft.Container(
+                content=ft.Text(
+                    "No hay tareas en progreso",
+                    size=14,
+                    color=ft.Colors.GREY_500,
+                    text_align=ft.TextAlign.CENTER
+                ),
+                padding=20,
+                alignment=ft.alignment.center
+            )
+        )
+    
+    in_progress_column = ft.Column(
+        in_progress_controls,
+        spacing=0,
+        scroll=ft.ScrollMode.AUTO,
+        expand=True
+    )
+    
+    # Crear columna de Completado
+    completed_controls = [
+        ft.Container(
+            content=ft.Text(
+                "Completado",
+                size=16,
+                weight=ft.FontWeight.BOLD,
+                color=ft.Colors.GREEN if not is_dark else ft.Colors.GREEN_300
+            ),
+            padding=12,
+            bgcolor=ft.Colors.GREEN_50 if not is_dark else ft.Colors.GREEN_900,
+            border=ft.border.only(bottom=ft.BorderSide(2, ft.Colors.GREEN))
+        )
+    ]
+    
+    if completed_tasks:
+        completed_controls.extend([
+            ft.Container(
+                content=create_task_card(
+                    task,
+                    on_toggle=on_toggle,
+                    on_edit=on_edit,
+                    on_delete=on_delete,
+                    on_toggle_subtask=on_toggle_subtask,
+                    on_add_subtask=on_add_subtask,
+                    on_delete_subtask=on_delete_subtask,
+                    on_edit_subtask=on_edit_subtask,
+                    page=page
+                ),
+                margin=ft.margin.only(bottom=8)
+            )
+            for task in completed_tasks
+        ])
+    else:
+        completed_controls.append(
+            ft.Container(
+                content=ft.Text(
+                    "No hay tareas completadas",
+                    size=14,
+                    color=ft.Colors.GREY_500,
+                    text_align=ft.TextAlign.CENTER
+                ),
+                padding=20,
+                alignment=ft.alignment.center
+            )
+        )
+    
+    completed_column = ft.Column(
+        completed_controls,
+        spacing=0,
+        scroll=ft.ScrollMode.AUTO,
+        expand=True
+    )
+    
+    # Agregar las 3 columnas al contenedor Kanban
+    kanban_row = ft.Row(
+        [
+            ft.Container(
+                content=backlog_column,
+                expand=True,
+                bgcolor=bg_color,
+                border=ft.border.all(1, border_color),
+                border_radius=8,
+                padding=8,
+                margin=ft.margin.only(right=8)
+            ),
+            ft.Container(
+                content=in_progress_column,
                 expand=True,
                 bgcolor=bg_color,
                 border=ft.border.all(1, border_color),

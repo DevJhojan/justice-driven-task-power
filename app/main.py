@@ -46,10 +46,10 @@ def main(page: ft.Page):
     # Inicializar la vista principal
     home_view = HomeView(page)
     
-    # Mostrar página informativa sobre permisos de almacenamiento en Android/iOS
+    # Mostrar pantalla de carga en Android/iOS
     if page.platform == ft.PagePlatform.ANDROID or page.platform == ft.PagePlatform.IOS:
-        # Mostrar página completa con información sobre permisos de almacenamiento
-        home_view._show_storage_permission_dialog()
+        # Mostrar pantalla de carga con logo y barra de progreso
+        home_view._show_splash_screen()
 
 
 if __name__ == "__main__":
