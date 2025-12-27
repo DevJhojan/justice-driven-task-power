@@ -121,8 +121,7 @@ class HomeView:
         # Variable para almacenar bytes del ZIP durante la exportación
         self._export_zip_bytes = None
 
-        self.page.update()
-
+        # Construir la UI primero antes de actualizar la página
         self._build_ui()
         self.goals_view.load_goals()
     
@@ -272,41 +271,26 @@ class HomeView:
         else:
             main_view = ft.Container(content=ft.Text("Sección no encontrada"), expand=True)
         
-        # Actualizar la vista principal si es goals, hábitos o settings
-        if self.current_section in ["goals", "habits", "settings"] and self.home_view:
-            is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-            bgcolor = ft.Colors.BLACK if is_dark else ft.Colors.GREY_50
-            self.home_view.controls = [
-                ft.Column(
-                    [
-                        self.title_bar,
-                        main_view,
-                        self.bottom_bar
-                    ],
-                    spacing=0,
-                    expand=True
-                )
-            ]
-            self.home_view.bgcolor = bgcolor
+        # Crear la columna principal con todos los elementos
+        main_column = ft.Column(
+            [
+                self.title_bar,
+                main_view,
+                self.bottom_bar
+            ],
+            spacing=0,
+            expand=True
+        )
         
-        # Guardar referencia a la vista principal
+        # Crear la vista principal
         self.home_view = ft.View(
             route="/",
-            controls=[
-                ft.Column(
-                    [
-                        self.title_bar,
-                        main_view,
-                        self.bottom_bar
-                    ],
-                    spacing=0,
-                    expand=True
-                )
-            ],
+            controls=[main_column],
             bgcolor=ft.Colors.BLACK if self.page.theme_mode == ft.ThemeMode.DARK else ft.Colors.GREY_50
         )
         
         # Configurar las vistas de la página
+        # Limpiar cualquier vista existente y agregar nuestra vista
         self.page.views.clear()
         self.page.views.append(self.home_view)
         self.page.go("/")

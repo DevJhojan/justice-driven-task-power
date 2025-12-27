@@ -39,17 +39,16 @@ def main(page: ft.Page):
     app_settings = settings_service.get_settings()
     apply_theme_to_page(page, app_settings)
     
-    # Configuración para móvil
+    # Configuración para móvil/desktop
     page.horizontal_alignment = ft.CrossAxisAlignment.STRETCH
     page.vertical_alignment = ft.MainAxisAlignment.START
     
-    # Inicializar la vista principal
-    home_view = HomeView(page)
+    # Limpiar cualquier vista inicial que Flet haya creado
+    page.views.clear()
     
-    # Mostrar pantalla de carga en Android/iOS
-    if page.platform == ft.PagePlatform.ANDROID or page.platform == ft.PagePlatform.IOS:
-        # Mostrar pantalla de carga con logo y barra de progreso
-        home_view._show_splash_screen()
+    # Inicializar la vista principal
+    # HomeView se encarga de construir y agregar el contenido a la página
+    HomeView(page)
 
 
 if __name__ == "__main__":
