@@ -9,7 +9,9 @@ def build_priority_navigation_bar(
     page: ft.Page,
     current_priority_section: str,
     on_priority_click: callable,
-    on_add_task_click: callable
+    on_add_task_click: callable,
+    current_view_mode: str = "lista_normal",
+    on_view_mode_change: callable = None
 ) -> ft.Container:
     """
     Construye la barra de navegación con 4 botones para las prioridades.
@@ -19,6 +21,8 @@ def build_priority_navigation_bar(
         current_priority_section: Prioridad activa actual.
         on_priority_click: Callback cuando se hace clic en una prioridad.
         on_add_task_click: Callback cuando se hace clic en agregar tarea.
+        current_view_mode: Modo de vista actual ('lista_normal', 'lista_4do', 'kanban').
+        on_view_mode_change: Callback cuando se cambia el modo de vista.
     
     Returns:
         Container con la barra de navegación.
@@ -106,6 +110,39 @@ def build_priority_navigation_bar(
         icon_size=icon_size
     )
     
+    # Botón de selección de vista
+    view_mode_labels = {
+        "lista_normal": "Lista normal",
+        "lista_4do": "Matriz de Eisenhower",
+        "kanban": "Kanban"
+    }
+    
+    view_icon = ft.Icons.VIEW_LIST if current_view_mode == "lista_normal" else (
+        ft.Icons.VIEW_MODULE if current_view_mode == "lista_4do" else ft.Icons.VIEW_COMFY
+    )
+    
+    view_button = None
+    if on_view_mode_change:
+        # Crear menú desplegable para seleccionar vista
+        view_menu_items = []
+        for mode, label in view_mode_labels.items():
+            view_menu_items.append(
+                ft.PopupMenuItem(
+                    text=label,
+                    on_click=lambda e, m=mode: on_view_mode_change(m),
+                    checked=mode == current_view_mode,
+                )
+            )
+        
+        view_button = ft.PopupMenuButton(
+            icon=view_icon,
+            tooltip="Cambiar vista",
+            items=view_menu_items,
+            icon_size=icon_size,
+            width=button_size,
+            height=button_size,
+        )
+    
     # Contenedor responsive con padding vertical mínimo - reducido
     nav_padding = ft.padding.symmetric(
         vertical=2 if is_wide_screen else 1,  # Reducido de 4/3 a 2/1
@@ -113,8 +150,13 @@ def build_priority_navigation_bar(
     )
     button_spacing = 8 if is_wide_screen else 4  # Reducido de 10/6 a 8/4
     
-    # Crear Row con botones de prioridad y botón de agregar
-    row_controls = buttons.copy()
+    # Crear Row con botones de prioridad, botón de vista y botón de agregar
+    # Si está en modo lista_normal, solo mostrar botón de vista y agregar
+    row_controls = []
+    if current_view_mode != "lista_normal":
+        row_controls = buttons.copy()
+    if view_button:
+        row_controls.append(view_button)
     row_controls.append(add_button)
     
     return ft.Container(

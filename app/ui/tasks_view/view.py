@@ -35,6 +35,12 @@ class TasksView:
         self.task_service = task_service
         self.on_go_back = on_go_back
         
+        # Cargar preferencia de vista desde SettingsService
+        from app.services.settings_service import SettingsService
+        self.settings_service = SettingsService()
+        settings = self.settings_service.get_settings()
+        self.current_view_mode = settings.tasks_view_mode
+        
         # Filtros por sección de prioridad: {priority: filter_value}
         self.priority_filters = {
             'urgent_important': None,  # None=all, True=completed, False=pending
@@ -71,77 +77,102 @@ class TasksView:
         
         is_desktop = is_desktop_platform(self.page)
         
-        # Barra de navegación de prioridades
+        # Barra de navegación de prioridades (o solo botones de vista/agregar en lista_normal)
         priority_nav = build_priority_navigation_bar(
             self.page,
             self.current_priority_section,
             self._scroll_to_priority,
-            self._show_new_task_form
+            self._show_new_task_form,
+            self.current_view_mode,
+            self._change_view_mode
         )
         # Guardar referencia a la barra de navegación para poder actualizarla
         self.priority_nav_container = priority_nav
         
-        # Construir las 4 secciones de prioridad
-        priority_sections = [
-            build_priority_section(
-                self.page,
-                priority,
-                self.priority_filters,
-                self.priority_containers[priority],
-                self._filter_priority_tasks,
-                self.priority_section_refs
+        # Si está en modo lista_normal, mostrar solo un contenedor simple con todas las tareas
+        if self.current_view_mode == "lista_normal":
+            # Contenedor único para todas las tareas (sin separación por prioridad)
+            # Usaremos el contenedor de la primera prioridad como contenedor único
+            all_tasks_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
+            self.priority_containers['urgent_important'] = all_tasks_container
+            
+            # Padding responsive para el contenedor principal
+            main_padding = ft.padding.only(
+                bottom=24 if is_desktop else 16,
+                left=16 if is_desktop else 12,
+                right=16 if is_desktop else 12,
+                top=16 if is_desktop else 12
             )
-            for priority in PRIORITIES
-        ]
-        
-        # Contenedor principal con scroll - responsive - más compacto
-        section_spacing = 16 if is_desktop else 12  # Reducido de 24/16 a 16/12
-        # Usar ListView para mejor soporte de scroll programático
-        self.main_scroll_listview = ft.ListView(
-            priority_sections,
-            spacing=section_spacing,
-            expand=True,
-            padding=0
-        )
-        main_scroll_content = self.main_scroll_listview
-        
-        # Padding responsive para el contenedor principal - sin padding superior
-        main_padding = ft.padding.only(
-            bottom=24 if is_desktop else 16,
-            left=0,
-            right=0,
-            top=0  # Sin padding superior para eliminar espacio en blanco
-        )
-        
-        # Detectar ancho de pantalla para layout adaptable
-        screen_width = get_screen_width(self.page)
-        
-        # En escritorio con pantalla grande, centrar con ancho máximo; en pantallas pequeñas, usar todo el ancho
-        if is_desktop and isinstance(screen_width, (int, float)) and screen_width > 1200:
+            
+            # Contenedor principal con scroll
             self.main_scroll_container = ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Container(width=0, expand=True),  # Espaciador izquierdo
-                        ft.Container(
-                            content=main_scroll_content,
-                            width=1200,  # Ancho máximo para legibilidad en pantallas grandes
-                            expand=False
-                        ),
-                        ft.Container(width=0, expand=True)  # Espaciador derecho
-                    ],
-                    alignment=ft.MainAxisAlignment.CENTER
-                ),
-                padding=main_padding,
-                expand=True
-            )
-        else:
-            # En pantallas pequeñas o medianas, usar todo el ancho disponible
-            self.main_scroll_container = ft.Container(
-                content=main_scroll_content,
+                content=all_tasks_container,
                 padding=main_padding,
                 expand=True,
                 width=None
             )
+        else:
+            # Construir las 4 secciones de prioridad (modo Matriz de Eisenhower o Kanban)
+            priority_sections = [
+                build_priority_section(
+                    self.page,
+                    priority,
+                    self.priority_filters,
+                    self.priority_containers[priority],
+                    self._filter_priority_tasks,
+                    self.priority_section_refs
+                )
+                for priority in PRIORITIES
+            ]
+            
+            # Contenedor principal con scroll - responsive - más compacto
+            section_spacing = 16 if is_desktop else 12  # Reducido de 24/16 a 16/12
+            # Usar ListView para mejor soporte de scroll programático
+            self.main_scroll_listview = ft.ListView(
+                priority_sections,
+                spacing=section_spacing,
+                expand=True,
+                padding=0
+            )
+            main_scroll_content = self.main_scroll_listview
+            
+            # Padding responsive para el contenedor principal - sin padding superior
+            main_padding = ft.padding.only(
+                bottom=24 if is_desktop else 16,
+                left=0,
+                right=0,
+                top=0  # Sin padding superior para eliminar espacio en blanco
+            )
+            
+            # Detectar ancho de pantalla para layout adaptable
+            screen_width = get_screen_width(self.page)
+            
+            # En escritorio con pantalla grande, centrar con ancho máximo; en pantallas pequeñas, usar todo el ancho
+            if is_desktop and isinstance(screen_width, (int, float)) and screen_width > 1200:
+                self.main_scroll_container = ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Container(width=0, expand=True),  # Espaciador izquierdo
+                            ft.Container(
+                                content=main_scroll_content,
+                                width=1200,  # Ancho máximo para legibilidad en pantallas grandes
+                                expand=False
+                            ),
+                            ft.Container(width=0, expand=True)  # Espaciador derecho
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER
+                    ),
+                    padding=main_padding,
+                    expand=True
+                )
+            else:
+                # En pantallas pequeñas o medianas, usar todo el ancho disponible
+                self.main_scroll_container = ft.Container(
+                    content=main_scroll_content,
+                    padding=main_padding,
+                    expand=True,
+                    width=None
+                )
         
         # Vista principal - sin spacing ni márgenes para acercar elementos
         main_view_container = ft.Container(
@@ -174,7 +205,8 @@ class TasksView:
             self._toggle_subtask,
             self._show_add_subtask_dialog,
             self._delete_subtask,
-            self._edit_subtask
+            self._edit_subtask,
+            self.current_view_mode
         )
     
     def _filter_priority_tasks(self, priority: str, filter_completed: Optional[bool]):
@@ -223,11 +255,125 @@ class TasksView:
                     self.page,
                     self.current_priority_section,
                     self._scroll_to_priority,
-                    self._show_new_task_form
+                    self._show_new_task_form,
+                    self.current_view_mode,
+                    self._change_view_mode
                 )
                 # Reemplazar la barra de navegación antigua
                 main_column.controls[0] = new_nav
                 self.priority_nav_container = new_nav
+    
+    def _change_view_mode(self, view_mode: str):
+        """Cambia el modo de vista de las tareas."""
+        self.current_view_mode = view_mode
+        # Guardar preferencia
+        self.settings_service.update_settings(tasks_view_mode=view_mode)
+        # Reconstruir la UI completamente para reflejar el cambio de modo
+        self._rebuild_ui_for_view_mode()
+        # Recargar tareas con la nueva vista
+        self.load_tasks()
+        self.page.update()
+    
+    def _rebuild_ui_for_view_mode(self):
+        """Reconstruye la UI cuando cambia el modo de vista."""
+        from .utils import is_desktop_platform, get_screen_width
+        
+        is_desktop = is_desktop_platform(self.page)
+        
+        # Actualizar la barra de navegación
+        new_nav = build_priority_navigation_bar(
+            self.page,
+            self.current_priority_section,
+            self._scroll_to_priority,
+            self._show_new_task_form,
+            self.current_view_mode,
+            self._change_view_mode
+        )
+        self.priority_nav_container = new_nav
+        
+        # Reconstruir el contenedor principal según el modo de vista
+        if self.current_view_mode == "lista_normal":
+            # Contenedor único para todas las tareas
+            all_tasks_container = ft.Column([], spacing=0, scroll=ft.ScrollMode.AUTO, expand=True)
+            self.priority_containers['urgent_important'] = all_tasks_container
+            
+            # Padding responsive
+            main_padding = ft.padding.only(
+                bottom=24 if is_desktop else 16,
+                left=16 if is_desktop else 12,
+                right=16 if is_desktop else 12,
+                top=16 if is_desktop else 12
+            )
+            
+            self.main_scroll_container = ft.Container(
+                content=all_tasks_container,
+                padding=main_padding,
+                expand=True,
+                width=None
+            )
+            self.main_scroll_listview = None  # No se usa en lista_normal
+        else:
+            # Reconstruir las 4 secciones de prioridad
+            priority_sections = [
+                build_priority_section(
+                    self.page,
+                    priority,
+                    self.priority_filters,
+                    self.priority_containers[priority],
+                    self._filter_priority_tasks,
+                    self.priority_section_refs
+                )
+                for priority in PRIORITIES
+            ]
+            
+            section_spacing = 16 if is_desktop else 12
+            self.main_scroll_listview = ft.ListView(
+                priority_sections,
+                spacing=section_spacing,
+                expand=True,
+                padding=0
+            )
+            main_scroll_content = self.main_scroll_listview
+            
+            main_padding = ft.padding.only(
+                bottom=24 if is_desktop else 16,
+                left=0,
+                right=0,
+                top=0
+            )
+            
+            screen_width = get_screen_width(self.page)
+            if is_desktop and isinstance(screen_width, (int, float)) and screen_width > 1200:
+                self.main_scroll_container = ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Container(width=0, expand=True),
+                            ft.Container(
+                                content=main_scroll_content,
+                                width=1200,
+                                expand=False
+                            ),
+                            ft.Container(width=0, expand=True)
+                        ],
+                        alignment=ft.MainAxisAlignment.CENTER
+                    ),
+                    padding=main_padding,
+                    expand=True
+                )
+            else:
+                self.main_scroll_container = ft.Container(
+                    content=main_scroll_content,
+                    padding=main_padding,
+                    expand=True,
+                    width=None
+                )
+        
+        # Actualizar el contenedor principal de la vista
+        if self.main_view_container and self.main_view_container.content:
+            main_column = self.main_view_container.content
+            if isinstance(main_column, ft.Column) and len(main_column.controls) >= 2:
+                main_column.controls[0] = new_nav
+                main_column.controls[1] = self.main_scroll_container
     
     def _scroll_to_priority(self, priority: str):
         """Hace scroll automático hasta la sección de prioridad especificada."""
@@ -384,6 +530,8 @@ class TasksView:
             self.page,
             self.current_priority_section,
             self._scroll_to_priority,
-            self._show_new_task_form
+            self._show_new_task_form,
+            self.current_view_mode,
+            self._change_view_mode
         )
 

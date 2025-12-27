@@ -31,6 +31,7 @@ from app.ui.task_form import TaskForm
 from app.ui.habit_form import HabitForm
 from app.ui.tasks_view import TasksView
 from app.ui.habits_view import HabitsView
+from app.ui.goals_view import GoalsView
 from app.ui.settings_view import SettingsView
 
 
@@ -47,6 +48,8 @@ class HomeView:
         self.page = page
         self.task_service = TaskService()
         self.habit_service = HabitService()
+        from app.services.goal_service import GoalService
+        self.goal_service = GoalService()
         self.settings_service = SettingsService()
         self.sync_service = SyncService()
         
@@ -77,6 +80,13 @@ class HomeView:
             on_go_back=self._go_back
         )
         
+        # Inicializar vista de objetivos como módulo separado
+        self.goals_view = GoalsView(
+            page=page,
+            goal_service=self.goal_service,
+            on_go_back=self._go_back
+        )
+        
         # Inicializar vista de configuración como módulo separado
         firebase_error = ""
         try:
@@ -101,12 +111,12 @@ class HomeView:
         # Configurar callback para reconstruir vista de configuración
         self.settings_view.set_rebuild_settings_callback(lambda: self._build_ui() if self.current_section == "settings" else None)
         
-        # Secciones: "tasks", "habits", "settings"
-        self.current_section = "tasks"
+        # Secciones: "goals", "tasks", "habits", "settings"
+        self.current_section = "goals"
         self.stats_card = None
         self.habit_stats_card = None
         self.title_bar = None  # Guardar referencia a la barra de título
-
+        self.home_view = None  # Inicializar home_view como None
         
         # Variable para almacenar bytes del ZIP durante la exportación
         self._export_zip_bytes = None
@@ -114,7 +124,7 @@ class HomeView:
         self.page.update()
 
         self._build_ui()
-        self.tasks_view.load_tasks()
+        self.goals_view.load_goals()
     
     # ==================== MÉTODOS DE TAREAS (delegados a TasksView) ====================
     
@@ -220,7 +230,8 @@ class HomeView:
             content=ft.Row(
                 [
                     ft.Text(
-                        "Mis Tareas" if self.current_section == "tasks"
+                        "Mis Objetivos" if self.current_section == "goals"
+                        else "Mis Tareas" if self.current_section == "tasks"
                         else "Mis Hábitos" if self.current_section == "habits"
                         else "Configuración",
                         size=title_size,
@@ -244,12 +255,15 @@ class HomeView:
         self._build_bottom_bar()
         
         # Construir la vista según la sección actual
-        if self.current_section == "tasks":
+        if self.current_section == "goals":
+            # Usar GoalsView para construir la vista de objetivos
+            main_view = self.goals_view.build_ui(self.title_bar, self.bottom_bar, None)
+        elif self.current_section == "tasks":
             # Usar TasksView para construir la vista de tareas
             main_view = self.tasks_view.build_ui()
         elif self.current_section == "habits":
             # Usar HabitsView para construir la vista de hábitos
-            main_view = self.habits_view.build_ui(self.title_bar, self.bottom_bar, self.home_view)
+            main_view = self.habits_view.build_ui(self.title_bar, self.bottom_bar, None)
         elif self.current_section == "settings":
             # Usar SettingsView para construir la vista de configuración
             # Solo el contenido, sin title_bar ni bottom_bar (se agregan en la estructura externa)
@@ -258,8 +272,8 @@ class HomeView:
         else:
             main_view = ft.Container(content=ft.Text("Sección no encontrada"), expand=True)
         
-        # Actualizar la vista principal si es hábitos o settings
-        if self.current_section in ["habits", "settings"] and self.home_view:
+        # Actualizar la vista principal si es goals, hábitos o settings
+        if self.current_section in ["goals", "habits", "settings"] and self.home_view:
             is_dark = self.page.theme_mode == ft.ThemeMode.DARK
             bgcolor = ft.Colors.BLACK if is_dark else ft.Colors.GREY_50
             self.home_view.controls = [
@@ -306,6 +320,34 @@ class HomeView:
         scheme = self.page.theme.color_scheme if self.page.theme else None
         selected_color = scheme.primary if scheme and scheme.primary else ft.Colors.RED_400
         unselected_color = ft.Colors.GREY_500 if is_dark else ft.Colors.GREY_600
+        
+        # Botón de Mis Objetivos
+        goals_button = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Icon(
+                        ft.Icons.FLAG if self.current_section == "goals" else ft.Icons.FLAG_OUTLINED,
+                        color=selected_color if self.current_section == "goals" else unselected_color,
+                        size=24
+                    ),
+                    ft.Text(
+                        "Mis Objetivos",
+                        size=12,
+                        color=selected_color if self.current_section == "goals" else unselected_color,
+                        weight=ft.FontWeight.BOLD if self.current_section == "goals" else None
+                    )
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=4,
+                tight=True
+            ),
+            on_click=lambda e: self._navigate_to_section("goals"),
+            padding=12,
+            expand=True,
+            border=ft.border.only(
+                top=ft.BorderSide(3, selected_color if self.current_section == "goals" else ft.Colors.TRANSPARENT)
+            )
+        )
         
         # Botón de Mis Tareas
         tasks_button = ft.Container(
@@ -394,6 +436,7 @@ class HomeView:
         self.bottom_bar = ft.Container(
             content=ft.Row(
                 [
+                    goals_button,
                     tasks_button,
                     habits_button,
                     settings_button
@@ -412,7 +455,11 @@ class HomeView:
         """Navega a una sección específica."""
         self.current_section = section
         
-        if section == "tasks":
+        if section == "goals":
+            # Mostrar la vista de objetivos
+            self._build_ui()
+            self.goals_view.load_goals()
+        elif section == "tasks":
             # Mostrar la vista de tareas
             self._build_ui()
             self.tasks_view.load_tasks()
@@ -428,7 +475,9 @@ class HomeView:
         if self.title_bar:
             title_text = self.title_bar.content.controls[0]  # El texto está en el índice 0 ahora
             if isinstance(title_text, ft.Text):
-                if section == "tasks":
+                if section == "goals":
+                    title_text.value = "Mis Objetivos"
+                elif section == "tasks":
                     title_text.value = "Mis Tareas"
                 elif section == "habits":
                     title_text.value = "Mis Hábitos"

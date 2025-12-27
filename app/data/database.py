@@ -303,6 +303,37 @@ class Database:
             ON habits(active)
         ''')
         
+        # Tabla de objetivos
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS goals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT,
+                frequency TEXT NOT NULL DEFAULT 'monthly',
+                target_date TEXT,
+                completed INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                CHECK(frequency IN ('daily', 'weekly', 'monthly', 'quarterly', 'semiannual', 'annual'))
+            )
+        ''')
+        
+        # Índices para mejorar el rendimiento de consultas de objetivos
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_goals_frequency 
+            ON goals(frequency)
+        ''')
+        
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_goals_completed 
+            ON goals(completed)
+        ''')
+        
+        cursor.execute('''
+            CREATE INDEX IF NOT EXISTS idx_goals_target_date 
+            ON goals(target_date)
+        ''')
+        
         conn.commit()
         conn.close()
     

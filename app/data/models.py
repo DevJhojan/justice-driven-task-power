@@ -252,3 +252,67 @@ class Habit:
             completions=completions
         )
 
+
+@dataclass
+class Goal:
+    """Modelo de un objetivo."""
+    id: Optional[int]
+    title: str
+    description: str
+    frequency: str  # 'daily', 'weekly', 'monthly', 'quarterly', 'semiannual', 'annual'
+    target_date: Optional[datetime]  # Fecha objetivo para completar el objetivo
+    completed: bool  # Si el objetivo está completado
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+    
+    def __post_init__(self):
+        """Inicializa valores por defecto."""
+        if self.id is None:
+            self.id = None
+        if self.created_at is None:
+            self.created_at = datetime.now()
+        if self.updated_at is None:
+            self.updated_at = datetime.now()
+        if not self.frequency:
+            self.frequency = 'monthly'
+        if self.description is None:
+            self.description = ""
+    
+    def to_dict(self) -> dict:
+        """Convierte el objetivo a un diccionario."""
+        return {
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'frequency': self.frequency,
+            'target_date': self.target_date.isoformat() if self.target_date else None,
+            'completed': self.completed,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> 'Goal':
+        """Crea un objetivo desde un diccionario."""
+        created_at = None
+        updated_at = None
+        target_date = None
+        
+        if data.get('created_at'):
+            created_at = datetime.fromisoformat(data['created_at'])
+        if data.get('updated_at'):
+            updated_at = datetime.fromisoformat(data['updated_at'])
+        if data.get('target_date'):
+            target_date = datetime.fromisoformat(data['target_date'])
+        
+        return cls(
+            id=data.get('id'),
+            title=data.get('title', ''),
+            description=data.get('description', ''),
+            frequency=data.get('frequency', 'monthly'),
+            target_date=target_date,
+            completed=bool(data.get('completed', False)),
+            created_at=created_at,
+            updated_at=updated_at
+        )
+

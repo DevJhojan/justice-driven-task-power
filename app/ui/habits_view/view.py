@@ -40,14 +40,14 @@ class HabitsView:
         self.habit_stats_container = None
         self.new_habit_button = None
     
-    def build_ui(self, title_bar, bottom_bar, home_view) -> ft.Container:
+    def build_ui(self, title_bar=None, bottom_bar=None, home_view=None) -> ft.Container:
         """
         Construye la interfaz de usuario de hábitos.
         
         Args:
-            title_bar: Barra de título de la vista principal.
-            bottom_bar: Barra inferior de navegación.
-            home_view: Vista principal para actualizar.
+            title_bar: Barra de título de la vista principal (no se usa actualmente).
+            bottom_bar: Barra inferior de navegación (no se usa actualmente).
+            home_view: Vista principal para actualizar (no se usa actualmente).
         
         Returns:
             Container con la vista completa de hábitos.

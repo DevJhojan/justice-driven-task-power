@@ -20,6 +20,7 @@ from app.data.database import Database
 
 
 ThemeModeLiteral = Literal["light", "dark"]
+TasksViewModeLiteral = Literal["lista_normal", "lista_4do", "kanban"]
 # Paletas disponibles: fácil de extender añadiendo nuevos valores aquí.
 # Usamos claves legibles y cada una mapea a un color HEX concreto.
 AccentColorLiteral = Literal[
@@ -90,6 +91,7 @@ class AppSettings:
 
     theme_mode: ThemeModeLiteral = "dark"
     accent_color: AccentColorLiteral = "red"
+    tasks_view_mode: TasksViewModeLiteral = "lista_normal"
 
 
 class SettingsService:
@@ -117,17 +119,29 @@ class SettingsService:
             CREATE TABLE IF NOT EXISTS app_settings (
                 key TEXT PRIMARY KEY,
                 theme_mode TEXT NOT NULL,
-                accent_color TEXT NOT NULL
+                accent_color TEXT NOT NULL,
+                tasks_view_mode TEXT NOT NULL DEFAULT 'lista_normal'
             )
             """
         )
+        
+        # Migración: Agregar columna tasks_view_mode si no existe
+        try:
+            cur.execute("SELECT tasks_view_mode FROM app_settings LIMIT 1")
+        except Exception:
+            # La columna no existe, agregarla
+            try:
+                cur.execute("ALTER TABLE app_settings ADD COLUMN tasks_view_mode TEXT NOT NULL DEFAULT 'lista_normal'")
+            except Exception:
+                # Si falla, la columna ya existe o hay otro problema
+                pass
 
         cur.execute("SELECT key FROM app_settings WHERE key = 'global'")
         if not cur.fetchone():
             cur.execute(
                 """
-                INSERT INTO app_settings (key, theme_mode, accent_color)
-                VALUES ('global', 'dark', 'red')
+                INSERT INTO app_settings (key, theme_mode, accent_color, tasks_view_mode)
+                VALUES ('global', 'dark', 'red', 'lista_normal')
                 """
             )
 
@@ -139,7 +153,7 @@ class SettingsService:
         conn = self.db.get_connection()
         cur = conn.cursor()
         cur.execute(
-            "SELECT theme_mode, accent_color FROM app_settings WHERE key = 'global'"
+            "SELECT theme_mode, accent_color, tasks_view_mode FROM app_settings WHERE key = 'global'"
         )
         row = cur.fetchone()
         conn.close()
@@ -148,6 +162,14 @@ class SettingsService:
             return AppSettings()  # valores por defecto
 
         theme_mode = row["theme_mode"] if row["theme_mode"] in ("light", "dark") else "dark"
+        
+        # Obtener tasks_view_mode con manejo seguro para bases de datos antiguas
+        try:
+            tasks_view_mode_raw = row["tasks_view_mode"]
+        except (KeyError, IndexError):
+            tasks_view_mode_raw = "lista_normal"
+        
+        tasks_view_mode = tasks_view_mode_raw if tasks_view_mode_raw in ("lista_normal", "lista_4do", "kanban") else "lista_normal"
         valid_accents = {
             # Azules
             "dodger_blue",
@@ -209,34 +231,36 @@ class SettingsService:
             "orange_neon",
         }
         accent = row["accent_color"] if row["accent_color"] in valid_accents else "dodger_blue"
-        return AppSettings(theme_mode=theme_mode, accent_color=accent)
+        return AppSettings(theme_mode=theme_mode, accent_color=accent, tasks_view_mode=tasks_view_mode)
 
     def update_settings(
         self,
         theme_mode: Optional[ThemeModeLiteral] = None,
         accent_color: Optional[AccentColorLiteral] = None,
+        tasks_view_mode: Optional[TasksViewModeLiteral] = None,
     ) -> AppSettings:
         """
-        Actualiza uno o ambos parámetros y devuelve los ajustes resultantes.
+        Actualiza los parámetros proporcionados y devuelve los ajustes resultantes.
         """
         current = self.get_settings()
-        new_theme = theme_mode or current.theme_mode
-        new_accent = accent_color or current.accent_color
+        new_theme = theme_mode if theme_mode is not None else current.theme_mode
+        new_accent = accent_color if accent_color is not None else current.accent_color
+        new_tasks_view_mode = tasks_view_mode if tasks_view_mode is not None else current.tasks_view_mode
 
         conn = self.db.get_connection()
         cur = conn.cursor()
         cur.execute(
             """
             UPDATE app_settings
-            SET theme_mode = ?, accent_color = ?
+            SET theme_mode = ?, accent_color = ?, tasks_view_mode = ?
             WHERE key = 'global'
             """,
-            (new_theme, new_accent),
+            (new_theme, new_accent, new_tasks_view_mode),
         )
         conn.commit()
         conn.close()
 
-        return AppSettings(theme_mode=new_theme, accent_color=new_accent)
+        return AppSettings(theme_mode=new_theme, accent_color=new_accent, tasks_view_mode=new_tasks_view_mode)
 
 
 def _accent_palette(accent: AccentColorLiteral) -> dict[str, str]:
