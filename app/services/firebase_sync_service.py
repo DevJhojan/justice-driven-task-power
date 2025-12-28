@@ -636,10 +636,11 @@ class FirebaseSyncService:
             stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "rewards_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0, "rewards_created": 0}
             
             # Obtener datos remotos para comparar (pasar token explícitamente)
+            # Usar rutas completas directamente para evitar bug de pyrebase con .child() encadenado
             print(f"DEBUG _perform_sync - Obteniendo remote_tasks desde: users/{self.user_id}/tasks")
             print(f"DEBUG _perform_sync - Token a usar (primeros 50 chars): {token[:50] if token else 'None'}...")
             try:
-                raw_tasks = user_ref.child("tasks").get(token=token).val()
+                raw_tasks = self.db_firebase.child(f"users/{self.user_id}/tasks").get(token=token).val()
                 remote_tasks = self._normalize_firebase_data(raw_tasks)
                 print(f"DEBUG _perform_sync - remote_tasks obtenido exitosamente (tipo: {type(raw_tasks).__name__}, normalizado: {type(remote_tasks).__name__})")
             except Exception as e:
@@ -648,7 +649,7 @@ class FirebaseSyncService:
             
             print(f"DEBUG _perform_sync - Obteniendo remote_habits desde: users/{self.user_id}/habits")
             try:
-                raw_habits = user_ref.child("habits").get(token=token).val()
+                raw_habits = self.db_firebase.child(f"users/{self.user_id}/habits").get(token=token).val()
                 remote_habits = self._normalize_firebase_data(raw_habits)
                 print(f"DEBUG _perform_sync - remote_habits obtenido exitosamente (tipo: {type(raw_habits).__name__}, normalizado: {type(remote_habits).__name__})")
             except Exception as e:
@@ -657,7 +658,7 @@ class FirebaseSyncService:
             
             print(f"DEBUG _perform_sync - Obteniendo remote_goals desde: users/{self.user_id}/goals")
             try:
-                raw_goals = user_ref.child("goals").get(token=token).val()
+                raw_goals = self.db_firebase.child(f"users/{self.user_id}/goals").get(token=token).val()
                 remote_goals = self._normalize_firebase_data(raw_goals)
                 print(f"DEBUG _perform_sync - remote_goals obtenido exitosamente (tipo: {type(raw_goals).__name__}, normalizado: {type(remote_goals).__name__})")
             except Exception as e:
@@ -709,7 +710,7 @@ class FirebaseSyncService:
                 local_subtasks = self.task_service.get_subtasks(task.id)
                 
                 # Obtener subtareas remotas para esta tarea
-                raw_subtasks = user_ref.child(f"tasks/{task_id_str}/subtasks").get(token=token).val()
+                raw_subtasks = self.db_firebase.child(f"users/{self.user_id}/tasks/{task_id_str}/subtasks").get(token=token).val()
                 remote_subtasks = self._normalize_firebase_data(raw_subtasks)
                 local_subtask_ids = {str(s.id) for s in local_subtasks}
                 
@@ -779,7 +780,7 @@ class FirebaseSyncService:
                 
                 # Sincronizar completaciones individualmente (sincronización estricta granular)
                 remote_completions_ref = user_ref.child(f"habits/{habit_id_str}/completions")
-                raw_completions = remote_completions_ref.get(token=token).val()
+                raw_completions = self.db_firebase.child(f"users/{self.user_id}/habits/{habit_id_str}/completions").get(token=token).val()
                 remote_completions = self._normalize_firebase_data(raw_completions)
                 local_completions_set = {d.isoformat() for d in local_completions}
                 
@@ -878,7 +879,7 @@ class FirebaseSyncService:
             
             # Sincronizar puntos (solo si cambió)
             total_points = self.points_service.get_total_points()
-            raw_points = user_ref.child("points").get(token=token).val()
+            raw_points = self.db_firebase.child(f"users/{self.user_id}/points").get(token=token).val()
             remote_points = self._normalize_firebase_data(raw_points) if isinstance(raw_points, (dict, list)) else (raw_points if raw_points else {})
             remote_total_points = remote_points.get("total_points", 0.0) if isinstance(remote_points, dict) else 0.0
             
@@ -890,7 +891,7 @@ class FirebaseSyncService:
             
             # Sincronizar configuración del usuario (solo si cambió)
             user_name = self.user_settings_service.get_user_name()
-            raw_settings = user_ref.child("user_settings").get(token=token).val()
+            raw_settings = self.db_firebase.child(f"users/{self.user_id}/user_settings").get(token=token).val()
             remote_settings = self._normalize_firebase_data(raw_settings) if isinstance(raw_settings, (dict, list)) else (raw_settings if raw_settings else {})
             remote_user_name = remote_settings.get("user_name", "") if isinstance(remote_settings, dict) else ""
             
@@ -959,17 +960,18 @@ class FirebaseSyncService:
             stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "rewards_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0, "rewards_created": 0}
             
             # Descargar datos (pasar token explícitamente)
-            raw_tasks = user_ref.child("tasks").get(token=token).val()
+            # Usar rutas completas directamente para evitar bug de pyrebase con .child() encadenado
+            raw_tasks = self.db_firebase.child(f"users/{self.user_id}/tasks").get(token=token).val()
             tasks_data = self._normalize_firebase_data(raw_tasks)
-            raw_habits = user_ref.child("habits").get(token=token).val()
+            raw_habits = self.db_firebase.child(f"users/{self.user_id}/habits").get(token=token).val()
             habits_data = self._normalize_firebase_data(raw_habits)
-            raw_goals = user_ref.child("goals").get(token=token).val()
+            raw_goals = self.db_firebase.child(f"users/{self.user_id}/goals").get(token=token).val()
             goals_data = self._normalize_firebase_data(raw_goals)
-            raw_rewards = user_ref.child("rewards").get(token=token).val() if self.reward_service else None
+            raw_rewards = self.db_firebase.child(f"users/{self.user_id}/rewards").get(token=token).val() if self.reward_service else None
             rewards_data = self._normalize_firebase_data(raw_rewards) if raw_rewards else {}
-            raw_points = user_ref.child("points").get(token=token).val()
+            raw_points = self.db_firebase.child(f"users/{self.user_id}/points").get(token=token).val()
             points_data = self._normalize_firebase_data(raw_points) if isinstance(raw_points, (dict, list)) else (raw_points if raw_points else {})
-            raw_settings = user_ref.child("user_settings").get(token=token).val()
+            raw_settings = self.db_firebase.child(f"users/{self.user_id}/user_settings").get(token=token).val()
             user_settings_data = self._normalize_firebase_data(raw_settings) if isinstance(raw_settings, (dict, list)) else (raw_settings if raw_settings else {})
             
             # Obtener datos locales para comparar
@@ -1047,7 +1049,7 @@ class FirebaseSyncService:
                     stats["tasks_created"] += 1
                 
                 # Sincronizar subtareas individualmente (sincronización estricta granular)
-                raw_subtasks_data = user_ref.child(f"tasks/{task_id_str}/subtasks").get(token=token).val()
+                raw_subtasks_data = self.db_firebase.child(f"users/{self.user_id}/tasks/{task_id_str}/subtasks").get(token=token).val()
                 remote_subtasks_data = self._normalize_firebase_data(raw_subtasks_data)
                 local_subtasks = self.task_service.get_subtasks(task_id) if task_id else []
                 local_subtasks_dict = {str(s.id): s for s in local_subtasks}
@@ -1145,7 +1147,7 @@ class FirebaseSyncService:
                     stats["habits_created"] += 1
                 
                 # Sincronizar completaciones individualmente (sincronización estricta granular)
-                raw_completions_data = user_ref.child(f"habits/{habit_id_str}/completions").get(token=token).val()
+                raw_completions_data = self.db_firebase.child(f"users/{self.user_id}/habits/{habit_id_str}/completions").get(token=token).val()
                 remote_completions_data = self._normalize_firebase_data(raw_completions_data)
                 local_completions = self.habit_service.get_completions(habit_id)
                 local_completions_set = {d.isoformat() for d in local_completions}
