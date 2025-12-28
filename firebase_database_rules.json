@@ -13,7 +13,7 @@
               "$subtaskId": {
                 ".read": "$userId === auth.uid",
                 ".write": "$userId === auth.uid",
-                ".validate": "(newData.hasChildren(['id', 'task_id', 'title', 'completed']) || data.exists()) && (!newData.hasChild('id') || newData.child('id').val() == $subtaskId) && (!newData.hasChild('task_id') || newData.child('task_id').val() == $taskId) && (!newData.hasChild('title') || newData.child('title').isString()) && (!newData.hasChild('completed') || typeof newData.child('completed').val() === 'boolean') && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('updated_at') || newData.child('updated_at').isString() || newData.child('updated_at').val() == null)"
+                ".validate": "(newData.hasChildren(['id', 'task_id', 'title', 'completed']) || data.exists()) && (!newData.hasChild('id') || newData.child('id').val() == $subtaskId) && (!newData.hasChild('task_id') || newData.child('task_id').val() == $taskId) && (!newData.hasChild('title') || newData.child('title').isString()) && (!newData.hasChild('completed') || newData.child('completed').isBoolean()) && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('updated_at') || newData.child('updated_at').isString() || newData.child('updated_at').val() == null)"
               }
             }
           }
