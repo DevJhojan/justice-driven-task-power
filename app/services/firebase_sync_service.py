@@ -66,9 +66,21 @@ class FirebaseSyncService:
         self.auth = self.firebase.auth()
         self.db_firebase = self.firebase.database()
         
-        self.user_id: Optional[str] = None
-        self.auth_token: Optional[str] = None
-        self.refresh_token: Optional[str] = None
+        # Restaurar estado de sesión guardado (persistencia estricta)
+        self.user_id: Optional[str] = self.user_settings_service.get_firebase_user_id()
+        self.refresh_token: Optional[str] = self.user_settings_service.get_firebase_refresh_token()
+        self.auth_token: Optional[str] = None  # No guardamos el auth_token, se refresca cuando se necesita
+        
+        # Si tenemos user_id y refresh_token guardados, intentar refrescar el token
+        if self.user_id and self.refresh_token:
+            try:
+                if self._refresh_auth_token():
+                    print(f"DEBUG __init__ - Sesión restaurada: user_id={self.user_id}")
+                else:
+                    print(f"DEBUG __init__ - No se pudo refrescar token, pero user_id existe: {self.user_id}")
+            except Exception as e:
+                print(f"DEBUG __init__ - Error al refrescar token al inicializar: {e}")
+                # No borrar el estado guardado, solo registrar el error
     
     def _create_task_with_id(self, task):
         """Crea una tarea con un ID específico para sincronización, evitando duplicados."""
@@ -230,8 +242,13 @@ class FirebaseSyncService:
                 print("Error: No se pudo obtener el user_id")
                 return False
             
-            # Guardar el email del usuario
+            # Guardar el estado de la sesión en la base de datos local (persistencia estricta)
             self.user_settings_service.set_firebase_email(email)
+            self.user_settings_service.set_firebase_user_id(self.user_id)
+            if self.refresh_token:
+                self.user_settings_service.set_firebase_refresh_token(self.refresh_token)
+            
+            print(f"DEBUG Login - Estado guardado en BD local: user_id={self.user_id}, refresh_token={'presente' if self.refresh_token else 'None'}")
             
             # Verificar que la sesión está activa
             if not self.is_logged_in():
@@ -263,23 +280,45 @@ class FirebaseSyncService:
             self.user_id = user['localId']
             self.auth_token = user.get('idToken')
             self.refresh_token = user.get('refreshToken')
-            # Guardar el email del usuario
+            
+            # Guardar el estado de la sesión en la base de datos local (persistencia estricta)
             self.user_settings_service.set_firebase_email(email)
+            self.user_settings_service.set_firebase_user_id(self.user_id)
+            if self.refresh_token:
+                self.user_settings_service.set_firebase_refresh_token(self.refresh_token)
+            
+            print(f"DEBUG Register - Estado guardado en BD local: user_id={self.user_id}, refresh_token={'presente' if self.refresh_token else 'None'}")
             return True
         except Exception as e:
             print(f"Error al registrar usuario: {e}")
             return False
     
     def logout(self):
-        """Cierra la sesión de Firebase."""
+        """Cierra la sesión de Firebase. Solo se llama explícitamente."""
+        # Borrar estado en memoria
         self.user_id = None
         self.auth_token = None
         self.refresh_token = None
-        # Eliminar el email guardado
+        
+        # Borrar estado guardado en la base de datos (solo cuando se cierra sesión explícitamente)
         self.user_settings_service.set_firebase_email(None)
+        self.user_settings_service.set_firebase_user_id(None)
+        self.user_settings_service.set_firebase_refresh_token(None)
+        
+        print("DEBUG Logout - Estado de sesión borrado completamente")
     
     def is_logged_in(self) -> bool:
-        """Verifica si hay una sesión activa."""
+        """
+        Verifica si hay una sesión activa.
+        Restaura el estado desde BD si es necesario (persistencia estricta).
+        """
+        # Si no hay user_id en memoria, intentar restaurarlo desde BD (persistencia estricta)
+        if not self.user_id:
+            saved_user_id = self.user_settings_service.get_firebase_user_id()
+            if saved_user_id:
+                self.user_id = saved_user_id
+                print(f"DEBUG is_logged_in - user_id restaurado desde BD: {self.user_id}")
+        
         return self.user_id is not None
     
     def _refresh_auth_token(self) -> bool:
@@ -290,7 +329,13 @@ class FirebaseSyncService:
             True si el token fue refrescado exitosamente, False en caso contrario.
         """
         if not self.refresh_token:
-            return False
+            # Si no hay refresh_token en memoria, intentar restaurarlo desde BD
+            saved_refresh_token = self.user_settings_service.get_firebase_refresh_token()
+            if saved_refresh_token:
+                self.refresh_token = saved_refresh_token
+                print("DEBUG _refresh_auth_token - refresh_token restaurado desde BD")
+            else:
+                return False
         
         try:
             # Pyrebase4 maneja el refresh automáticamente, pero podemos intentar refrescar manualmente
@@ -298,24 +343,43 @@ class FirebaseSyncService:
             user = self.auth.refresh(self.refresh_token)
             if user and 'idToken' in user:
                 self.auth_token = user.get('idToken')
-                # Actualizar el refresh_token si está disponible
+                # Actualizar el refresh_token si está disponible y guardarlo
                 if 'refreshToken' in user:
-                    self.refresh_token = user.get('refreshToken')
+                    new_refresh_token = user.get('refreshToken')
+                    if new_refresh_token != self.refresh_token:
+                        self.refresh_token = new_refresh_token
+                        # Guardar el nuevo refresh_token en BD
+                        self.user_settings_service.set_firebase_refresh_token(self.refresh_token)
                 return True
             return False
         except Exception as e:
             print(f"Error al refrescar token: {e}")
-            # NO borrar la sesión aquí - dejar que el método que llama decida
-            # porque el user_id todavía puede ser válido
+            # NO borrar la sesión aquí - el estado guardado se mantiene
+            # Solo retornar False para que el método que llama decida
             return False
     
     def _ensure_authenticated(self) -> bool:
         """
         Asegura que el usuario esté autenticado y el token sea válido.
+        Restaura el estado desde BD si es necesario (persistencia estricta).
         
         Returns:
             True si está autenticado, False en caso contrario.
         """
+        # Si no hay user_id en memoria, intentar restaurarlo desde BD (persistencia estricta)
+        if not self.user_id:
+            saved_user_id = self.user_settings_service.get_firebase_user_id()
+            if saved_user_id:
+                self.user_id = saved_user_id
+                print(f"DEBUG _ensure_authenticated - user_id restaurado desde BD: {self.user_id}")
+        
+        # Si no hay refresh_token en memoria, intentar restaurarlo desde BD
+        if not self.refresh_token:
+            saved_refresh_token = self.user_settings_service.get_firebase_refresh_token()
+            if saved_refresh_token:
+                self.refresh_token = saved_refresh_token
+                print(f"DEBUG _ensure_authenticated - refresh_token restaurado desde BD")
+        
         print(f"DEBUG _ensure_authenticated - user_id: {self.user_id}")
         print(f"DEBUG _ensure_authenticated - auth_token presente: {self.auth_token is not None}")
         print(f"DEBUG _ensure_authenticated - refresh_token presente: {self.refresh_token is not None}")
@@ -345,13 +409,27 @@ class FirebaseSyncService:
     def _get_auth_token(self) -> Optional[str]:
         """
         Obtiene el token de autenticación, refrescándolo si es necesario.
+        Restaura el estado desde BD si es necesario (persistencia estricta).
         
         Returns:
             El token de autenticación o None si no está disponible.
         """
+        # Si no hay user_id en memoria, intentar restaurarlo desde BD (persistencia estricta)
         if not self.user_id:
-            print(f"DEBUG _get_auth_token - No hay user_id")
-            return None
+            saved_user_id = self.user_settings_service.get_firebase_user_id()
+            if saved_user_id:
+                self.user_id = saved_user_id
+                print(f"DEBUG _get_auth_token - user_id restaurado desde BD: {self.user_id}")
+            else:
+                print(f"DEBUG _get_auth_token - No hay user_id")
+                return None
+        
+        # Si no hay refresh_token en memoria, intentar restaurarlo desde BD
+        if not self.refresh_token:
+            saved_refresh_token = self.user_settings_service.get_firebase_refresh_token()
+            if saved_refresh_token:
+                self.refresh_token = saved_refresh_token
+                print(f"DEBUG _get_auth_token - refresh_token restaurado desde BD")
         
         print(f"DEBUG _get_auth_token - user_id: {self.user_id}, auth_token presente: {self.auth_token is not None}")
         

@@ -144,3 +144,89 @@ class UserSettingsService:
         conn.close()
         
         return True
+    
+    def get_firebase_user_id(self) -> Optional[str]:
+        """
+        Obtiene el user_id de Firebase guardado.
+        
+        Returns:
+            user_id de Firebase si existe, None en caso contrario.
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT value FROM user_settings WHERE key = ?", ("firebase_user_id",))
+        row = cursor.fetchone()
+        conn.close()
+        
+        return row['value'] if row else None
+    
+    def set_firebase_user_id(self, user_id: Optional[str]) -> bool:
+        """
+        Establece el user_id de Firebase.
+        
+        Args:
+            user_id: user_id de Firebase o None para eliminar.
+        
+        Returns:
+            True si se actualizó correctamente.
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now().isoformat()
+        if user_id:
+            cursor.execute("""
+                INSERT OR REPLACE INTO user_settings (key, value, updated_at)
+                VALUES (?, ?, ?)
+            """, ("firebase_user_id", user_id.strip(), now))
+        else:
+            cursor.execute("DELETE FROM user_settings WHERE key = ?", ("firebase_user_id",))
+        
+        conn.commit()
+        conn.close()
+        
+        return True
+    
+    def get_firebase_refresh_token(self) -> Optional[str]:
+        """
+        Obtiene el refresh_token de Firebase guardado.
+        
+        Returns:
+            refresh_token de Firebase si existe, None en caso contrario.
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT value FROM user_settings WHERE key = ?", ("firebase_refresh_token",))
+        row = cursor.fetchone()
+        conn.close()
+        
+        return row['value'] if row else None
+    
+    def set_firebase_refresh_token(self, refresh_token: Optional[str]) -> bool:
+        """
+        Establece el refresh_token de Firebase.
+        
+        Args:
+            refresh_token: refresh_token de Firebase o None para eliminar.
+        
+        Returns:
+            True si se actualizó correctamente.
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now().isoformat()
+        if refresh_token:
+            cursor.execute("""
+                INSERT OR REPLACE INTO user_settings (key, value, updated_at)
+                VALUES (?, ?, ?)
+            """, ("firebase_refresh_token", refresh_token.strip(), now))
+        else:
+            cursor.execute("DELETE FROM user_settings WHERE key = ?", ("firebase_refresh_token",))
+        
+        conn.commit()
+        conn.close()
+        
+        return True
