@@ -665,6 +665,18 @@ class FirebaseSyncService:
                 print(f"DEBUG _perform_sync - Error al obtener remote_goals: {e}")
                 raise
             
+            # Obtener recompensas remotas (solo si reward_service está disponible)
+            remote_rewards = {}
+            if self.reward_service:
+                print(f"DEBUG _perform_sync - Obteniendo remote_rewards desde: users/{self.user_id}/rewards")
+                try:
+                    raw_rewards = self.db_firebase.child(f"users/{self.user_id}/rewards").get(token=token).val()
+                    remote_rewards = self._normalize_firebase_data(raw_rewards)
+                    print(f"DEBUG _perform_sync - remote_rewards obtenido exitosamente (tipo: {type(raw_rewards).__name__}, normalizado: {type(remote_rewards).__name__})")
+                except Exception as e:
+                    print(f"DEBUG _perform_sync - Error al obtener remote_rewards: {e}")
+                    raise
+            
             # Sincronizar tareas (solo campos modificados)
             tasks = self.task_service.get_all_tasks()
             for task in tasks:
