@@ -28,6 +28,7 @@ class GoalsView:
         self.form_container = None  # Contenedor del formulario
         self._editing_goal_id = None  # ID de la meta que se está editando (None si no hay ninguna)
         self._sort_order = "recent"  # "recent" para más reciente primero, "oldest" para más antiguo primero
+        self._goal_card_refs = {}  # Diccionario para guardar referencias a los controles de cada tarjeta
     
     def build_ui(self) -> ft.Container:
         """
@@ -189,10 +190,88 @@ class GoalsView:
                                 self._build_goal_card(goal)
                             )
         
-        if self.page:
-            self.page.update()
+        # No actualizar aquí - se actualizará desde el método que llama
+        # Esto evita múltiples actualizaciones simultáneas que causan AssertionError
     
-    def _build_goal_card(self, goal: Goal) -> ft.Container:
+    def _update_goal_card(self, goal_id: int):
+        """Actualiza solo la tarjeta de una meta específica sin reconstruir todas."""
+        if self.goals_container is None:
+            return
+        
+        # Recargar todas las metas pero sin llamar a page.update() aquí
+        # El método que llama a este se encargará de actualizar la página
+        # Esto evita múltiples actualizaciones simultáneas que causan AssertionError
+        goals = list(self.goal_service.get_all_goals())
+        self.goals_container.controls.clear()
+        
+        if not goals:
+            self.goals_container.controls.append(
+                ft.Container(
+                    content=ft.Text(
+                        "No hay metas. ¡Crea una nueva!",
+                        size=16,
+                        text_align=ft.TextAlign.CENTER
+                    ),
+                    alignment=ft.alignment.center,
+                    padding=32
+                )
+            )
+        else:
+            # Ordenar las metas según el filtro seleccionado
+            if self._sort_order == "recent":
+                goals.sort(key=lambda g: g.created_at if g.created_at else datetime.min, reverse=True)
+            else:
+                goals.sort(key=lambda g: g.created_at if g.created_at else datetime.max)
+            
+            # Agrupar metas por período
+            period_order = ["semana", "mes", "trimestre", "semestre", "anual"]
+            period_names = {
+                "semana": "📅 Semanales",
+                "mes": "📆 Mensuales",
+                "trimestre": "📊 Trimestrales",
+                "semestre": "📈 Semestrales",
+                "anual": "🎯 Anuales"
+            }
+            
+            goals_by_period = {}
+            for goal in goals:
+                period = goal.period or "mes"
+                if period not in goals_by_period:
+                    goals_by_period[period] = []
+                goals_by_period[period].append(goal)
+            
+            # Mostrar metas agrupadas por período
+            is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+            title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+            
+            for period in period_order:
+                if period in goals_by_period:
+                    # Título del período
+                    self.goals_container.controls.append(
+                        ft.Container(
+                            content=ft.Text(
+                                period_names[period],
+                                size=18,
+                                weight=ft.FontWeight.BOLD,
+                                color=title_color
+                            ),
+                            padding=ft.padding.only(top=16, bottom=8, left=16, right=16)
+                        )
+                    )
+                    
+                    # Metas de este período
+                    for goal in goals_by_period[period]:
+                        # Si esta meta se está editando, mostrar formulario inline en lugar de la tarjeta
+                        if self._editing_goal_id == goal.id:
+                            self.goals_container.controls.append(
+                                self._build_inline_form(goal)
+                            )
+                        else:
+                            self.goals_container.controls.append(
+                                self._build_goal_card(goal)
+                            )
+    
+    def _build_goal_card(self, goal: Goal, store_refs: bool = False) -> ft.Container:
         """
         Construye una tarjeta para una meta.
         
@@ -579,11 +658,14 @@ class GoalsView:
                     points_service=self.points_service
                 )
                 if success:
-                    self._load_goals()
-                    # Actualizar header y resumen si están visibles
-                    if hasattr(self.page, '_home_view_ref'):
-                        home_view = self.page._home_view_ref
-                        home_view._build_ui()
+                    # Actualizar solo la tarjeta específica sin reconstruir toda la lista
+                    self._update_goal_card(goal.id)
+                    
+                    # Actualizar solo el header sin reconstruir toda la UI
+                    self._update_header_only()
+                    
+                    # Actualizar la página una sola vez al final
+                    self.page.update()
         except Exception as e:
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(f"Error al incrementar progreso: {str(e)}"),
@@ -591,6 +673,21 @@ class GoalsView:
             )
             self.page.snack_bar.open = True
             self.page.update()
+    
+    def _update_header_only(self):
+        """Actualiza solo el header sin reconstruir toda la UI."""
+        if hasattr(self.page, '_home_view_ref'):
+            home_view = self.page._home_view_ref
+            # Buscar la vista principal y actualizar solo el header
+            if hasattr(self.page, 'views') and self.page.views:
+                for view in self.page.views:
+                    if view.route == "/" and view.controls:
+                        if isinstance(view.controls[0], ft.Column) and len(view.controls[0].controls) > 0:
+                            # Reemplazar solo el header (primer control)
+                            new_header = home_view._build_header()
+                            view.controls[0].controls[0] = new_header
+                            self.page.update()
+                            break
     
     def _decrement_progress(self, goal: Goal):
         """Decrementa el progreso de una meta en 1.0."""
@@ -611,11 +708,14 @@ class GoalsView:
                         if not updated_goal.target_value or new_value < updated_goal.target_value:
                             self.points_service.add_points(-1.00)  # Restar 1.00 puntos
                     
-                    self._load_goals()
-                    # Actualizar header y resumen si están visibles
-                    if hasattr(self.page, '_home_view_ref'):
-                        home_view = self.page._home_view_ref
-                        home_view._build_ui()
+                    # Actualizar solo la tarjeta específica sin reconstruir toda la lista
+                    self._update_goal_card(goal.id)
+                    
+                    # Actualizar solo el header sin reconstruir toda la UI
+                    self._update_header_only()
+                    
+                    # Actualizar la página una sola vez al final
+                    self.page.update()
         except Exception as e:
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(f"Error al decrementar progreso: {str(e)}"),

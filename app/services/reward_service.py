@@ -109,12 +109,16 @@ class RewardService:
         """
         Actualiza el estado de todas las recompensas basándose en los puntos actuales.
         Este método debe llamarse cuando cambien los puntos del usuario.
+        
+        Returns:
+            True si alguna recompensa cambió a "a_reclamar", False en caso contrario.
         """
         if not self.points_service:
-            return
+            return False
         
         current_points = self.points_service.get_total_points()
         all_rewards = self.reward_repository.get_all()
+        any_changed_to_available = False
         
         for reward in all_rewards:
             # Solo actualizar recompensas que no estén reclamadas
@@ -126,11 +130,14 @@ class RewardService:
                 if reward.status != "a_reclamar":
                     reward.status = "a_reclamar"
                     self.reward_repository.update(reward)
+                    any_changed_to_available = True
             else:
                 # Si no se alcanzan los puntos, cambiar a "por_alcanzar"
                 if reward.status != "por_alcanzar":
                     reward.status = "por_alcanzar"
                     self.reward_repository.update(reward)
+        
+        return any_changed_to_available
     
     def claim_reward(self, reward_id: int, reuse: bool = False, new_target_points: Optional[float] = None) -> Reward:
         """

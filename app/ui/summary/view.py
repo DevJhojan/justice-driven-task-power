@@ -38,6 +38,13 @@ class SummaryView:
         # Estado del panel de recompensas
         self._rewards_filter = "por_alcanzar"  # por_alcanzar, a_reclamar, reclamada
         self._rewards_container = None
+        self._rewards_panel_container = None
+        self._filter_buttons = {}  # Diccionario para guardar referencias a los botones de filtro
+        self._show_add_form = False  # Controla si se muestra el formulario de agregar
+        self._add_form_container = None  # Contenedor del formulario
+        self._add_button_ref = None  # Referencia al botón de agregar
+        self._claiming_reward_id = None  # ID de la recompensa que se está reclamando (None si no hay ninguna)
+        self._claim_panels = {}  # Diccionario para guardar referencias a los paneles de confirmación {reward_id: panel}
     
     def build_ui(self) -> ft.Container:
         """
@@ -432,7 +439,11 @@ class SummaryView:
             return ft.Container()
         
         # Actualizar estados de recompensas basándose en puntos actuales
-        self.reward_service.update_reward_statuses()
+        # Si alguna recompensa cambió a "a_reclamar", cambiar el filtro automáticamente
+        changed_to_available = self.reward_service.update_reward_statuses()
+        if changed_to_available and self._rewards_filter == "por_alcanzar":
+            # Cambiar automáticamente al filtro "a_reclamar" para mostrar las recompensas disponibles
+            self._rewards_filter = "a_reclamar"
         
         # Forzar tema oscuro
         is_dark = True
@@ -446,28 +457,40 @@ class SummaryView:
         # Construir lista de recompensas
         rewards_list = self._build_rewards_list()
         
-        # Botón para agregar nueva recompensa
+        # Formulario de agregar recompensa (inline)
+        add_form = self._build_add_reward_form() if self._show_add_form else None
+        
+        # Botón para agregar nueva recompensa / cancelar
         add_button = ft.ElevatedButton(
-            "➕ Nueva Recompensa",
-            on_click=self._show_create_reward_dialog,
-            bgcolor=ft.Colors.GREEN_700,
+            "➕ Nueva Recompensa" if not self._show_add_form else "❌ Cancelar",
+            on_click=self._toggle_add_form,
+            bgcolor=ft.Colors.GREEN_700 if not self._show_add_form else ft.Colors.RED_700,
             color=ft.Colors.WHITE,
-            icon=ft.icons.ADD
+            icon=ft.Icons.ADD if not self._show_add_form else ft.Icons.CLOSE
         )
+        self._add_button_ref = add_button  # Guardar referencia
+        
+        # Construir contenido del panel
+        panel_content = [
+            ft.Text(
+                "🎁 Recompensas",
+                size=18,
+                weight=ft.FontWeight.BOLD,
+                color=title_color
+            ),
+            filters,
+        ]
+        
+        # Agregar formulario si está visible
+        if self._show_add_form and add_form:
+            panel_content.append(add_form)
+        
+        # Agregar lista de recompensas y botón
+        panel_content.extend([rewards_list, add_button])
         
         return ft.Container(
             content=ft.Column(
-                [
-                    ft.Text(
-                        "🎁 Recompensas",
-                        size=18,
-                        weight=ft.FontWeight.BOLD,
-                        color=title_color
-                    ),
-                    filters,
-                    rewards_list,
-                    add_button
-                ],
+                panel_content,
                 spacing=12,
                 horizontal_alignment=ft.CrossAxisAlignment.STRETCH
             ),
@@ -482,41 +505,81 @@ class SummaryView:
         """Construye los filtros de recompensas."""
         def on_filter_change(e):
             self._rewards_filter = e.control.data
-            self._refresh_rewards_list()
+            self._update_filter_buttons()
+            # Al cambiar de filtro manualmente, NO actualizar estados ni cambiar el filtro automáticamente
+            # Solo refrescar la lista con el nuevo filtro
+            self._refresh_rewards_list(update_states=False, auto_switch_filter=False)
+        
+        # Crear botones con referencias
+        button_por_alcanzar = ft.ElevatedButton(
+            "🟡 Por Alcanzar",
+            on_click=on_filter_change,
+            data="por_alcanzar",
+            bgcolor=ft.Colors.YELLOW_700 if self._rewards_filter == "por_alcanzar" else ft.Colors.GREY_700,
+            color=ft.Colors.WHITE,
+            expand=True
+        )
+        
+        button_a_reclamar = ft.ElevatedButton(
+            "🟢 A Reclamar",
+            on_click=on_filter_change,
+            data="a_reclamar",
+            bgcolor=ft.Colors.GREEN_700 if self._rewards_filter == "a_reclamar" else ft.Colors.GREY_700,
+            color=ft.Colors.WHITE,
+            expand=True
+        )
+        
+        button_reclamadas = ft.ElevatedButton(
+            "⚪ Reclamadas",
+            on_click=on_filter_change,
+            data="reclamada",
+            bgcolor=ft.Colors.GREY_600 if self._rewards_filter == "reclamada" else ft.Colors.GREY_700,
+            color=ft.Colors.WHITE,
+            expand=True
+        )
+        
+        # Guardar referencias
+        self._filter_buttons = {
+            "por_alcanzar": button_por_alcanzar,
+            "a_reclamar": button_a_reclamar,
+            "reclamada": button_reclamadas
+        }
         
         return ft.Row(
-            [
-                ft.ElevatedButton(
-                    "🟡 Por Alcanzar",
-                    on_click=on_filter_change,
-                    data="por_alcanzar",
-                    bgcolor=ft.Colors.YELLOW_700 if self._rewards_filter == "por_alcanzar" else ft.Colors.GREY_700,
-                    color=ft.Colors.WHITE,
-                    expand=True
-                ),
-                ft.ElevatedButton(
-                    "🟢 A Reclamar",
-                    on_click=on_filter_change,
-                    data="a_reclamar",
-                    bgcolor=ft.Colors.GREEN_700 if self._rewards_filter == "a_reclamar" else ft.Colors.GREY_700,
-                    color=ft.Colors.WHITE,
-                    expand=True
-                ),
-                ft.ElevatedButton(
-                    "⚪ Reclamadas",
-                    on_click=on_filter_change,
-                    data="reclamada",
-                    bgcolor=ft.Colors.GREY_600 if self._rewards_filter == "reclamada" else ft.Colors.GREY_700,
-                    color=ft.Colors.WHITE,
-                    expand=True
-                )
-            ],
+            [button_por_alcanzar, button_a_reclamar, button_reclamadas],
             spacing=8
         )
+    
+    def _update_filter_buttons(self):
+        """Actualiza los colores de los botones de filtro según el filtro activo."""
+        # Colores para cada filtro
+        filter_colors = {
+            "por_alcanzar": ft.Colors.YELLOW_700,
+            "a_reclamar": ft.Colors.GREEN_700,
+            "reclamada": ft.Colors.GREY_600
+        }
+        
+        # Actualizar cada botón
+        for filter_key, button in self._filter_buttons.items():
+            if filter_key == self._rewards_filter:
+                button.bgcolor = filter_colors[filter_key]
+            else:
+                button.bgcolor = ft.Colors.GREY_700
+        
+        # Actualizar la página para reflejar los cambios
+        if self._filter_buttons:
+            self.page.update()
     
     def _build_rewards_list(self) -> ft.Column:
         """Construye la lista de recompensas según el filtro actual."""
         rewards = self.reward_service.get_rewards_by_status(self._rewards_filter)
+        
+        # Si el contenedor ya existe, solo actualizar sus controles
+        if self._rewards_container is None:
+            self._rewards_container = ft.Column([], spacing=8)
+        
+        # Limpiar controles existentes
+        self._rewards_container.controls.clear()
         
         if not rewards:
             empty_text = {
@@ -525,25 +588,19 @@ class SummaryView:
                 "reclamada": "No hay recompensas reclamadas"
             }
             
-            return ft.Column(
-                [
-                    ft.Text(
-                        empty_text.get(self._rewards_filter, "No hay recompensas"),
-                        size=14,
-                        color=ft.Colors.GREY_500,
-                        text_align=ft.TextAlign.CENTER
-                    )
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=8
+            self._rewards_container.controls.append(
+                ft.Text(
+                    empty_text.get(self._rewards_filter, "No hay recompensas"),
+                    size=14,
+                    color=ft.Colors.GREY_500,
+                    text_align=ft.TextAlign.CENTER
+                )
             )
-        
-        reward_cards = [self._build_reward_card(reward) for reward in rewards]
-        
-        self._rewards_container = ft.Column(
-            reward_cards,
-            spacing=8
-        )
+            self._rewards_container.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+        else:
+            reward_cards = [self._build_reward_card(reward) for reward in rewards]
+            self._rewards_container.controls.extend(reward_cards)
+            self._rewards_container.horizontal_alignment = None
         
         return self._rewards_container
     
@@ -597,34 +654,66 @@ class SummaryView:
         )
         
         # Botones de acción
-        action_buttons = ft.Row(
-            [
+        action_buttons_list = []
+        
+        # Botón de editar (solo si no está reclamada)
+        if reward.status != "reclamada":
+            action_buttons_list.append(
                 ft.IconButton(
-                    ft.icons.EDIT,
+                    ft.Icons.EDIT,
                     on_click=lambda e, r=reward: self._show_edit_reward_dialog(r),
                     tooltip="Editar",
                     icon_color=ft.Colors.BLUE
-                ) if reward.status != "reclamada" else ft.Container(),
-                ft.IconButton(
-                    ft.icons.DELETE,
-                    on_click=lambda e, r=reward: self._delete_reward(r),
-                    tooltip="Eliminar",
-                    icon_color=ft.Colors.RED
                 )
-            ],
+            )
+        
+        # Botón de eliminar (siempre disponible)
+        action_buttons_list.append(
+            ft.IconButton(
+                ft.Icons.DELETE,
+                on_click=lambda e, r=reward: self._delete_reward(r),
+                tooltip="Eliminar",
+                icon_color=ft.Colors.RED
+            )
+        )
+        
+        action_buttons = ft.Row(
+            action_buttons_list,
             spacing=4
         )
         
+        # Panel de confirmación inline (se muestra cuando se hace clic en el checkbox)
+        show_panel = self._claiming_reward_id == reward.id
+        if show_panel:
+            # Siempre crear un nuevo panel para asegurar que esté en el estado inicial (Sí/No visible)
+            # Esto garantiza que siempre muestre primero los botones Sí/No
+            claim_panel = self._build_claim_confirmation_panel(reward)
+            self._claim_panels[reward.id] = claim_panel
+        else:
+            # Ocultar el panel
+            claim_panel = ft.Container(visible=False)
+            if reward.id in self._claim_panels:
+                self._claim_panels[reward.id].visible = False
+        
+        # Contenido principal de la tarjeta
+        card_content = ft.Column(
+            [
+                ft.Row(
+                    [
+                        checkbox,
+                        reward_info,
+                        action_buttons
+                    ],
+                    spacing=12,
+                    vertical_alignment=ft.CrossAxisAlignment.START
+                ),
+                claim_panel  # Panel de confirmación debajo de la tarjeta
+            ],
+            spacing=8
+        )
+        
         return ft.Container(
-            content=ft.Row(
-                [
-                    checkbox,
-                    reward_info,
-                    action_buttons
-                ],
-                spacing=12,
-                vertical_alignment=ft.CrossAxisAlignment.START
-            ),
+            content=card_content,
             padding=12,
             bgcolor=ft.Colors.GREY_900,
             border_radius=8,
@@ -635,36 +724,47 @@ class SummaryView:
     def _on_reward_checkbox_change(self, e, reward):
         """Maneja el cambio en el checkbox de una recompensa."""
         if e.control.value and reward.status == "a_reclamar":
-            self._show_claim_reward_dialog(reward)
-        elif not e.control.value and reward.status == "reclamada":
-            # Si se desmarca una recompensa reclamada, no hacer nada
-            e.control.value = True
-            self.page.update()
+            # Mostrar panel de confirmación inline
+            self._claiming_reward_id = reward.id
+            # Refrescar la lista para mostrar el panel
+            self._refresh_rewards_list(update_states=False, auto_switch_filter=False)
+        elif not e.control.value:
+            # Si se desmarca, ocultar el panel si estaba visible
+            if self._claiming_reward_id == reward.id:
+                self._claiming_reward_id = None
+                self._refresh_rewards_list(update_states=False, auto_switch_filter=False)
+            elif reward.status == "reclamada":
+                # Si se desmarca una recompensa reclamada, no hacer nada
+                e.control.value = True
+                self.page.update()
     
-    def _show_create_reward_dialog(self, e):
-        """Muestra el diálogo para crear una nueva recompensa."""
+    def _build_add_reward_form(self) -> ft.Container:
+        """Construye el formulario inline para agregar una nueva recompensa."""
         name_field = ft.TextField(
             label="Nombre de la recompensa",
             hint_text="Ej: Comprar un libro",
-            autofocus=True
+            autofocus=True,
+            expand=True
         )
         description_field = ft.TextField(
             label="Descripción (opcional)",
             hint_text="Describe tu recompensa",
             multiline=True,
-            max_lines=3
+            max_lines=3,
+            expand=True
         )
         points_field = ft.TextField(
             label="Puntos objetivo",
             hint_text="Ej: 100.5",
-            keyboard_type=ft.KeyboardType.NUMBER
+            keyboard_type=ft.KeyboardType.NUMBER,
+            expand=True
         )
         
         def on_create(e):
             try:
                 name = name_field.value.strip()
                 description = description_field.value.strip() if description_field.value else None
-                target_points = float(points_field.value)
+                target_points = float(points_field.value) if points_field.value else 0
                 
                 if not name:
                     self._show_snackbar("El nombre es requerido", ft.Colors.RED)
@@ -675,33 +775,91 @@ class SummaryView:
                     return
                 
                 self.reward_service.create_reward(name, description, target_points)
-                self._refresh_rewards_list()
-                dialog.open = False
-                self.page.update()
+                
+                # Limpiar campos
+                name_field.value = ""
+                description_field.value = ""
+                points_field.value = ""
+                
+                # Ocultar formulario
+                self._show_add_form = False
+                # Refrescar lista con actualización de estados (sin cambiar filtro automáticamente al crear)
+                self._refresh_rewards_list(update_states=True, auto_switch_filter=False)
+                # Reconstruir el panel completo para ocultar el formulario
+                if hasattr(self.page, '_home_view_ref'):
+                    home_view = self.page._home_view_ref
+                    if hasattr(home_view, 'summary_view'):
+                        home_view._build_ui()
+                        self.page.update()
                 self._show_snackbar("Recompensa creada exitosamente", ft.Colors.GREEN)
             except ValueError as ve:
                 self._show_snackbar(str(ve), ft.Colors.RED)
             except Exception as ex:
                 self._show_snackbar(f"Error: {str(ex)}", ft.Colors.RED)
         
-        dialog = ft.AlertDialog(
-            title=ft.Text("➕ Nueva Recompensa"),
-            content=ft.Column(
-                [name_field, description_field, points_field],
-                spacing=12,
-                height=200,
-                width=400
-            ),
-            actions=[
-                ft.TextButton("Cancelar", on_click=lambda e: setattr(dialog, "open", False) or self.page.update()),
-                ft.TextButton("Crear", on_click=on_create)
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
+        create_button = ft.ElevatedButton(
+            "Crear Recompensa",
+            on_click=on_create,
+            bgcolor=ft.Colors.GREEN_700,
+            color=ft.Colors.WHITE,
+            icon=ft.Icons.CHECK,
+            expand=True
         )
         
-        self.page.dialog = dialog
-        dialog.open = True
-        self.page.update()
+        form_container = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Text(
+                        "➕ Nueva Recompensa",
+                        size=16,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.GREEN_400
+                    ),
+                    name_field,
+                    description_field,
+                    points_field,
+                    create_button
+                ],
+                spacing=12,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH
+            ),
+            padding=16,
+            bgcolor=ft.Colors.GREY_900,
+            border_radius=8,
+            border=ft.border.all(2, ft.Colors.GREEN_700),
+            margin=ft.margin.only(bottom=8)
+        )
+        
+        self._add_form_container = form_container
+        return form_container
+    
+    def _toggle_add_form(self, e):
+        """Muestra u oculta el formulario de agregar recompensa."""
+        self._show_add_form = not self._show_add_form
+        
+        # Actualizar el botón
+        if self._add_button_ref:
+            self._add_button_ref.text = "➕ Nueva Recompensa" if not self._show_add_form else "❌ Cancelar"
+            self._add_button_ref.bgcolor = ft.Colors.GREEN_700 if not self._show_add_form else ft.Colors.RED_700
+            self._add_button_ref.icon = ft.Icons.ADD if not self._show_add_form else ft.Icons.CLOSE
+        
+        # Actualizar el panel completo reconstruyendo la UI
+        if hasattr(self.page, '_home_view_ref'):
+            home_view = self.page._home_view_ref
+            if hasattr(home_view, 'summary_view'):
+                # Reconstruir solo la sección de resumen
+                home_view._build_ui()
+                self.page.update()
+    
+    def _refresh_rewards_panel(self):
+        """Actualiza todo el panel de recompensas."""
+        # Reconstruir el panel completo
+        if hasattr(self.page, '_home_view_ref'):
+            home_view = self.page._home_view_ref
+            if hasattr(home_view, 'summary_view'):
+                # Reconstruir la UI completa
+                home_view._build_ui()
+                self.page.update()
     
     def _show_edit_reward_dialog(self, reward):
         """Muestra el diálogo para editar una recompensa."""
@@ -740,8 +898,8 @@ class SummaryView:
                 reward.description = description
                 reward.target_points = target_points
                 self.reward_service.update_reward(reward)
-                self.reward_service.update_reward_statuses()  # Actualizar estados
-                self._refresh_rewards_list()
+                # Actualizar estados y refrescar lista (sin cambiar filtro automáticamente al editar)
+                self._refresh_rewards_list(update_states=True, auto_switch_filter=False)
                 dialog.open = False
                 self.page.update()
                 self._show_snackbar("Recompensa actualizada exitosamente", ft.Colors.GREEN)
@@ -769,6 +927,125 @@ class SummaryView:
         dialog.open = True
         self.page.update()
     
+    def _build_claim_confirmation_panel(self, reward) -> ft.Container:
+        """Construye el panel de confirmación inline para reclamar una recompensa."""
+        current_points = self.points_service.get_total_points() if self.points_service else 0
+        
+        # Campo de nuevos puntos objetivo (inicialmente oculto)
+        new_points_field = ft.TextField(
+            label="Nuevos puntos objetivo",
+            hint_text=f"Ej: {current_points + 10:.2f}",
+            keyboard_type=ft.KeyboardType.NUMBER,
+            visible=False,
+            expand=True
+        )
+        
+        # Botón de confirmar reutilización (inicialmente oculto)
+        confirm_reuse_button = ft.ElevatedButton(
+            "Confirmar Reutilizar",
+            visible=False,
+            bgcolor=ft.Colors.GREEN_700,
+            color=ft.Colors.WHITE,
+            icon=ft.Icons.CHECK,
+            expand=True
+        )
+        
+        def on_yes(e):
+            """Muestra el input para nuevos puntos objetivo."""
+            new_points_field.visible = True
+            confirm_reuse_button.visible = True
+            yes_button.visible = False
+            no_button.visible = False
+            self.page.update()
+        
+        def on_no(e):
+            """Reclama la recompensa sin reutilizar."""
+            try:
+                self.reward_service.claim_reward(reward.id, reuse=False)
+                # Ocultar panel y cambiar al filtro "reclamada"
+                self._claiming_reward_id = None
+                self._rewards_filter = "reclamada"
+                self._update_filter_buttons()
+                # Actualizar estados y refrescar lista
+                self._refresh_rewards_list(update_states=True, auto_switch_filter=False)
+                self._show_snackbar("Recompensa reclamada", ft.Colors.GREEN)
+            except Exception as ex:
+                self._show_snackbar(f"Error: {str(ex)}", ft.Colors.RED)
+        
+        def on_reuse_confirm(e):
+            """Confirma la reutilización con nuevos puntos objetivo."""
+            try:
+                new_points = float(new_points_field.value) if new_points_field.value else 0
+                
+                if new_points <= current_points:
+                    self._show_snackbar(
+                        f"Los nuevos puntos ({new_points:.2f}) deben ser mayores a los actuales ({current_points:.2f})",
+                        ft.Colors.RED
+                    )
+                    return
+                
+                self.reward_service.claim_reward(reward.id, reuse=True, new_target_points=new_points)
+                # Ocultar panel
+                self._claiming_reward_id = None
+                # Actualizar estados y refrescar lista
+                self._refresh_rewards_list(update_states=True, auto_switch_filter=False)
+                self._show_snackbar("Recompensa reutilizada", ft.Colors.GREEN)
+            except ValueError:
+                self._show_snackbar("Por favor ingresa un número válido", ft.Colors.RED)
+            except Exception as ex:
+                self._show_snackbar(f"Error: {str(ex)}", ft.Colors.RED)
+        
+        # Botones Sí y No
+        yes_button = ft.ElevatedButton(
+            "Sí",
+            on_click=on_yes,
+            bgcolor=ft.Colors.GREEN_700,
+            color=ft.Colors.WHITE,
+            icon=ft.Icons.CHECK,
+            expand=True
+        )
+        
+        no_button = ft.ElevatedButton(
+            "No",
+            on_click=on_no,
+            bgcolor=ft.Colors.RED_700,
+            color=ft.Colors.WHITE,
+            icon=ft.Icons.CLOSE,
+            expand=True
+        )
+        
+        confirm_reuse_button.on_click = on_reuse_confirm
+        
+        # Panel de confirmación
+        panel_content = ft.Column(
+            [
+                ft.Text(
+                    "¿Quieres usar esta misma recompensa para puntos más adelante?",
+                    size=14,
+                    weight=ft.FontWeight.BOLD,
+                    color=ft.Colors.WHITE,
+                    text_align=ft.TextAlign.CENTER
+                ),
+                ft.Row(
+                    [yes_button, no_button],
+                    spacing=8
+                ),
+                new_points_field,
+                confirm_reuse_button
+            ],
+            spacing=12,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH
+        )
+        
+        return ft.Container(
+            content=panel_content,
+            padding=16,
+            bgcolor=ft.Colors.GREY_800,
+            border_radius=8,
+            border=ft.border.all(2, ft.Colors.GREEN_700),
+            margin=ft.margin.only(top=8)
+        )
+    
     def _show_claim_reward_dialog(self, reward):
         """Muestra el diálogo para reclamar una recompensa."""
         new_points_field = ft.TextField(
@@ -788,8 +1065,8 @@ class SummaryView:
         def on_no(e):
             try:
                 self.reward_service.claim_reward(reward.id, reuse=False)
-                self.reward_service.update_reward_statuses()
-                self._refresh_rewards_list()
+                # Actualizar estados y refrescar lista (sin cambiar filtro automáticamente al reclamar)
+                self._refresh_rewards_list(update_states=True, auto_switch_filter=False)
                 dialog.open = False
                 self.page.update()
                 self._show_snackbar("Recompensa reclamada", ft.Colors.GREEN)
@@ -806,8 +1083,8 @@ class SummaryView:
                     return
                 
                 self.reward_service.claim_reward(reward.id, reuse=True, new_target_points=new_points)
-                self.reward_service.update_reward_statuses()
-                self._refresh_rewards_list()
+                # Actualizar estados y refrescar lista (sin cambiar filtro automáticamente al reutilizar)
+                self._refresh_rewards_list(update_states=True, auto_switch_filter=False)
                 dialog.open = False
                 self.page.update()
                 self._show_snackbar("Recompensa reutilizada", ft.Colors.GREEN)
@@ -849,19 +1126,40 @@ class SummaryView:
         def on_confirm(e):
             try:
                 self.reward_service.delete_reward(reward.id)
-                self._refresh_rewards_list()
+                # Refrescar lista sin actualizar estados (la recompensa ya fue eliminada)
+                self._refresh_rewards_list(update_states=False, auto_switch_filter=False)
                 dialog.open = False
                 self.page.update()
                 self._show_snackbar("Recompensa eliminada", ft.Colors.GREEN)
             except Exception as ex:
                 self._show_snackbar(f"Error: {str(ex)}", ft.Colors.RED)
+                dialog.open = False
+                self.page.update()
+        
+        def on_cancel(e):
+            dialog.open = False
+            self.page.update()
+        
+        # Crear botón de eliminar con estilo rojo usando ElevatedButton
+        delete_button = ft.ElevatedButton(
+            "Eliminar",
+            on_click=on_confirm,
+            bgcolor=ft.Colors.RED_700,
+            color=ft.Colors.WHITE,
+            icon=ft.Icons.DELETE
+        )
+        
+        cancel_button = ft.TextButton(
+            "Cancelar",
+            on_click=on_cancel
+        )
         
         dialog = ft.AlertDialog(
             title=ft.Text("🗑️ Eliminar Recompensa"),
             content=ft.Text(f"¿Estás seguro de eliminar '{reward.name}'?"),
             actions=[
-                ft.TextButton("Cancelar", on_click=lambda e: setattr(dialog, "open", False) or self.page.update()),
-                ft.TextButton("Eliminar", on_click=on_confirm, color=ft.Colors.RED)
+                cancel_button,
+                delete_button
             ],
             actions_alignment=ft.MainAxisAlignment.END
         )
@@ -870,13 +1168,26 @@ class SummaryView:
         dialog.open = True
         self.page.update()
     
-    def _refresh_rewards_list(self):
-        """Actualiza la lista de recompensas."""
-        if self._rewards_container:
-            new_list = self._build_rewards_list()
-            # Reemplazar el contenido del contenedor
-            self._rewards_container.controls = new_list.controls
-            self.page.update()
+    def _refresh_rewards_list(self, update_states: bool = True, auto_switch_filter: bool = False):
+        """
+        Actualiza la lista de recompensas.
+        
+        Args:
+            update_states: Si True, actualiza los estados de las recompensas basándose en los puntos actuales.
+            auto_switch_filter: Si True, cambia automáticamente el filtro cuando una recompensa cambia a "a_reclamar".
+        """
+        # Actualizar estados solo si se solicita
+        if update_states:
+            changed_to_available = self.reward_service.update_reward_statuses()
+            
+            # Solo cambiar el filtro automáticamente si se solicita y si alguna recompensa cambió a "a_reclamar"
+            if auto_switch_filter and changed_to_available and self._rewards_filter == "por_alcanzar":
+                self._rewards_filter = "a_reclamar"
+                self._update_filter_buttons()
+        
+        # Reconstruir la lista (esto actualizará self._rewards_container que es la misma referencia)
+        self._build_rewards_list()
+        self.page.update()
     
     def _show_snackbar(self, message: str, color = None):
         """Muestra un mensaje snackbar."""
