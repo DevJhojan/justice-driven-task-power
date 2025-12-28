@@ -63,6 +63,42 @@ def main(page: ft.Page):
     # Inicializar home_view primero
     home_view = HomeView(page)
     
+    def _show_error_page(page: ft.Page, error: Exception, context: str = ""):
+        """Muestra una página de error."""
+        try:
+            from app.ui.error_view import ErrorView
+            error_view = ErrorView(page, error, context)
+            error_view_obj = error_view.build_view()
+            
+            # Verificar si ya existe una vista de error
+            existing_error_view = None
+            for view in page.views:
+                if view.route == "/error":
+                    existing_error_view = view
+                    break
+            
+            if existing_error_view:
+                # Reemplazar la vista de error existente
+                index = page.views.index(existing_error_view)
+                page.views[index] = error_view_obj
+            else:
+                # Agregar nueva vista de error
+                page.views.append(error_view_obj)
+            
+            page.go("/error")
+            page.update()
+        except Exception as ex2:
+            # Si no se puede mostrar la página de error, mostrar un diálogo
+            page.dialog = ft.AlertDialog(
+                title=ft.Text("Error crítico"),
+                content=ft.Text(f"Error al mostrar el error:\n{ex2}\n\nError original:\n{error}"),
+                actions=[
+                    ft.TextButton("Cerrar", on_click=lambda e: page.close_dialog())
+                ]
+            )
+            page.dialog.open = True
+            page.update()
+    
     # Configurar el manejador de rutas para formularios
     def route_change(e):
         """Maneja los cambios de ruta."""
@@ -75,46 +111,54 @@ def main(page: ft.Page):
         
         # Si hay parámetros en la ruta, manejar formularios
         if page.route.startswith("/task-form"):
-            # Verificar si ya existe una vista con esta ruta
-            existing_view = None
-            for view in page.views:
-                if view.route == page.route:
-                    existing_view = view
-                    break
-            
-            if existing_view:
-                # Si ya existe, solo actualizar la página
+            try:
+                # Verificar si ya existe una vista con esta ruta
+                existing_view = None
+                for view in page.views:
+                    if view.route == page.route:
+                        existing_view = view
+                        break
+                
+                if existing_view:
+                    # Si ya existe, solo actualizar la página
+                    page.update()
+                    return
+                
+                from app.ui.tasks.form import TaskForm
+                from app.services.task_service import TaskService
+                from app.data.task_repository import TaskRepository
+                from app.data.subtask_repository import SubtaskRepository
+                from app.data.database import get_db
+                
+                # Obtener ID de la ruta si existe
+                task_id = None
+                if "?id=" in page.route:
+                    try:
+                        task_id = int(page.route.split("?id=")[1])
+                    except:
+                        pass
+                
+                db = get_db()
+                task_service = TaskService(TaskRepository(db), SubtaskRepository(db))
+                task = task_service.get_task(task_id) if task_id else None
+                
+                def on_save():
+                    # Regresar a la vista principal y recargar
+                    page.go("/")
+                    # Recargar todas las vistas
+                    home_view._build_ui()
+                
+                form = TaskForm(page, task_service, task, on_save)
+                form_view = form.build_view()
+                page.views.append(form_view)
                 page.update()
-                return
-            
-            from app.ui.tasks.form import TaskForm
-            from app.services.task_service import TaskService
-            from app.data.task_repository import TaskRepository
-            from app.data.subtask_repository import SubtaskRepository
-            from app.data.database import get_db
-            
-            # Obtener ID de la ruta si existe
-            task_id = None
-            if "?id=" in page.route:
-                try:
-                    task_id = int(page.route.split("?id=")[1])
-                except:
-                    pass
-            
-            db = get_db()
-            task_service = TaskService(TaskRepository(db), SubtaskRepository(db))
-            task = task_service.get_task(task_id) if task_id else None
-            
-            def on_save():
-                # Regresar a la vista principal y recargar
-                page.go("/")
-                # Recargar todas las vistas
-                home_view._build_ui()
-            
-            form = TaskForm(page, task_service, task, on_save)
-            form_view = form.build_view()
-            page.views.append(form_view)
-            page.update()
+            except Exception as ex:
+                # Si hay un error, mostrar página de error
+                _show_error_page(page, ex, "Error al abrir formulario de tarea")
+        
+        elif page.route == "/error":
+            # La página de error se maneja externamente, solo necesitamos reconocer la ruta
+            pass
         
         elif page.route.startswith("/habit-form"):
             from app.ui.habits.form import HabitForm

@@ -270,6 +270,31 @@ class TasksView:
     
     def _open_task_form(self, e, task: Optional[Task] = None):
         """Abre el formulario de tarea en una nueva vista."""
-        route = f"/task-form?id={task.id}" if task and task.id else "/task-form"
-        self.page.go(route)
+        try:
+            route = f"/task-form?id={task.id}" if task and task.id else "/task-form"
+            self.page.go(route)
+        except Exception as ex:
+            # Si hay un error, redirigir a la página de error
+            self._show_error(ex, "Error al abrir formulario de tarea")
+    
+    def _show_error(self, error: Exception, context: str = ""):
+        """Muestra una página de error."""
+        try:
+            from app.ui.error_view import ErrorView
+            error_view = ErrorView(self.page, error, context)
+            error_view_obj = error_view.build_view()
+            self.page.views.append(error_view_obj)
+            self.page.go("/error")
+            self.page.update()
+        except Exception as ex2:
+            # Si no se puede mostrar la página de error, mostrar un diálogo
+            self.page.dialog = ft.AlertDialog(
+                title=ft.Text("Error crítico"),
+                content=ft.Text(f"Error al mostrar el error:\n{ex2}\n\nError original:\n{error}"),
+                actions=[
+                    ft.TextButton("Cerrar", on_click=lambda e: self.page.close_dialog())
+                ]
+            )
+            self.page.dialog.open = True
+            self.page.update()
 
