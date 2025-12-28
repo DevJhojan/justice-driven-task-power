@@ -125,6 +125,12 @@ class Database:
             VALUES ('user_name', 'Usuario', ?)
         """, (datetime.now().isoformat(),))
         
+        # Insertar tema por defecto si no existe (tema oscuro por defecto)
+        cursor.execute("""
+            INSERT OR IGNORE INTO user_settings (key, value, updated_at)
+            VALUES ('theme', 'dark', ?)
+        """, (datetime.now().isoformat(),))
+        
         # Crear índices para mejorar el rendimiento
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)

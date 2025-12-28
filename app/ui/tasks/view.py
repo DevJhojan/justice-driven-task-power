@@ -2,6 +2,7 @@
 Vista principal de tareas.
 """
 import flet as ft
+from datetime import datetime
 from typing import Optional
 
 from app.data.models import Task
@@ -25,6 +26,8 @@ class TasksView:
         self.points_service = points_service
         self.tasks_container = None
         self._editing_task_id = None  # ID de la tarea que se está editando (None si no hay ninguna)
+        self._expanded_subtasks = set()  # Set de IDs de tareas con subtareas expandidas
+        self._sort_order = "recent"  # "recent" para más reciente primero, "oldest" para más antiguo primero
     
     def build_ui(self) -> ft.Container:
         """
@@ -47,6 +50,16 @@ class TasksView:
         title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
         btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_600
         
+        # Botón de filtro de ordenamiento
+        sort_icon = ft.Icons.ARROW_DOWNWARD if self._sort_order == "recent" else ft.Icons.ARROW_UPWARD
+        sort_tooltip = "Más reciente primero" if self._sort_order == "recent" else "Más antiguo primero"
+        sort_button = ft.IconButton(
+            icon=sort_icon,
+            on_click=self._toggle_sort_order,
+            tooltip=sort_tooltip,
+            icon_color=btn_color
+        )
+        
         title_bar = ft.Container(
             content=ft.Row(
                 [
@@ -56,11 +69,17 @@ class TasksView:
                         weight=ft.FontWeight.BOLD,
                         color=title_color
                     ),
-                    ft.IconButton(
-                        icon=ft.Icons.ADD,
-                        on_click=self._toggle_form,
-                        tooltip="Agregar tarea",
-                        icon_color=btn_color
+                    ft.Row(
+                        [
+                            sort_button,
+                            ft.IconButton(
+                                icon=ft.Icons.ADD,
+                                on_click=self._toggle_form,
+                                tooltip="Agregar tarea",
+                                icon_color=btn_color
+                            )
+                        ],
+                        spacing=4
                     )
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN
@@ -95,7 +114,16 @@ class TasksView:
         if self.tasks_container is None:
             return
         
-        tasks = self.task_service.get_all_tasks()
+        tasks = list(self.task_service.get_all_tasks())
+        
+        # Ordenar según el filtro seleccionado
+        if self._sort_order == "recent":
+            # Más reciente primero (created_at más reciente)
+            tasks.sort(key=lambda t: t.created_at if t.created_at else datetime.min, reverse=True)
+        else:
+            # Más antiguo primero (created_at más antiguo)
+            tasks.sort(key=lambda t: t.created_at if t.created_at else datetime.max)
+        
         self.tasks_container.controls.clear()
         
         if not tasks:
@@ -172,6 +200,20 @@ class TasksView:
         # Obtener subtareas
         subtasks = self.task_service.get_subtasks(task.id) if task.id else []
         
+        # Verificar si las subtareas están expandidas
+        is_subtasks_expanded = task.id in self._expanded_subtasks if task.id else False
+        
+        # Botón para expandir/contraer subtareas (solo si hay subtareas)
+        subtasks_button = None
+        if subtasks:
+            subtasks_button = ft.IconButton(
+                icon=ft.Icons.EXPAND_MORE if not is_subtasks_expanded else ft.Icons.EXPAND_LESS,
+                on_click=lambda e, t=task: self._toggle_subtasks_expansion(t),
+                tooltip=f"{len(subtasks)} subtarea(s)" if len(subtasks) == 1 else f"{len(subtasks)} subtareas",
+                icon_color=btn_color,
+                icon_size=20
+            )
+        
         # Construir lista de subtareas
         subtasks_content = []
         if subtasks:
@@ -214,6 +256,7 @@ class TasksView:
                         spacing=4,
                         expand=True
                     ),
+                    subtasks_button if subtasks_button else ft.Container(width=0, height=0),  # Espacio reservado si no hay subtareas
                     edit_button,
                     delete_button
                 ],
@@ -222,8 +265,8 @@ class TasksView:
             )
         ]
         
-        # Agregar subtareas si existen
-        if subtasks_content:
+        # Agregar subtareas si existen y están expandidas
+        if subtasks_content and is_subtasks_expanded:
             content_items.append(
                 ft.Container(
                     content=ft.Column(
@@ -231,7 +274,8 @@ class TasksView:
                         spacing=4
                     ),
                     padding=ft.padding.only(left=32, top=8),
-                    border=ft.border.only(left=ft.border.BorderSide(2, ft.Colors.GREY_400))
+                    border=ft.border.only(left=ft.border.BorderSide(2, ft.Colors.GREY_400)),
+                    visible=is_subtasks_expanded
                 )
             )
         
@@ -249,6 +293,25 @@ class TasksView:
         """Alterna el estado de una subtarea."""
         self.task_service.toggle_subtask(subtask.id)
         self._load_tasks()
+    
+    def _toggle_subtasks_expansion(self, task: Task):
+        """Expande o contrae las subtareas de una tarea."""
+        if task.id:
+            if task.id in self._expanded_subtasks:
+                self._expanded_subtasks.remove(task.id)
+            else:
+                self._expanded_subtasks.add(task.id)
+            self._load_tasks()
+            self.page.update()
+    
+    def _toggle_sort_order(self, e):
+        """Alterna entre ordenamiento más reciente primero y más antiguo primero."""
+        self._sort_order = "oldest" if self._sort_order == "recent" else "recent"
+        self._load_tasks()
+        # Reconstruir la UI para actualizar el icono del botón
+        self.build_ui()
+        if self.page:
+            self.page.update()
     
     def _toggle_task_status(self, task: Task):
         """Alterna el estado de una tarea."""

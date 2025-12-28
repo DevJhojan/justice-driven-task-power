@@ -60,6 +60,14 @@ def main(page: ft.Page):
     page.dark_theme.color_scheme.on_primary = ft.Colors.WHITE
     page.dark_theme.color_scheme.on_secondary = ft.Colors.WHITE
     
+    # Establecer tema inicial desde configuración del usuario
+    from app.data.database import get_db
+    from app.services.user_settings_service import UserSettingsService
+    db = get_db()
+    user_settings_service = UserSettingsService(db)
+    saved_theme = user_settings_service.get_theme()
+    page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
+    
     # Inicializar home_view primero
     home_view = HomeView(page)
     

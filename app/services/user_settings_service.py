@@ -57,4 +57,47 @@ class UserSettingsService:
         conn.close()
         
         return True
+    
+    def get_theme(self) -> str:
+        """
+        Obtiene el tema configurado.
+        
+        Returns:
+            Tema configurado ('dark' o 'light'), 'dark' por defecto.
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT value FROM user_settings WHERE key = ?", ("theme",))
+        row = cursor.fetchone()
+        conn.close()
+        
+        return row['value'] if row and row['value'] in ['dark', 'light'] else "dark"
+    
+    def set_theme(self, theme: str) -> bool:
+        """
+        Establece el tema.
+        
+        Args:
+            theme: 'dark' o 'light'.
+        
+        Returns:
+            True si se actualizó correctamente.
+        """
+        if theme not in ['dark', 'light']:
+            return False
+        
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now().isoformat()
+        cursor.execute("""
+            INSERT OR REPLACE INTO user_settings (key, value, updated_at)
+            VALUES (?, ?, ?)
+        """, ("theme", theme, now))
+        
+        conn.commit()
+        conn.close()
+        
+        return True
 

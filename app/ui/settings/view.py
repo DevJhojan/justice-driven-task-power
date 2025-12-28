@@ -191,9 +191,15 @@ class SettingsView:
     
     def _toggle_theme(self, e):
         """Alterna entre modo oscuro y claro."""
-        self.page.theme_mode = (
+        new_theme_mode = (
             ft.ThemeMode.DARK if self.page.theme_mode == ft.ThemeMode.LIGHT
             else ft.ThemeMode.LIGHT
         )
+        self.page.theme_mode = new_theme_mode
+        
+        # Guardar el tema en la base de datos
+        theme_str = "dark" if new_theme_mode == ft.ThemeMode.DARK else "light"
+        self.user_settings_service.set_theme(theme_str)
+        
         self.page.update()
 
