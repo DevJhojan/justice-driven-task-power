@@ -50,6 +50,9 @@ class SettingsView:
         
         # Campo para el nombre del usuario
         user_name = self.user_settings_service.get_user_name()
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        icon_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        
         self.user_name_field = ft.TextField(
             label="Nombre de usuario",
             hint_text="Ingresa tu nombre",
@@ -58,7 +61,8 @@ class SettingsView:
             suffix=ft.IconButton(
                 icon=ft.Icons.SAVE,
                 on_click=self._save_user_name,
-                tooltip="Guardar nombre"
+                tooltip="Guardar nombre",
+                icon_color=icon_color
             )
         )
         
@@ -99,9 +103,12 @@ class SettingsView:
                         color=ft.Colors.GREY
                     )
                 ],
-                spacing=16
+                spacing=16,
+                scroll=ft.ScrollMode.AUTO,
+                expand=True
             ),
-            padding=16
+            padding=16,
+            expand=True
         )
         
         # Vista principal

@@ -171,12 +171,15 @@ class HomeView:
         
         # Iconos y textos para cada sección
         nav_items = [
-            ("tasks", "📋", "Tareas"),
-            ("habits", "🔁", "Hábitos"),
-            ("goals", "🎯", "Metas"),
-            ("summary", "📊", "Resumen"),
-            ("settings", "⚙️", "Config")
+            ("tasks", ft.Icons.ASSIGNMENT, "Tareas"),
+            ("habits", ft.Icons.REPEAT, "Hábitos"),
+            ("goals", ft.Icons.FLAG, "Metas"),
+            ("summary", ft.Icons.BAR_CHART, "Resumen"),
+            ("settings", ft.Icons.SETTINGS, "Config")
         ]
+        
+        icon_color = selected_color if not is_dark else ft.Colors.RED_500
+        unselected_icon_color = ft.Colors.RED_800 if not is_dark else ft.Colors.RED_400
         
         buttons = []
         for section, icon, label in nav_items:
@@ -184,8 +187,8 @@ class HomeView:
             button = ft.ElevatedButton(
                 content=ft.Column(
                     [
-                        ft.Text(icon, size=24),
-                        ft.Text(label, size=12)
+                        ft.Icon(icon, size=24, color=ft.Colors.WHITE if is_selected else icon_color),
+                        ft.Text(label, size=12, color=ft.Colors.WHITE if is_selected else unselected_icon_color)
                     ],
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=4,
