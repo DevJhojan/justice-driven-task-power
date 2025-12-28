@@ -307,10 +307,14 @@ class TasksView:
     def _toggle_sort_order(self, e):
         """Alterna entre ordenamiento más reciente primero y más antiguo primero."""
         self._sort_order = "oldest" if self._sort_order == "recent" else "recent"
+        # Recargar tareas con el nuevo orden
         self._load_tasks()
-        # Reconstruir la UI para actualizar el icono del botón
-        self.build_ui()
-        if self.page:
+        # Notificar a home_view para que reconstruya la UI y actualice el icono
+        # Buscar la instancia de HomeView en la página
+        if hasattr(self.page, '_home_view_ref'):
+            home_view = self.page._home_view_ref
+            home_view._build_ui()
+        elif self.page:
             self.page.update()
     
     def _toggle_task_status(self, task: Task):

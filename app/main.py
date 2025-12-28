@@ -70,6 +70,8 @@ def main(page: ft.Page):
     
     # Inicializar home_view primero
     home_view = HomeView(page)
+    # Guardar referencia a home_view en la página para que las vistas puedan acceder
+    page._home_view_ref = home_view
     
     def _show_error_page(page: ft.Page, error: Exception, context: str = ""):
         """Muestra una página de error."""

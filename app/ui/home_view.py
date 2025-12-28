@@ -239,6 +239,7 @@ class HomeView:
         """Navega a una sección específica."""
         self.current_section = section
         self._build_ui()
+        # No llamar a page.update() aquí, ya que _build_ui() lo hace
     
     def refresh_all(self):
         """Refresca todas las vistas después de guardar."""
