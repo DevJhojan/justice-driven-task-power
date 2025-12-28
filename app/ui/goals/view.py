@@ -373,7 +373,7 @@ class GoalsView:
         cancel_button = ft.TextButton(
             "Cancelar",
             on_click=self._cancel_inline_edit,
-            color=btn_color
+            style=ft.ButtonStyle(color=btn_color)
         )
         
         form_content = ft.Column(
@@ -628,7 +628,7 @@ class GoalsView:
         cancel_button = ft.TextButton(
             "Cancelar",
             on_click=lambda e: self._cancel_inline_edit(e),
-            color=btn_color
+            style=ft.ButtonStyle(color=btn_color)
         )
         
         form_content = ft.Column(
