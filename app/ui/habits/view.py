@@ -47,8 +47,9 @@ class HabitsView:
         # Contenedor del formulario (oculto por defecto)
         self.form_container = self._build_form_container()
         
-        # Contenedor de métricas globales (oculto por defecto)
+        # Contenedor de métricas globales (oculto por defecto si no está visible)
         self._global_metrics_container = self._build_global_metrics_container()
+        self._global_metrics_container.visible = self._global_metrics_visible
         
         # Barra de título
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
@@ -608,15 +609,11 @@ class HabitsView:
     def _open_metrics(self, e):
         """Muestra u oculta el panel de métricas globales."""
         self._global_metrics_visible = not self._global_metrics_visible
-        if self._global_metrics_visible:
-            # Reconstruir el contenedor de métricas globales para actualizar los datos
-            self._global_metrics_container = self._build_global_metrics_container()
-            self._global_metrics_container.visible = True
-            # Actualizar la vista principal para incluir el nuevo contenedor
-            self.page.update()
-        else:
-            if self._global_metrics_container:
-                self._global_metrics_container.visible = False
+        # Reconstruir la UI para actualizar la visibilidad del contenedor de métricas
+        if hasattr(self.page, '_home_view_ref'):
+            home_view = self.page._home_view_ref
+            home_view._build_ui()
+        elif self.page:
             self.page.update()
     
     def _toggle_habit_metrics(self, habit: Habit):
@@ -909,8 +906,7 @@ class HabitsView:
         self._sort_order = "oldest" if self._sort_order == "recent" else "recent"
         # Recargar hábitos con el nuevo orden
         self._load_habits()
-        # Notificar a home_view para que reconstruya la UI y actualice el icono
-        # Buscar la instancia de HomeView en la página
+        # Reconstruir la UI para actualizar el icono del botón
         if hasattr(self.page, '_home_view_ref'):
             home_view = self.page._home_view_ref
             home_view._build_ui()

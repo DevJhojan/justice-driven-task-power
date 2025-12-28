@@ -28,6 +28,7 @@ class TasksView:
         self._editing_task_id = None  # ID de la tarea que se está editando (None si no hay ninguna)
         self._expanded_subtasks = set()  # Set de IDs de tareas con subtareas expandidas
         self._sort_order = "recent"  # "recent" para más reciente primero, "oldest" para más antiguo primero
+        self._selected_section = "backlog"  # "backlog", "pendientes", "completadas"
     
     def build_ui(self) -> ft.Container:
         """
@@ -88,6 +89,9 @@ class TasksView:
             bgcolor=ft.Colors.SURFACE
         )
         
+        # Segundo header con secciones: Backlog, Pendientes, Completadas
+        sections_bar = self._build_sections_bar(is_dark, title_color, btn_color)
+        
         # Cargar tareas
         self._load_tasks()
         
@@ -96,6 +100,7 @@ class TasksView:
             content=ft.Column(
                 [
                     title_bar,
+                    sections_bar,  # Segundo header con secciones
                     self.form_container,  # Formulario (aparece primero cuando está visible)
                     ft.Container(
                         content=self.tasks_container,
@@ -110,11 +115,24 @@ class TasksView:
         )
     
     def _load_tasks(self):
-        """Carga las tareas desde el servicio."""
+        """Carga las tareas desde el servicio y las agrupa por sección."""
         if self.tasks_container is None:
             return
         
-        tasks = list(self.task_service.get_all_tasks())
+        all_tasks = list(self.task_service.get_all_tasks())
+        
+        # Filtrar tareas según la sección seleccionada
+        if self._selected_section == "backlog":
+            # Backlog: tareas sin fecha y no completadas
+            tasks = [t for t in all_tasks if t.due_date is None and t.status != "completada"]
+        elif self._selected_section == "pendientes":
+            # Pendientes: tareas con fecha y no completadas
+            tasks = [t for t in all_tasks if t.due_date is not None and t.status != "completada"]
+        elif self._selected_section == "completadas":
+            # Completadas: todas las tareas completadas
+            tasks = [t for t in all_tasks if t.status == "completada"]
+        else:
+            tasks = all_tasks
         
         # Ordenar según el filtro seleccionado
         if self._sort_order == "recent":
@@ -127,10 +145,16 @@ class TasksView:
         self.tasks_container.controls.clear()
         
         if not tasks:
+            section_name = {
+                "backlog": "Backlog",
+                "pendientes": "Pendientes",
+                "completadas": "Completadas"
+            }.get(self._selected_section, "tareas")
+            
             self.tasks_container.controls.append(
                 ft.Container(
                     content=ft.Text(
-                        "No hay tareas. ¡Crea una nueva!",
+                        f"No hay {section_name.lower()}. ¡Crea una nueva!",
                         size=16,
                         text_align=ft.TextAlign.CENTER
                     ),
@@ -309,8 +333,55 @@ class TasksView:
         self._sort_order = "oldest" if self._sort_order == "recent" else "recent"
         # Recargar tareas con el nuevo orden
         self._load_tasks()
-        # Notificar a home_view para que reconstruya la UI y actualice el icono
-        # Buscar la instancia de HomeView en la página
+        # Reconstruir la UI para actualizar el icono del botón
+        if hasattr(self.page, '_home_view_ref'):
+            home_view = self.page._home_view_ref
+            home_view._build_ui()
+        elif self.page:
+            self.page.update()
+    
+    def _build_sections_bar(self, is_dark: bool, title_color, btn_color) -> ft.Container:
+        """Construye la barra de secciones (Backlog, Pendientes, Completadas)."""
+        # Colores para botones seleccionados y no seleccionados
+        selected_bg = ft.Colors.RED_500 if is_dark else ft.Colors.RED_700
+        selected_text = ft.Colors.WHITE
+        unselected_bg = ft.Colors.SURFACE if is_dark else ft.Colors.GREY_200
+        unselected_text = title_color
+        
+        # Función para crear botón de sección
+        def create_section_button(section_key: str, label: str) -> ft.ElevatedButton:
+            is_selected = self._selected_section == section_key
+            return ft.ElevatedButton(
+                text=label,
+                on_click=lambda e, key=section_key: self._select_section(key),
+                bgcolor=selected_bg if is_selected else unselected_bg,
+                color=selected_text if is_selected else unselected_text,
+                style=ft.ButtonStyle(
+                    shape=ft.RoundedRectangleBorder(radius=8)
+                ),
+                expand=True
+            )
+        
+        return ft.Container(
+            content=ft.Row(
+                [
+                    create_section_button("backlog", "📦 Backlog"),
+                    create_section_button("pendientes", "⏰ Pendientes"),
+                    create_section_button("completadas", "✅ Completadas")
+                ],
+                spacing=8,
+                alignment=ft.MainAxisAlignment.SPACE_EVENLY
+            ),
+            padding=ft.padding.symmetric(horizontal=16, vertical=12),
+            bgcolor=ft.Colors.SURFACE if is_dark else ft.Colors.WHITE,
+            border=ft.border.only(bottom=ft.border.BorderSide(1, btn_color))
+        )
+    
+    def _select_section(self, section: str):
+        """Selecciona una sección y recarga las tareas."""
+        self._selected_section = section
+        self._load_tasks()
+        # Reconstruir la UI para actualizar los botones de sección
         if hasattr(self.page, '_home_view_ref'):
             home_view = self.page._home_view_ref
             home_view._build_ui()

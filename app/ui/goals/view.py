@@ -25,6 +25,7 @@ class GoalsView:
         self.goal_service = goal_service
         self.points_service = points_service
         self.goals_container = None
+        self.form_container = None  # Contenedor del formulario
         self._editing_goal_id = None  # ID de la meta que se está editando (None si no hay ninguna)
         self._sort_order = "recent"  # "recent" para más reciente primero, "oldest" para más antiguo primero
     
@@ -43,6 +44,9 @@ class GoalsView:
         
         # Contenedor del formulario (oculto por defecto)
         self.form_container = self._build_form_container()
+        # Asegurar que form_container no sea None
+        if self.form_container is None:
+            self.form_container = ft.Container(visible=False)
         
         # Barra de título
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
@@ -430,6 +434,8 @@ class GoalsView:
     
     def _edit_goal_in_form(self, goal: Goal):
         """Prepara el formulario para editar una meta existente."""
+        if self.form_container is None:
+            return
         self._form_title_field.value = goal.title
         self._form_description_field.value = goal.description or ""
         self._form_target_value_field.value = str(goal.target_value) if goal.target_value else ""
@@ -450,7 +456,8 @@ class GoalsView:
     
     def _cancel_inline_edit(self, e=None):
         """Cancela la edición inline y oculta el formulario."""
-        self.form_container.visible = False
+        if self.form_container is not None:
+            self.form_container.visible = False
         self._editing_goal_id = None
         self._load_goals()
         self.page.update()
@@ -512,7 +519,8 @@ class GoalsView:
                 )
             
             # Ocultar formulario y recargar metas
-            self.form_container.visible = False
+            if self.form_container is not None:
+                self.form_container.visible = False
             self._editing_goal_id = None
             self._load_goals()
             self.page.update()

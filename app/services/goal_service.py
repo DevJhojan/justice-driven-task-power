@@ -52,7 +52,7 @@ class GoalService:
         # Si la meta se crea ya completa, otorgar puntos
         if target_value and current_value >= target_value:
             if points_service:
-                points_service.add_points(0.1)  # 0.1 puntos por completar una meta
+                points_service.add_points(1.00)  # 1.00 puntos por completar una meta
         
         return created_goal
     
@@ -113,7 +113,7 @@ class GoalService:
         # Si tiene target_value y ahora está completa (y antes no lo estaba), dar puntos
         if goal.target_value and current_value >= goal.target_value and not was_completed:
             if points_service:
-                points_service.add_points(0.1)  # 0.1 puntos por completar una meta
+                points_service.add_points(1.00)  # 1.00 puntos por completar una meta
         
         return True
     
@@ -141,7 +141,7 @@ class GoalService:
         # Si tiene target_value y ahora está completa (y antes no lo estaba), dar puntos
         if goal.target_value and goal.current_value >= goal.target_value and not was_completed:
             if points_service:
-                points_service.add_points(0.1)  # 0.1 puntos por completar una meta
+                points_service.add_points(1.00)  # 1.00 puntos por completar una meta
         
         return True
     
