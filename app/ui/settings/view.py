@@ -30,6 +30,9 @@ class SettingsView:
         self._firebase_login_visible = False  # Controla si el formulario de login está visible
         self.firebase_email_field = None
         self.firebase_password_field = None
+        self._last_sync_result = None  # Almacena el último resultado de sincronización
+        self._sync_result_container = None  # Contenedor para mostrar resultados
+        self._building_ui = False  # Flag para evitar recursión durante construcción
         
     
     def build_ui(self) -> ft.Container:
@@ -39,6 +42,9 @@ class SettingsView:
         Returns:
             Container con la vista de configuración.
         """
+        # Marcar que estamos construyendo la UI para evitar recursión
+        self._building_ui = True
+        
         # Toggle para modo oscuro/claro
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         theme_switch = ft.Switch(
@@ -85,6 +91,7 @@ class SettingsView:
                     theme_switch,
                     ft.Divider(),
                     self._build_firebase_section(),
+                    self._build_sync_result_section(),  # Contenedor de resultados inline
                     ft.Divider(),
                     ft.Text(
                         "Aplicación de Productividad",
@@ -111,10 +118,15 @@ class SettingsView:
         )
         
         # Vista principal
-        return ft.Container(
+        result = ft.Container(
             content=app_info,
             expand=True
         )
+        
+        # Marcar que terminamos de construir la UI
+        self._building_ui = False
+        
+        return result
     
     def _save_user_name(self, e):
         """Guarda el nombre del usuario."""
@@ -419,12 +431,33 @@ class SettingsView:
         
         try:
             result = self.firebase_sync_service.sync_to_firebase()
+            # Guardar resultado para mostrarlo inline
+            self._last_sync_result = {
+                "type": "export",
+                "success": result.get("success", False),
+                "message": result.get("message", ""),
+                "stats": result.get("stats", {}),
+                "error": "" if result.get("success") else result.get("message", "Error desconocido")
+            }
+            # Actualizar el contenedor de resultados
+            self._update_sync_result_container()
+            # Mostrar snackbar breve
             if result.get("success"):
-                self._show_snackbar(f"✅ {result.get('message', 'Exportación exitosa')}", ft.Colors.GREEN)
+                self._show_snackbar("✅ Exportación completada", ft.Colors.GREEN)
             else:
-                self._show_snackbar(f"❌ {result.get('message', 'Error al exportar')}", ft.Colors.RED)
+                self._show_snackbar("❌ Error en exportación", ft.Colors.RED)
         except Exception as ex:
-            self._show_snackbar(f"❌ Error al exportar: {str(ex)}", ft.Colors.RED)
+            import traceback
+            error_traceback = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+            self._last_sync_result = {
+                "type": "export",
+                "success": False,
+                "message": "Error al exportar datos",
+                "stats": {},
+                "error": f"{str(ex)}\n\n{error_traceback}"
+            }
+            self._update_sync_result_container()
+            self._show_snackbar("❌ Error al exportar", ft.Colors.RED)
     
     def _import_from_firebase(self, e):
         """Importa datos de Firebase a local."""
@@ -433,8 +466,19 @@ class SettingsView:
         
         try:
             result = self.firebase_sync_service.sync_from_firebase()
+            # Guardar resultado para mostrarlo inline
+            self._last_sync_result = {
+                "type": "import",
+                "success": result.get("success", False),
+                "message": result.get("message", ""),
+                "stats": result.get("stats", {}),
+                "error": "" if result.get("success") else result.get("message", "Error desconocido")
+            }
+            # Actualizar el contenedor de resultados
+            self._update_sync_result_container()
+            # Mostrar snackbar breve
             if result.get("success"):
-                self._show_snackbar(f"✅ {result.get('message', 'Importación exitosa')}", ft.Colors.GREEN)
+                self._show_snackbar("✅ Importación completada", ft.Colors.GREEN)
                 # Reconstruir UI para reflejar cambios
                 if hasattr(self.page, '_home_view_ref'):
                     home_view = self.page._home_view_ref
@@ -442,9 +486,19 @@ class SettingsView:
                 else:
                     self.page.update()
             else:
-                self._show_snackbar(f"❌ {result.get('message', 'Error al importar')}", ft.Colors.RED)
+                self._show_snackbar("❌ Error en importación", ft.Colors.RED)
         except Exception as ex:
-            self._show_snackbar(f"❌ Error al importar: {str(ex)}", ft.Colors.RED)
+            import traceback
+            error_traceback = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+            self._last_sync_result = {
+                "type": "import",
+                "success": False,
+                "message": "Error al importar datos",
+                "stats": {},
+                "error": f"{str(ex)}\n\n{error_traceback}"
+            }
+            self._update_sync_result_container()
+            self._show_snackbar("❌ Error al importar", ft.Colors.RED)
     
     def _firebase_logout(self, e):
         """Cierra sesión en Firebase."""
@@ -484,4 +538,218 @@ class SettingsView:
         self.user_settings_service.set_theme(theme_str)
         
         self.page.update()
+    
+    def _build_sync_result_section(self) -> ft.Container:
+        """Construye la sección de resultados de sincronización inline."""
+        # Si el contenedor no existe, crearlo
+        if self._sync_result_container is None:
+            self._sync_result_container = ft.Container(
+                content=ft.Column([], spacing=8),
+                visible=False,
+                padding=0
+            )
+        
+        # Si hay un resultado previo Y estamos construyendo la UI (no actualizando),
+        # construir el contenido del contenedor directamente sin causar recursión
+        if self._last_sync_result and self._sync_result_container and self._building_ui:
+            self._build_result_content_internal()
+        
+        return ft.Container(
+            content=ft.Column([
+                self._sync_result_container
+            ], spacing=0),
+            padding=0
+        )
+    
+    def _build_result_content_internal(self):
+        """Construye el contenido del contenedor de resultados sin causar recursión."""
+        if not self._last_sync_result or not self._sync_result_container:
+            return
+        
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        bg_color = ft.Colors.SURFACE if is_dark else ft.Colors.WHITE
+        title_color = ft.Colors.RED_800 if not is_dark else ft.Colors.RED_400
+        
+        result = self._last_sync_result
+        is_success = result.get("success", False)
+        message = result.get("message", "")
+        stats = result.get("stats", {})
+        error = result.get("error", "")
+        sync_type = result.get("type", "export")
+        
+        # Color y icono según el resultado
+        if is_success:
+            status_color = ft.Colors.GREEN
+            status_icon = ft.Icons.CHECK_CIRCLE
+            title_text = f"{'Exportación' if sync_type == 'export' else 'Importación'} - Éxito"
+        else:
+            status_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_400
+            status_icon = ft.Icons.ERROR
+            title_text = f"{'Exportación' if sync_type == 'export' else 'Importación'} - Error"
+        
+        # Construir contenido
+        content_items = [
+            ft.Row([
+                ft.Icon(status_icon, color=status_color, size=20),
+                ft.Text(
+                    title_text,
+                    size=16,
+                    weight=ft.FontWeight.BOLD,
+                    color=status_color,
+                    expand=True
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.CLOSE,
+                    icon_size=18,
+                    on_click=self._close_sync_result,
+                    tooltip="Cerrar",
+                    icon_color=ft.Colors.GREY
+                )
+            ], spacing=8),
+            ft.Divider(height=10)
+        ]
+        
+        # Agregar mensaje principal
+        if message:
+            content_items.append(
+                ft.Text(
+                    message,
+                    size=14,
+                    color=ft.Colors.GREY if is_dark else ft.Colors.GREY_700
+                )
+            )
+        
+        # Agregar estadísticas si existen
+        if stats and isinstance(stats, dict):
+            stats_items = []
+            if stats.get("tasks_created", 0) > 0 or stats.get("tasks_updated", 0) > 0:
+                stats_items.append(
+                    f"Tareas: {stats.get('tasks_created', 0)} nuevas, {stats.get('tasks_updated', 0)} actualizadas"
+                )
+            if stats.get("habits_created", 0) > 0 or stats.get("habits_updated", 0) > 0:
+                stats_items.append(
+                    f"Hábitos: {stats.get('habits_created', 0)} nuevos, {stats.get('habits_updated', 0)} actualizados"
+                )
+            if stats.get("goals_created", 0) > 0 or stats.get("goals_updated", 0) > 0:
+                stats_items.append(
+                    f"Metas: {stats.get('goals_created', 0)} nuevas, {stats.get('goals_updated', 0)} actualizadas"
+                )
+            
+            if stats_items:
+                content_items.append(ft.Divider(height=10))
+                for stat_item in stats_items:
+                    content_items.append(
+                        ft.Text(
+                            f"• {stat_item}",
+                            size=12,
+                            color=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_400
+                        )
+                    )
+        
+        # Agregar error si existe
+        if error and not is_success:
+            content_items.extend([
+                ft.Divider(height=10),
+                ft.Text(
+                    "Detalles del error:",
+                    size=12,
+                    weight=ft.FontWeight.BOLD,
+                    color=status_color
+                ),
+                ft.Container(
+                    content=ft.Column([
+                        ft.Text(
+                            error,
+                            size=11,
+                            color=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_400,
+                            selectable=True,
+                            font_family="monospace"
+                        )
+                    ], scroll=ft.ScrollMode.AUTO),
+                    padding=12,
+                    bgcolor=ft.Colors.BLACK if is_dark else ft.Colors.GREY_100,
+                    border_radius=8,
+                    border=ft.border.all(1, status_color),
+                    height=150
+                ),
+                ft.ElevatedButton(
+                    "Copiar Error",
+                    icon=ft.Icons.COPY,
+                    on_click=lambda e: self._copy_error(error),
+                    bgcolor=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_600,
+                    color=ft.Colors.WHITE,
+                    height=36
+                )
+            ])
+        
+        # Actualizar el contenedor
+        self._sync_result_container.content = ft.Column(content_items, spacing=8)
+        self._sync_result_container.visible = True
+        self._sync_result_container.bgcolor = bg_color
+        self._sync_result_container.border = ft.border.all(2, status_color)
+        self._sync_result_container.border_radius = 8
+        self._sync_result_container.padding = 16
+    
+    def _update_sync_result_container(self):
+        """Actualiza el contenedor de resultados de sincronización."""
+        if not self._last_sync_result:
+            if self._sync_result_container:
+                self._sync_result_container.visible = False
+            self.page.update()
+            return
+        
+        # Si el contenedor no existe, crearlo
+        if self._sync_result_container is None:
+            self._sync_result_container = ft.Container(
+                content=ft.Column([], spacing=8),
+                visible=False,
+                padding=0
+            )
+        
+        # Construir el contenido sin causar recursión
+        self._build_result_content_internal()
+        
+        # Actualizar solo la página sin reconstruir toda la UI
+        self.page.update()
+    
+    def _close_sync_result(self, e):
+        """Cierra el contenedor de resultados de sincronización."""
+        self._last_sync_result = None
+        if self._sync_result_container:
+            self._sync_result_container.visible = False
+        # Actualizar solo la página sin reconstruir toda la UI
+        self.page.update()
+    
+    def _copy_error(self, error_text: str):
+        """Copia el error al portapapeles."""
+        try:
+            # Intentar usar pyperclip si está disponible
+            try:
+                import pyperclip
+                pyperclip.copy(error_text)
+            except ImportError:
+                # Usar métodos del sistema operativo
+                import subprocess
+                import sys
+                if sys.platform == "linux":
+                    # Linux: usar xclip o xsel
+                    try:
+                        subprocess.run(["xclip", "-selection", "clipboard"], input=error_text.encode(), check=True)
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        try:
+                            subprocess.run(["xsel", "--clipboard", "--input"], input=error_text.encode(), check=True)
+                        except (subprocess.CalledProcessError, FileNotFoundError):
+                            raise Exception("No se encontró xclip ni xsel. Instala uno de ellos: sudo apt-get install xclip")
+                elif sys.platform == "darwin":
+                    # macOS: usar pbcopy
+                    subprocess.run(["pbcopy"], input=error_text.encode(), check=True)
+                elif sys.platform == "win32":
+                    # Windows: usar clip
+                    subprocess.run(["clip"], input=error_text.encode(), check=True, shell=True)
+                else:
+                    raise Exception(f"Plataforma no soportada: {sys.platform}")
+            
+            self._show_snackbar("✅ Error copiado al portapapeles", ft.Colors.GREEN)
+        except Exception as ex:
+            self._show_snackbar(f"❌ No se pudo copiar: {str(ex)}", ft.Colors.RED)
 

@@ -67,6 +67,8 @@ class FirebaseSyncService:
         self.db_firebase = self.firebase.database()
         
         self.user_id: Optional[str] = None
+        self.auth_token: Optional[str] = None
+        self.refresh_token: Optional[str] = None
     
     def _create_task_with_id(self, task):
         """Crea una tarea con un ID específico para sincronización, evitando duplicados."""
@@ -211,6 +213,8 @@ class FirebaseSyncService:
         try:
             user = self.auth.sign_in_with_email_and_password(email, password)
             self.user_id = user['localId']
+            self.auth_token = user.get('idToken')
+            self.refresh_token = user.get('refreshToken')
             # Guardar el email del usuario
             self.user_settings_service.set_firebase_email(email)
             return True
@@ -232,6 +236,8 @@ class FirebaseSyncService:
         try:
             user = self.auth.create_user_with_email_and_password(email, password)
             self.user_id = user['localId']
+            self.auth_token = user.get('idToken')
+            self.refresh_token = user.get('refreshToken')
             # Guardar el email del usuario
             self.user_settings_service.set_firebase_email(email)
             return True
@@ -242,12 +248,84 @@ class FirebaseSyncService:
     def logout(self):
         """Cierra la sesión de Firebase."""
         self.user_id = None
+        self.auth_token = None
+        self.refresh_token = None
         # Eliminar el email guardado
         self.user_settings_service.set_firebase_email(None)
     
     def is_logged_in(self) -> bool:
         """Verifica si hay una sesión activa."""
         return self.user_id is not None
+    
+    def _refresh_auth_token(self) -> bool:
+        """
+        Refresca el token de autenticación si es necesario.
+        
+        Returns:
+            True si el token fue refrescado exitosamente, False en caso contrario.
+        """
+        if not self.refresh_token:
+            return False
+        
+        try:
+            # Pyrebase4 maneja el refresh automáticamente, pero podemos intentar refrescar manualmente
+            # si tenemos el refresh_token
+            user = self.auth.refresh(self.refresh_token)
+            if user:
+                self.auth_token = user.get('idToken')
+                self.refresh_token = user.get('refreshToken')
+                return True
+            return False
+        except Exception as e:
+            print(f"Error al refrescar token: {e}")
+            # Si falla el refresh, limpiar la sesión
+            self.logout()
+            return False
+    
+    def _ensure_authenticated(self) -> bool:
+        """
+        Asegura que el usuario esté autenticado y el token sea válido.
+        
+        Returns:
+            True si está autenticado, False en caso contrario.
+        """
+        if not self.user_id:
+            return False
+        
+        # Pyrebase maneja los tokens automáticamente, pero si tenemos refresh_token
+        # podemos intentar refrescarlo antes de hacer peticiones
+        if self.refresh_token:
+            try:
+                self._refresh_auth_token()
+            except:
+                pass
+        
+        return self.user_id is not None
+    
+    def _handle_firebase_error(self, error: Exception) -> Dict[str, Any]:
+        """
+        Maneja errores de Firebase, especialmente errores de autenticación.
+        
+        Args:
+            error: La excepción capturada.
+        
+        Returns:
+            Diccionario con información del error.
+        """
+        error_str = str(error)
+        
+        # Si es un error de permisos, podría ser que el token expiró
+        if "Permission denied" in error_str or "401" in error_str:
+            # Intentar refrescar el token
+            if self.refresh_token:
+                if self._refresh_auth_token():
+                    return {"success": False, "message": "Token expirado. Por favor, intenta nuevamente después de refrescar la sesión."}
+            
+            # Si no se pudo refrescar, el usuario necesita iniciar sesión nuevamente
+            self.logout()
+            return {"success": False, "message": "Sesión expirada. Por favor, inicia sesión nuevamente."}
+        
+        return {"success": False, "message": f"Error al sincronizar: {error_str}"}
     
     def sync_to_firebase(self) -> Dict[str, Any]:
         """
@@ -256,8 +334,8 @@ class FirebaseSyncService:
         Returns:
             Diccionario con el resultado de la sincronización.
         """
-        if not self.user_id:
-            return {"success": False, "message": "No hay sesión activa"}
+        if not self._ensure_authenticated():
+            return {"success": False, "message": "No hay sesión activa. Por favor, inicia sesión nuevamente."}
         
         try:
             user_ref = self.db_firebase.child(f"users/{self.user_id}")
@@ -476,7 +554,7 @@ class FirebaseSyncService:
             
             return {"success": True, "message": message, "stats": stats}
         except Exception as e:
-            return {"success": False, "message": f"Error al sincronizar: {str(e)}"}
+            return self._handle_firebase_error(e)
     
     def sync_from_firebase(self) -> Dict[str, Any]:
         """
@@ -486,8 +564,8 @@ class FirebaseSyncService:
         Returns:
             Diccionario con el resultado de la sincronización.
         """
-        if not self.user_id:
-            return {"success": False, "message": "No hay sesión activa"}
+        if not self._ensure_authenticated():
+            return {"success": False, "message": "No hay sesión activa. Por favor, inicia sesión nuevamente."}
         
         try:
             from datetime import date
@@ -553,7 +631,7 @@ class FirebaseSyncService:
                             due_date = date.fromisoformat(remote_task.get("due_date"))
                         except:
                             pass
-                    
+                        
                     created_at = None
                     if remote_task.get("created_at"):
                         try:
@@ -788,5 +866,5 @@ class FirebaseSyncService:
             
             return {"success": True, "message": message, "stats": stats}
         except Exception as e:
-            return {"success": False, "message": f"Error al descargar: {str(e)}"}
+            return self._handle_firebase_error(e)
 

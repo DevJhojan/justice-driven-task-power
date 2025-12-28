@@ -171,7 +171,7 @@ class TaskService:
         
         Args:
             task_id: ID de la tarea.
-        
+            
         Returns:
             Lista de subtareas.
         """
@@ -186,7 +186,7 @@ class TaskService:
         Args:
             task_id: ID de la tarea padre.
             title: Título de la subtarea.
-        
+            
         Returns:
             Subtarea creada, None si el repositorio no está disponible.
         """
@@ -207,7 +207,7 @@ class TaskService:
         
         Args:
             subtask_id: ID de la subtarea.
-        
+            
         Returns:
             True si ahora está completada, False si se desmarcó.
         """
@@ -228,7 +228,7 @@ class TaskService:
         
         Args:
             subtask_id: ID de la subtarea a eliminar.
-        
+            
         Returns:
             True si se eliminó, False si no existía.
         """
@@ -242,7 +242,7 @@ class TaskService:
         
         Args:
             subtask: Subtarea a actualizar.
-        
+            
         Returns:
             Subtarea actualizada, None si el repositorio no está disponible.
         """
