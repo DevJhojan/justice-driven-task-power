@@ -26,6 +26,7 @@ class TasksView:
         self.points_service = points_service
         self.tasks_container = None
         self._editing_task_id = None  # ID de la tarea que se está editando (None si no hay ninguna)
+        self._deleting_task_id = None  # ID de la tarea que se está eliminando (None si no hay ninguna)
         self._expanded_subtasks = set()  # Set de IDs de tareas con subtareas expandidas
         self._sort_order = "recent"  # "recent" para más reciente primero, "oldest" para más antiguo primero
         self._selected_section = "backlog"  # "backlog", "pendientes", "completadas"
@@ -303,6 +304,15 @@ class TasksView:
                 )
             )
         
+        # Panel de confirmación de eliminación (inline)
+        show_delete_panel = self._deleting_task_id == task.id
+        if show_delete_panel:
+            delete_panel = self._build_delete_confirmation_panel(task)
+        else:
+            delete_panel = ft.Container(visible=False)
+        
+        content_items.append(delete_panel)  # Panel de confirmación debajo de la tarjeta
+        
         content = ft.Column(content_items, spacing=4)
         
         return ft.Container(
@@ -401,11 +411,29 @@ class TasksView:
             home_view._build_ui()
     
     def _delete_task(self, task: Task):
-        """Elimina una tarea."""
+        """Muestra el panel de confirmación inline para eliminar una tarea."""
+        # Si ya se está eliminando esta tarea, cancelar
+        if self._deleting_task_id == task.id:
+            self._deleting_task_id = None
+        else:
+            # Mostrar panel de confirmación
+            self._deleting_task_id = task.id
+        
+        # Refrescar la lista para mostrar/ocultar el panel
+        self._load_tasks()
+        self.page.update()
+    
+    def _build_delete_confirmation_panel(self, task: Task) -> ft.Container:
+        """Construye el panel de confirmación inline para eliminar una tarea."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        
         def on_confirm(e):
+            """Confirma la eliminación de la tarea."""
             try:
                 self.task_service.delete_task(task.id)
-                dialog.open = False
+                # Ocultar panel
+                self._deleting_task_id = None
+                # Recargar tareas
                 self._load_tasks()
                 # Actualizar header y resumen si están visibles
                 if hasattr(self.page, '_home_view_ref'):
@@ -413,46 +441,73 @@ class TasksView:
                     home_view._build_ui()
                 else:
                     self.page.update()
+                # Mostrar mensaje de éxito
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Tarea eliminada exitosamente"),
+                    bgcolor=ft.Colors.GREEN
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
             except Exception as ex:
                 self.page.snack_bar = ft.SnackBar(
                     content=ft.Text(f"Error al eliminar: {str(ex)}"),
                     bgcolor=ft.Colors.RED
                 )
                 self.page.snack_bar.open = True
-                dialog.open = False
+                self._deleting_task_id = None
+                self._load_tasks()
                 self.page.update()
         
         def on_cancel(e):
-            dialog.open = False
+            """Cancela la eliminación."""
+            self._deleting_task_id = None
+            self._load_tasks()
             self.page.update()
         
-        # Crear botón de eliminar con estilo rojo
-        delete_button = ft.ElevatedButton(
+        # Botones de confirmación
+        confirm_button = ft.ElevatedButton(
             "Eliminar",
             on_click=on_confirm,
             bgcolor=ft.Colors.RED_700,
             color=ft.Colors.WHITE,
-            icon=ft.Icons.DELETE
+            icon=ft.Icons.DELETE,
+            expand=True
         )
         
-        cancel_button = ft.TextButton(
+        cancel_button = ft.ElevatedButton(
             "Cancelar",
-            on_click=on_cancel
+            on_click=on_cancel,
+            bgcolor=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_700,
+            color=ft.Colors.WHITE,
+            icon=ft.Icons.CLOSE,
+            expand=True
         )
         
-        dialog = ft.AlertDialog(
-            title=ft.Text("🗑️ Eliminar Tarea"),
-            content=ft.Text(f"¿Estás seguro de eliminar la tarea '{task.title}'?"),
-            actions=[
-                cancel_button,
-                delete_button
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
+        # Panel de confirmación
+        return ft.Container(
+            content=ft.Column(
+                [
+                    ft.Text(
+                        f"¿Estás seguro de eliminar la tarea '{task.title}'?",
+                        size=14,
+                        weight=ft.FontWeight.W_500,
+                        color=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_400
+                    ),
+                    ft.Row(
+                        [
+                            cancel_button,
+                            confirm_button
+                        ],
+                        spacing=8
+                    )
+                ],
+                spacing=12
+            ),
+            padding=12,
+            bgcolor=ft.Colors.RED_50 if not is_dark else ft.Colors.RED_900,
+            border_radius=8,
+            border=ft.border.all(1, ft.Colors.RED_300 if not is_dark else ft.Colors.RED_700)
         )
-        
-        self.page.dialog = dialog
-        dialog.open = True
-        self.page.update()
     
     def _toggle_form(self, e, task: Optional[Task] = None):
         """Muestra u oculta el formulario de tarea."""

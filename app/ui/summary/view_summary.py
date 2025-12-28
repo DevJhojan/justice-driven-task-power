@@ -45,6 +45,7 @@ class SummaryView:
         self._add_button_ref = None  # Referencia al botón de agregar
         self._claiming_reward_id = None  # ID de la recompensa que se está reclamando (None si no hay ninguna)
         self._claim_panels = {}  # Diccionario para guardar referencias a los paneles de confirmación {reward_id: panel}
+        self._deleting_reward_id = None  # ID de la recompensa que se está eliminando (None si no hay ninguna)
     
     def build_ui(self) -> ft.Container:
         """
@@ -683,8 +684,8 @@ class SummaryView:
         )
         
         # Panel de confirmación inline (se muestra cuando se hace clic en el checkbox)
-        show_panel = self._claiming_reward_id == reward.id
-        if show_panel:
+        show_claim_panel = self._claiming_reward_id == reward.id
+        if show_claim_panel:
             # Siempre crear un nuevo panel para asegurar que esté en el estado inicial (Sí/No visible)
             # Esto garantiza que siempre muestre primero los botones Sí/No
             claim_panel = self._build_claim_confirmation_panel(reward)
@@ -694,6 +695,13 @@ class SummaryView:
             claim_panel = ft.Container(visible=False)
             if reward.id in self._claim_panels:
                 self._claim_panels[reward.id].visible = False
+        
+        # Panel de confirmación de eliminación (inline)
+        show_delete_panel = self._deleting_reward_id == reward.id
+        if show_delete_panel:
+            delete_panel = self._build_delete_confirmation_panel(reward)
+        else:
+            delete_panel = ft.Container(visible=False)
         
         # Contenido principal de la tarjeta
         card_content = ft.Column(
@@ -707,7 +715,8 @@ class SummaryView:
                     spacing=12,
                     vertical_alignment=ft.CrossAxisAlignment.START
                 ),
-                claim_panel  # Panel de confirmación debajo de la tarjeta
+                claim_panel,  # Panel de confirmación de reclamación debajo de la tarjeta
+                delete_panel  # Panel de confirmación de eliminación debajo de la tarjeta
             ],
             spacing=8
         )
@@ -1122,51 +1131,86 @@ class SummaryView:
         self.page.update()
     
     def _delete_reward(self, reward):
-        """Elimina una recompensa."""
+        """Muestra el panel de confirmación inline para eliminar una recompensa."""
+        # Si ya se está eliminando esta recompensa, cancelar
+        if self._deleting_reward_id == reward.id:
+            self._deleting_reward_id = None
+        else:
+            # Mostrar panel de confirmación
+            self._deleting_reward_id = reward.id
+        
+        # Refrescar la lista para mostrar/ocultar el panel
+        self._refresh_rewards_list(update_states=False, auto_switch_filter=False)
+        self.page.update()
+    
+    def _build_delete_confirmation_panel(self, reward) -> ft.Container:
+        """Construye el panel de confirmación inline para eliminar una recompensa."""
+        is_dark = True  # Siempre tema oscuro en resumen
+        
         def on_confirm(e):
+            """Confirma la eliminación de la recompensa."""
             try:
                 self.reward_service.delete_reward(reward.id)
+                # Ocultar panel
+                self._deleting_reward_id = None
                 # Refrescar lista sin actualizar estados (la recompensa ya fue eliminada)
                 self._refresh_rewards_list(update_states=False, auto_switch_filter=False)
-                dialog.open = False
-                self.page.update()
                 self._show_snackbar("Recompensa eliminada", ft.Colors.GREEN)
             except Exception as ex:
                 self._show_snackbar(f"Error: {str(ex)}", ft.Colors.RED)
-                dialog.open = False
-                self.page.update()
+                self._deleting_reward_id = None
+                self._refresh_rewards_list(update_states=False, auto_switch_filter=False)
         
         def on_cancel(e):
-            dialog.open = False
+            """Cancela la eliminación."""
+            self._deleting_reward_id = None
+            self._refresh_rewards_list(update_states=False, auto_switch_filter=False)
             self.page.update()
         
-        # Crear botón de eliminar con estilo rojo usando ElevatedButton
-        delete_button = ft.ElevatedButton(
+        # Botones de confirmación
+        confirm_button = ft.ElevatedButton(
             "Eliminar",
             on_click=on_confirm,
             bgcolor=ft.Colors.RED_700,
             color=ft.Colors.WHITE,
-            icon=ft.Icons.DELETE
+            icon=ft.Icons.DELETE,
+            expand=True
         )
         
-        cancel_button = ft.TextButton(
+        cancel_button = ft.ElevatedButton(
             "Cancelar",
-            on_click=on_cancel
+            on_click=on_cancel,
+            bgcolor=ft.Colors.GREY_700,
+            color=ft.Colors.WHITE,
+            icon=ft.Icons.CLOSE,
+            expand=True
         )
         
-        dialog = ft.AlertDialog(
-            title=ft.Text("🗑️ Eliminar Recompensa"),
-            content=ft.Text(f"¿Estás seguro de eliminar '{reward.name}'?"),
-            actions=[
-                cancel_button,
-                delete_button
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
+        # Panel de confirmación
+        return ft.Container(
+            content=ft.Column(
+                [
+                    ft.Text(
+                        f"¿Estás seguro de eliminar '{reward.name}'?",
+                        size=14,
+                        weight=ft.FontWeight.W_500,
+                        color=ft.Colors.RED_400
+                    ),
+                    ft.Row(
+                        [
+                            cancel_button,
+                            confirm_button
+                        ],
+                        spacing=8
+                    )
+                ],
+                spacing=12
+            ),
+            padding=12,
+            bgcolor=ft.Colors.RED_900,
+            border_radius=8,
+            border=ft.border.all(1, ft.Colors.RED_700)
         )
-        
-        self.page.dialog = dialog
-        dialog.open = True
-        self.page.update()
     
     def _refresh_rewards_list(self, update_states: bool = True, auto_switch_filter: bool = False):
         """

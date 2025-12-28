@@ -27,6 +27,7 @@ class GoalsView:
         self.goals_container = None
         self.form_container = None  # Contenedor del formulario
         self._editing_goal_id = None  # ID de la meta que se está editando (None si no hay ninguna)
+        self._deleting_goal_id = None  # ID de la meta que se está eliminando (None si no hay ninguna)
         self._sort_order = "recent"  # "recent" para más reciente primero, "oldest" para más antiguo primero
         self._goal_card_refs = {}  # Diccionario para guardar referencias a los controles de cada tarjeta
     
@@ -319,6 +320,13 @@ class GoalsView:
             icon_color=ft.Colors.RED
         )
         
+        # Panel de confirmación de eliminación (inline)
+        show_delete_panel = self._deleting_goal_id == goal.id
+        if show_delete_panel:
+            delete_panel = self._build_delete_confirmation_panel(goal)
+        else:
+            delete_panel = ft.Container(visible=False)
+        
         content = ft.Column(
             [
                 ft.Row(
@@ -400,7 +408,8 @@ class GoalsView:
                         )
                     ],
                     spacing=8
-                )
+                ),
+                delete_panel  # Panel de confirmación debajo de la tarjeta
             ],
             spacing=8
         )
@@ -725,14 +734,28 @@ class GoalsView:
             self.page.update()
     
     def _delete_goal(self, goal: Goal):
-        """Elimina una meta."""
+        """Muestra el panel de confirmación inline para eliminar una meta."""
+        # Si ya se está eliminando esta meta, cancelar
+        if self._deleting_goal_id == goal.id:
+            self._deleting_goal_id = None
+        else:
+            # Mostrar panel de confirmación
+            self._deleting_goal_id = goal.id
+        
+        # Refrescar la lista para mostrar/ocultar el panel
+        self._load_goals()
+        self.page.update()
+    
+    def _build_delete_confirmation_panel(self, goal: Goal) -> ft.Container:
+        """Construye el panel de confirmación inline para eliminar una meta."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        
         def on_confirm(e):
+            """Confirma la eliminación de la meta."""
             try:
-                print(f"DEBUG: Intentando eliminar meta con ID: {goal.id}")
                 # Si la meta estaba completada, restar puntos antes de eliminar
                 was_completed = goal.target_value and goal.current_value >= goal.target_value
                 result = self.goal_service.delete_goal(goal.id)
-                print(f"DEBUG: Resultado de delete_goal: {result}")
                 
                 if not result:
                     raise Exception("No se pudo eliminar la meta. Puede que ya no exista.")
@@ -740,8 +763,8 @@ class GoalsView:
                 if was_completed and self.points_service:
                     self.points_service.add_points(-1.00)  # Restar 1.00 puntos (el valor que se otorga por completar)
                 
-                dialog.open = False
-                self.page.update()
+                # Ocultar panel
+                self._deleting_goal_id = None
                 
                 # Recargar metas
                 self._load_goals()
@@ -761,51 +784,65 @@ class GoalsView:
                 self.page.snack_bar.open = True
                 self.page.update()
             except Exception as ex:
-                print(f"DEBUG: Error al eliminar meta: {str(ex)}")
-                import traceback
-                traceback.print_exc()
                 self.page.snack_bar = ft.SnackBar(
                     content=ft.Text(f"Error al eliminar: {str(ex)}"),
                     bgcolor=ft.Colors.RED
                 )
                 self.page.snack_bar.open = True
-                dialog.open = False
+                self._deleting_goal_id = None
+                self._load_goals()
                 self.page.update()
         
         def on_cancel(e):
-            dialog.open = False
+            """Cancela la eliminación."""
+            self._deleting_goal_id = None
+            self._load_goals()
             self.page.update()
         
-        print(f"DEBUG: Mostrando diálogo de eliminación para meta: {goal.title} (ID: {goal.id})")
-        
-        # Crear botón de eliminar con estilo rojo
-        delete_button = ft.ElevatedButton(
+        # Botones de confirmación
+        confirm_button = ft.ElevatedButton(
             "Eliminar",
             on_click=on_confirm,
             bgcolor=ft.Colors.RED_700,
             color=ft.Colors.WHITE,
-            icon=ft.Icons.DELETE
+            icon=ft.Icons.DELETE,
+            expand=True
         )
         
-        cancel_button = ft.TextButton(
+        cancel_button = ft.ElevatedButton(
             "Cancelar",
-            on_click=on_cancel
+            on_click=on_cancel,
+            bgcolor=ft.Colors.GREY_600 if not is_dark else ft.Colors.GREY_700,
+            color=ft.Colors.WHITE,
+            icon=ft.Icons.CLOSE,
+            expand=True
         )
         
-        dialog = ft.AlertDialog(
-            title=ft.Text("🗑️ Eliminar Meta"),
-            content=ft.Text(f"¿Estás seguro de eliminar la meta '{goal.title}'?"),
-            actions=[
-                cancel_button,
-                delete_button
-            ],
-            actions_alignment=ft.MainAxisAlignment.END
+        # Panel de confirmación
+        return ft.Container(
+            content=ft.Column(
+                [
+                    ft.Text(
+                        f"¿Estás seguro de eliminar la meta '{goal.title}'?",
+                        size=14,
+                        weight=ft.FontWeight.W_500,
+                        color=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_400
+                    ),
+                    ft.Row(
+                        [
+                            cancel_button,
+                            confirm_button
+                        ],
+                        spacing=8
+                    )
+                ],
+                spacing=12
+            ),
+            padding=12,
+            bgcolor=ft.Colors.RED_50 if not is_dark else ft.Colors.RED_900,
+            border_radius=8,
+            border=ft.border.all(1, ft.Colors.RED_300 if not is_dark else ft.Colors.RED_700)
         )
-        
-        self.page.dialog = dialog
-        dialog.open = True
-        self.page.update()
-        print(f"DEBUG: Diálogo abierto: {dialog.open}")
     
     def _build_inline_form(self, goal: Goal) -> ft.Container:
         """Construye un formulario inline para editar una meta en su posición."""
