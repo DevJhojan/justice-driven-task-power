@@ -186,6 +186,8 @@ class FirebaseSyncService:
         try:
             user = self.auth.sign_in_with_email_and_password(email, password)
             self.user_id = user['localId']
+            # Guardar el email del usuario
+            self.user_settings_service.set_firebase_email(email)
             return True
         except Exception as e:
             print(f"Error al iniciar sesión: {e}")
@@ -205,6 +207,8 @@ class FirebaseSyncService:
         try:
             user = self.auth.create_user_with_email_and_password(email, password)
             self.user_id = user['localId']
+            # Guardar el email del usuario
+            self.user_settings_service.set_firebase_email(email)
             return True
         except Exception as e:
             print(f"Error al registrar usuario: {e}")
@@ -213,6 +217,8 @@ class FirebaseSyncService:
     def logout(self):
         """Cierra la sesión de Firebase."""
         self.user_id = None
+        # Eliminar el email guardado
+        self.user_settings_service.set_firebase_email(None)
     
     def is_logged_in(self) -> bool:
         """Verifica si hay una sesión activa."""

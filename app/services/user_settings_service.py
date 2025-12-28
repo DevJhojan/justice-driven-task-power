@@ -2,6 +2,7 @@
 Servicio para gestión de configuración del usuario.
 """
 from datetime import datetime
+from typing import Optional
 
 from app.data.database import Database
 
@@ -100,4 +101,46 @@ class UserSettingsService:
         conn.close()
         
         return True
-
+    
+    def get_firebase_email(self) -> Optional[str]:
+        """
+        Obtiene el email de Firebase del usuario.
+        
+        Returns:
+            Email de Firebase si existe, None en caso contrario.
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT value FROM user_settings WHERE key = ?", ("firebase_email",))
+        row = cursor.fetchone()
+        conn.close()
+        
+        return row['value'] if row else None
+    
+    def set_firebase_email(self, email: Optional[str]) -> bool:
+        """
+        Establece el email de Firebase del usuario.
+        
+        Args:
+            email: Email de Firebase o None para eliminar.
+        
+        Returns:
+            True si se actualizó correctamente.
+        """
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now().isoformat()
+        if email:
+            cursor.execute("""
+                INSERT OR REPLACE INTO user_settings (key, value, updated_at)
+                VALUES (?, ?, ?)
+            """, ("firebase_email", email.strip(), now))
+        else:
+            cursor.execute("DELETE FROM user_settings WHERE key = ?", ("firebase_email",))
+        
+        conn.commit()
+        conn.close()
+        
+        return True

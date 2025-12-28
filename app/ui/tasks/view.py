@@ -404,8 +404,14 @@ class TasksView:
         """Elimina una tarea."""
         def confirm_delete(e):
             self.task_service.delete_task(task.id)
-            self._load_tasks()
             self.page.close_dialog()
+            self._load_tasks()
+            # Actualizar header y resumen si están visibles
+            if hasattr(self.page, '_home_view_ref'):
+                home_view = self.page._home_view_ref
+                home_view._build_ui()
+            else:
+                self.page.update()
         
         self.page.dialog = ft.AlertDialog(
             title=ft.Text("Confirmar eliminación"),

@@ -2,6 +2,14 @@
 Vista de sincronización con Firebase.
 """
 import flet as ft
+import traceback
+
+# Intentar importar pyperclip, si no está disponible usar método alternativo
+try:
+    import pyperclip
+    HAS_PYPERCLIP = True
+except ImportError:
+    HAS_PYPERCLIP = False
 
 from app.services.firebase_sync_service import FirebaseSyncService
 
@@ -29,6 +37,10 @@ class FirebaseSyncView:
         self.logout_button = None
         self.sync_up_button = None
         self.sync_down_button = None
+        
+        # Estado del resultado de sincronización
+        self.last_sync_result = None  # {"type": "upload"/"download", "success": bool, "message": str, "error": str}
+        self.sync_result_container = None
     
     def build_view(self) -> ft.View:
         """
@@ -53,7 +65,7 @@ class FirebaseSyncView:
                         tooltip="Volver"
                     ),
                     ft.Text(
-                        "Sincronización Firebase",
+                        "Sincronizar en la nube",
                         size=20,
                         weight=ft.FontWeight.BOLD,
                         color=title_color
@@ -173,7 +185,7 @@ class FirebaseSyncView:
         
         # Botones de sincronización
         self.sync_up_button = ft.ElevatedButton(
-            "Subir a Firebase",
+            "Exportar",
             on_click=self._sync_to_firebase,
             icon=ft.Icons.UPLOAD,
             disabled=not is_logged_in,
@@ -183,7 +195,7 @@ class FirebaseSyncView:
         )
         
         self.sync_down_button = ft.ElevatedButton(
-            "Descargar de Firebase",
+            "Importar",
             on_click=self._sync_from_firebase,
             icon=ft.Icons.DOWNLOAD,
             disabled=not is_logged_in,
@@ -192,7 +204,8 @@ class FirebaseSyncView:
             expand=True
         )
         
-        return ft.Column([
+        # Construir lista de items
+        items = [
             ft.Container(
                 content=ft.Column([
                     ft.Text(
@@ -250,7 +263,15 @@ class FirebaseSyncView:
                 border_radius=12,
                 border=ft.border.all(1, ft.Colors.OUTLINE)
             ),
-            
+        ]
+        
+        # Agregar contenedor de resultado si existe
+        result_container = self._build_sync_result_container()
+        if result_container.visible:
+            items.append(result_container)
+        
+        # Agregar información
+        items.append(
             ft.Container(
                 content=ft.Column([
                     ft.Text(
@@ -262,8 +283,8 @@ class FirebaseSyncView:
                     ft.Text(
                         "• La sincronización es bidireccional\n"
                         "• Los datos se sincronizan de forma granular (solo campos modificados)\n"
-                        "• Subir a Firebase: envía tus datos locales a la nube\n"
-                        "• Descargar de Firebase: trae los datos de la nube a tu dispositivo",
+                        "• Exportar: envía tus datos locales a la nube\n"
+                        "• Importar: trae los datos de la nube a tu dispositivo",
                         size=12,
                         color=ft.Colors.GREY
                     )
@@ -272,8 +293,137 @@ class FirebaseSyncView:
                 bgcolor=ft.Colors.SURFACE if is_dark else ft.Colors.WHITE,
                 border_radius=12,
                 border=ft.border.all(1, ft.Colors.OUTLINE)
-            ),
-        ], spacing=16, scroll=ft.ScrollMode.AUTO, expand=True)
+            )
+        )
+        
+        return ft.Column(items, spacing=16, scroll=ft.ScrollMode.AUTO, expand=True)
+    
+    def _build_sync_result_container(self) -> ft.Container:
+        """Construye el contenedor para mostrar el resultado de la sincronización."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        bg_color = ft.Colors.SURFACE if is_dark else ft.Colors.WHITE
+        title_color = ft.Colors.RED_800 if not is_dark else ft.Colors.RED_400
+        
+        if not self.last_sync_result:
+            # Si no hay resultado, retornar contenedor vacío pero ocupando espacio mínimo
+            return ft.Container(
+                content=ft.Column([]),
+                padding=0,
+                visible=False,
+                height=0
+            )
+        
+        result = self.last_sync_result
+        is_success = result.get("success", False)
+        message = result.get("message", "")
+        error = result.get("error", "")
+        sync_type = result.get("type", "upload")
+        
+        # Color y icono según el resultado
+        if is_success:
+            status_color = ft.Colors.GREEN
+            status_icon = ft.Icons.CHECK_CIRCLE
+            status_text = "✅ Éxito"
+            title_text = f"{'Exportación' if sync_type == 'upload' else 'Importación'} - Éxito"
+        else:
+            status_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_400
+            status_icon = ft.Icons.ERROR
+            status_text = "❌ Error"
+            title_text = f"{'Exportación' if sync_type == 'upload' else 'Importación'} - Error"
+        
+        # Contenido del mensaje
+        content_items = [
+            ft.Row([
+                ft.Icon(status_icon, color=status_color, size=24),
+                ft.Text(
+                    status_text,
+                    size=16,
+                    weight=ft.FontWeight.BOLD,
+                    color=status_color
+                )
+            ], spacing=8),
+            ft.Divider(height=10),
+            ft.Text(
+                message,
+                size=14,
+                color=ft.Colors.GREY if is_dark else ft.Colors.GREY_700
+            )
+        ]
+        
+        # Si hay error, mostrar el error completo y botón de copiar
+        if not is_success and error:
+            error_text = ft.Text(
+                error,
+                size=12,
+                color=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_400,
+                selectable=True,
+                font_family="monospace"
+            )
+            
+            copy_button = ft.ElevatedButton(
+                "Copiar Error",
+                icon=ft.Icons.COPY,
+                on_click=lambda e: self._copy_error(error),
+                bgcolor=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_600,
+                color=ft.Colors.WHITE
+            )
+            
+            content_items.extend([
+                ft.Divider(height=10),
+                ft.Text(
+                    "Detalles del error:",
+                    size=12,
+                    weight=ft.FontWeight.BOLD,
+                    color=status_color
+                ),
+                ft.Container(
+                    content=error_text,
+                    padding=12,
+                    bgcolor=ft.Colors.BLACK if is_dark else ft.Colors.GREY_100,
+                    border_radius=8,
+                    border=ft.border.all(1, status_color)
+                ),
+                copy_button
+            ])
+        
+        self.sync_result_container = ft.Container(
+            content=ft.Column(content_items, spacing=12),
+            padding=16,
+            bgcolor=bg_color,
+            border_radius=12,
+            border=ft.border.all(2, status_color),
+            visible=True
+        )
+        
+        return self.sync_result_container
+    
+    def _copy_error(self, error_text: str):
+        """Copia el error al portapapeles."""
+        try:
+            if HAS_PYPERCLIP:
+                pyperclip.copy(error_text)
+            else:
+                # Usar métodos del sistema operativo
+                import subprocess
+                import sys
+                if sys.platform == "linux":
+                    try:
+                        subprocess.run(["xclip", "-selection", "clipboard"], input=error_text.encode(), check=True)
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        try:
+                            subprocess.run(["xsel", "--clipboard", "--input"], input=error_text.encode(), check=True)
+                        except (subprocess.CalledProcessError, FileNotFoundError):
+                            raise Exception("No se encontró xclip ni xsel")
+                elif sys.platform == "darwin":
+                    subprocess.run(["pbcopy"], input=error_text.encode(), check=True)
+                elif sys.platform == "win32":
+                    subprocess.run(["clip"], input=error_text.encode(), check=True, shell=True)
+                else:
+                    raise Exception(f"Plataforma no soportada: {sys.platform}")
+            
+            self._show_snackbar("Error copiado al portapapeles", ft.Colors.GREEN)
+        except Exception as ex:
+            self._show_snackbar(f"No se pudo copiar el error: {str(ex)}", ft.Colors.RED)
     
     def _firebase_login(self, e):
         """Inicia sesión en Firebase."""
@@ -371,12 +521,27 @@ class FirebaseSyncView:
         
         try:
             result = self.firebase_sync_service.sync_to_firebase()
-            if result["success"]:
-                self._show_snackbar(result["message"], ft.Colors.GREEN)
-            else:
-                self._show_snackbar(result["message"], ft.Colors.RED)
+            # Guardar resultado para mostrarlo en la UI
+            self.last_sync_result = {
+                "type": "upload",
+                "success": result.get("success", False),
+                "message": result.get("message", "Sincronización completada"),
+                "error": "" if result.get("success") else result.get("message", "Error desconocido")
+            }
+            self._rebuild_ui()
         except Exception as ex:
-            self._show_snackbar(f"Error: {str(ex)}", ft.Colors.RED)
+            error_msg = str(ex)
+            error_traceback = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+            full_error = f"{error_msg}\n\n{error_traceback}"
+            
+            # Guardar resultado de error
+            self.last_sync_result = {
+                "type": "upload",
+                "success": False,
+                "message": "Error al sincronizar datos",
+                "error": full_error
+            }
+            self._rebuild_ui()
     
     def _sync_from_firebase(self, e):
         """Sincroniza datos de Firebase a local."""
@@ -385,12 +550,27 @@ class FirebaseSyncView:
         
         try:
             result = self.firebase_sync_service.sync_from_firebase()
-            if result["success"]:
-                self._show_snackbar(result["message"], ft.Colors.GREEN)
-            else:
-                self._show_snackbar(result["message"], ft.Colors.RED)
+            # Guardar resultado para mostrarlo en la UI
+            self.last_sync_result = {
+                "type": "download",
+                "success": result.get("success", False),
+                "message": result.get("message", "Sincronización completada"),
+                "error": "" if result.get("success") else result.get("message", "Error desconocido")
+            }
+            self._rebuild_ui()
         except Exception as ex:
-            self._show_snackbar(f"Error: {str(ex)}", ft.Colors.RED)
+            error_msg = str(ex)
+            error_traceback = "".join(traceback.format_exception(type(ex), ex, ex.__traceback__))
+            full_error = f"{error_msg}\n\n{error_traceback}"
+            
+            # Guardar resultado de error
+            self.last_sync_result = {
+                "type": "download",
+                "success": False,
+                "message": "Error al sincronizar datos",
+                "error": full_error
+            }
+            self._rebuild_ui()
     
     def _rebuild_ui(self):
         """Reconstruye la UI después de cambios en Firebase."""

@@ -377,7 +377,7 @@ class SummaryView:
                                     text_align=ft.TextAlign.CENTER
                                 ),
                                 ft.Text(
-                                    f"{points:,.1f} puntos",
+                                    f"{points:.2f} puntos",
                                     size=16,
                                     color=text_color,
                                     text_align=ft.TextAlign.CENTER
@@ -395,7 +395,7 @@ class SummaryView:
                         height=20
                     ),
                     ft.Text(
-                        f"Próximo nivel: {next_level.display_name} ({points_to_next:,.1f} puntos)",
+                        f"Próximo nivel: {next_level.display_name} ({points_to_next:.2f} puntos)",
                         size=12,
                         color=text_color,
                         text_align=ft.TextAlign.CENTER

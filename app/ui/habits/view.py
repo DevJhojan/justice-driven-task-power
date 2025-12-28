@@ -47,7 +47,7 @@ class HabitsView:
         # Contenedor del formulario (oculto por defecto)
         self.form_container = self._build_form_container()
         
-        # Contenedor de métricas globales (oculto por defecto si no está visible)
+        # Contenedor de métricas globales (inicialmente oculto, se muestra/oculta con _open_metrics)
         self._global_metrics_container = self._build_global_metrics_container()
         self._global_metrics_container.visible = self._global_metrics_visible
         
@@ -289,8 +289,14 @@ class HabitsView:
         """Elimina un hábito."""
         def confirm_delete(e):
             self.habit_service.delete_habit(habit.id)
-            self._load_habits()
             self.page.close_dialog()
+            self._load_habits()
+            # Actualizar header y resumen si están visibles
+            if hasattr(self.page, '_home_view_ref'):
+                home_view = self.page._home_view_ref
+                home_view._build_ui()
+            else:
+                self.page.update()
         
         self.page.dialog = ft.AlertDialog(
             title=ft.Text("Confirmar eliminación"),
@@ -613,11 +619,9 @@ class HabitsView:
     def _open_metrics(self, e):
         """Muestra u oculta el panel de métricas globales."""
         self._global_metrics_visible = not self._global_metrics_visible
-        # Reconstruir la UI para actualizar la visibilidad del contenedor de métricas
-        if hasattr(self.page, '_home_view_ref'):
-            home_view = self.page._home_view_ref
-            home_view._build_ui()
-        elif self.page:
+        # Actualizar solo la visibilidad del contenedor de métricas globales
+        if self._global_metrics_container:
+            self._global_metrics_container.visible = self._global_metrics_visible
             self.page.update()
     
     def _toggle_habit_metrics(self, habit: Habit):
@@ -900,7 +904,7 @@ class HabitsView:
         
         container = ft.Container(
             content=metrics_content,
-            visible=False,  # Oculto por defecto
+            visible=False  # Se controla desde fuera del método mediante _open_metrics
         )
         
         return container

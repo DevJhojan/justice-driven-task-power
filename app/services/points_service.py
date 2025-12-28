@@ -148,7 +148,8 @@ class PointsService:
         row = cursor.fetchone()
         conn.close()
         
-        return float(row['total_points']) if row else 0.0
+        # Redondear a 2 decimales para asegurar consistencia
+        return round(float(row['total_points']), 2) if row else 0.0
     
     def add_points(self, points: float) -> float:
         """
@@ -165,6 +166,8 @@ class PointsService:
         
         current_points = self.get_total_points()
         new_total = max(0.0, current_points + float(points))  # No permitir puntos negativos
+        # Redondear a 2 decimales para evitar problemas de precisión con floats
+        new_total = round(new_total, 2)
         
         from datetime import datetime
         cursor.execute("""
