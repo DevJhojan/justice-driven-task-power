@@ -3,11 +3,11 @@ Vista principal de la aplicación con barra de navegación inferior.
 """
 import flet as ft
 
-from app.ui.tasks.view import TasksView
-from app.ui.habits.view import HabitsView
-from app.ui.goals.view import GoalsView
-from app.ui.settings.view import SettingsView
-from app.ui.summary.view import SummaryView
+from app.ui.tasks.view_tasks import TasksView
+from app.ui.habits.view_habits import HabitsView
+from app.ui.goals.view_goals import GoalsView
+from app.ui.settings.view_settings import SettingsView
+from app.ui.summary.view_summary import SummaryView
 
 
 class HomeView:

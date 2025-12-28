@@ -661,10 +661,9 @@ class GoalsView:
                     # Actualizar solo la tarjeta específica sin reconstruir toda la lista
                     self._update_goal_card(goal.id)
                     
-                    # Actualizar solo el header sin reconstruir toda la UI
-                    self._update_header_only()
-                    
                     # Actualizar la página una sola vez al final
+                    # No actualizamos el header aquí para evitar AssertionError
+                    # El header se actualizará la próxima vez que se reconstruya la UI
                     self.page.update()
         except Exception as e:
             self.page.snack_bar = ft.SnackBar(
@@ -676,6 +675,8 @@ class GoalsView:
     
     def _update_header_only(self):
         """Actualiza solo el header sin reconstruir toda la UI."""
+        # No actualizar aquí - se actualizará desde el método que llama
+        # Esto evita múltiples actualizaciones simultáneas que causan AssertionError
         if hasattr(self.page, '_home_view_ref'):
             home_view = self.page._home_view_ref
             # Buscar la vista principal y actualizar solo el header
@@ -686,7 +687,7 @@ class GoalsView:
                             # Reemplazar solo el header (primer control)
                             new_header = home_view._build_header()
                             view.controls[0].controls[0] = new_header
-                            self.page.update()
+                            # No llamar a page.update() aquí
                             break
     
     def _decrement_progress(self, goal: Goal):
@@ -711,10 +712,9 @@ class GoalsView:
                     # Actualizar solo la tarjeta específica sin reconstruir toda la lista
                     self._update_goal_card(goal.id)
                     
-                    # Actualizar solo el header sin reconstruir toda la UI
-                    self._update_header_only()
-                    
                     # Actualizar la página una sola vez al final
+                    # No actualizamos el header aquí para evitar AssertionError
+                    # El header se actualizará la próxima vez que se reconstruya la UI
                     self.page.update()
         except Exception as e:
             self.page.snack_bar = ft.SnackBar(
@@ -726,26 +726,86 @@ class GoalsView:
     
     def _delete_goal(self, goal: Goal):
         """Elimina una meta."""
-        try:
-            # Si la meta estaba completada, restar puntos antes de eliminar
-            was_completed = goal.target_value and goal.current_value >= goal.target_value
-            self.goal_service.delete_goal(goal.id)
-            if was_completed and self.points_service:
-                self.points_service.add_points(-1.00)  # Restar 1.00 puntos (el valor que se otorga por completar)
-            self._load_goals()
-            # Actualizar header y resumen si están visibles
-            if hasattr(self.page, '_home_view_ref'):
-                home_view = self.page._home_view_ref
-                home_view._build_ui()
-            else:
+        def on_confirm(e):
+            try:
+                print(f"DEBUG: Intentando eliminar meta con ID: {goal.id}")
+                # Si la meta estaba completada, restar puntos antes de eliminar
+                was_completed = goal.target_value and goal.current_value >= goal.target_value
+                result = self.goal_service.delete_goal(goal.id)
+                print(f"DEBUG: Resultado de delete_goal: {result}")
+                
+                if not result:
+                    raise Exception("No se pudo eliminar la meta. Puede que ya no exista.")
+                
+                if was_completed and self.points_service:
+                    self.points_service.add_points(-1.00)  # Restar 1.00 puntos (el valor que se otorga por completar)
+                
+                dialog.open = False
                 self.page.update()
-        except Exception as ex:
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error al eliminar: {str(ex)}"),
-                bgcolor=ft.Colors.RED
-            )
-            self.page.snack_bar.open = True
+                
+                # Recargar metas
+                self._load_goals()
+                
+                # Actualizar header y resumen si están visibles
+                if hasattr(self.page, '_home_view_ref'):
+                    home_view = self.page._home_view_ref
+                    home_view._build_ui()
+                else:
+                    self.page.update()
+                
+                # Mostrar mensaje de éxito
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text("Meta eliminada exitosamente"),
+                    bgcolor=ft.Colors.GREEN
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+            except Exception as ex:
+                print(f"DEBUG: Error al eliminar meta: {str(ex)}")
+                import traceback
+                traceback.print_exc()
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"Error al eliminar: {str(ex)}"),
+                    bgcolor=ft.Colors.RED
+                )
+                self.page.snack_bar.open = True
+                dialog.open = False
+                self.page.update()
+        
+        def on_cancel(e):
+            dialog.open = False
             self.page.update()
+        
+        print(f"DEBUG: Mostrando diálogo de eliminación para meta: {goal.title} (ID: {goal.id})")
+        
+        # Crear botón de eliminar con estilo rojo
+        delete_button = ft.ElevatedButton(
+            "Eliminar",
+            on_click=on_confirm,
+            bgcolor=ft.Colors.RED_700,
+            color=ft.Colors.WHITE,
+            icon=ft.Icons.DELETE
+        )
+        
+        cancel_button = ft.TextButton(
+            "Cancelar",
+            on_click=on_cancel
+        )
+        
+        dialog = ft.AlertDialog(
+            title=ft.Text("🗑️ Eliminar Meta"),
+            content=ft.Text(f"¿Estás seguro de eliminar la meta '{goal.title}'?"),
+            actions=[
+                cancel_button,
+                delete_button
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        self.page.dialog = dialog
+        dialog.open = True
+        self.page.update()
+        print(f"DEBUG: Diálogo abierto: {dialog.open}")
     
     def _build_inline_form(self, goal: Goal) -> ft.Container:
         """Construye un formulario inline para editar una meta en su posición."""

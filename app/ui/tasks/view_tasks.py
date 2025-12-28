@@ -402,26 +402,56 @@ class TasksView:
     
     def _delete_task(self, task: Task):
         """Elimina una tarea."""
-        def confirm_delete(e):
-            self.task_service.delete_task(task.id)
-            self.page.close_dialog()
-            self._load_tasks()
-            # Actualizar header y resumen si están visibles
-            if hasattr(self.page, '_home_view_ref'):
-                home_view = self.page._home_view_ref
-                home_view._build_ui()
-            else:
+        def on_confirm(e):
+            try:
+                self.task_service.delete_task(task.id)
+                dialog.open = False
+                self._load_tasks()
+                # Actualizar header y resumen si están visibles
+                if hasattr(self.page, '_home_view_ref'):
+                    home_view = self.page._home_view_ref
+                    home_view._build_ui()
+                else:
+                    self.page.update()
+            except Exception as ex:
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"Error al eliminar: {str(ex)}"),
+                    bgcolor=ft.Colors.RED
+                )
+                self.page.snack_bar.open = True
+                dialog.open = False
                 self.page.update()
         
-        self.page.dialog = ft.AlertDialog(
-            title=ft.Text("Confirmar eliminación"),
-            content=ft.Text(f"¿Estás seguro de que quieres eliminar la tarea '{task.title}'?"),
-            actions=[
-                ft.TextButton("Cancelar", on_click=lambda e: self.page.close_dialog()),
-                ft.TextButton("Eliminar", on_click=confirm_delete, style=ft.ButtonStyle(color=ft.Colors.RED))
-            ]
+        def on_cancel(e):
+            dialog.open = False
+            self.page.update()
+        
+        # Crear botón de eliminar con estilo rojo
+        delete_button = ft.ElevatedButton(
+            "Eliminar",
+            on_click=on_confirm,
+            bgcolor=ft.Colors.RED_700,
+            color=ft.Colors.WHITE,
+            icon=ft.Icons.DELETE
         )
-        self.page.dialog.open = True
+        
+        cancel_button = ft.TextButton(
+            "Cancelar",
+            on_click=on_cancel
+        )
+        
+        dialog = ft.AlertDialog(
+            title=ft.Text("🗑️ Eliminar Tarea"),
+            content=ft.Text(f"¿Estás seguro de eliminar la tarea '{task.title}'?"),
+            actions=[
+                cancel_button,
+                delete_button
+            ],
+            actions_alignment=ft.MainAxisAlignment.END
+        )
+        
+        self.page.dialog = dialog
+        dialog.open = True
         self.page.update()
     
     def _toggle_form(self, e, task: Optional[Task] = None):

@@ -132,7 +132,7 @@ def main(page: ft.Page):
                     page.update()
                     return
                 
-                from app.ui.tasks.form import TaskForm
+                from app.ui.tasks.form_tasks import TaskForm
                 from app.services.task_service import TaskService
                 from app.data.task_repository import TaskRepository
                 from app.data.subtask_repository import SubtaskRepository
@@ -169,7 +169,7 @@ def main(page: ft.Page):
             pass
         
         elif page.route.startswith("/habit-form"):
-            from app.ui.habits.form import HabitForm
+            from app.ui.habits.form_habits import HabitForm
             from app.services.habit_service import HabitService
             from app.data.habit_repository import HabitRepository
             from app.data.database import get_db
@@ -214,7 +214,7 @@ def main(page: ft.Page):
             page.update()
         
         elif page.route.startswith("/goal-form"):
-            from app.ui.goals.form import GoalForm
+            from app.ui.goals.form_goals import GoalForm
             from app.services.goal_service import GoalService
             from app.services.points_service import PointsService
             from app.data.goal_repository import GoalRepository
