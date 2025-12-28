@@ -60,15 +60,17 @@ def main(page: ft.Page):
     page.dark_theme.color_scheme.on_primary = ft.Colors.WHITE
     page.dark_theme.color_scheme.on_secondary = ft.Colors.WHITE
     
-    # Establecer tema inicial desde configuración del usuario
+    # Establecer tema inicial desde configuración del usuario ANTES de cualquier otra cosa
     from app.data.database import get_db
     from app.services.user_settings_service import UserSettingsService
     db = get_db()
     user_settings_service = UserSettingsService(db)
     saved_theme = user_settings_service.get_theme()
+    # Establecer el tema ANTES de construir cualquier vista
     page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
     
-    # Inicializar home_view primero
+    # Inicializar home_view después de establecer el tema
+    # Esto asegura que todas las vistas se construyan con el tema correcto
     home_view = HomeView(page)
     # Guardar referencia a home_view en la página para que las vistas puedan acceder
     page._home_view_ref = home_view
@@ -288,6 +290,11 @@ def main(page: ft.Page):
     
     page.on_route_change = route_change
     page.on_view_pop = view_pop
+    
+    # Construir la UI inicial después de que todo esté configurado
+    # Esto asegura que el tema se haya aplicado correctamente antes de construir las vistas
+    if len(page.views) == 0:
+        home_view._build_ui()
 
 
 if __name__ == "__main__":

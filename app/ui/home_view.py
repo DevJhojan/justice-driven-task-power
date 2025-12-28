@@ -70,8 +70,7 @@ class HomeView:
         )
         self.summary_view = SummaryView(page, self.task_service, self.habit_service, self.goal_service, self.points_service)
         
-        # Construir UI
-        self._build_ui()
+        # NO construir UI aquí - se construirá después de configurar los handlers en main.py
     
     def _build_ui(self):
         """Construye la interfaz de usuario."""
