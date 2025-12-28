@@ -6,7 +6,6 @@ from typing import Optional
 
 from app.data.models import Goal
 from app.services.goal_service import GoalService
-from app.ui.goals.form import GoalForm
 
 
 class GoalsView:
@@ -57,7 +56,7 @@ class GoalsView:
                     ),
                     ft.IconButton(
                         icon=ft.Icons.ADD,
-                        on_click=self._open_goal_form,
+                        on_click=self._toggle_form,
                         tooltip="Agregar meta",
                         icon_color=btn_color
                     )
@@ -201,7 +200,7 @@ class GoalsView:
         
         edit_button = ft.IconButton(
             icon=ft.Icons.EDIT,
-            on_click=lambda e, g=goal: self._open_goal_form(e, g),
+            on_click=lambda e, g=goal: self._toggle_form(e, g),
             tooltip="Editar",
             icon_color=btn_color
         )
@@ -298,8 +297,252 @@ class GoalsView:
         self.page.dialog.open = True
         self.page.update()
     
-    def _open_goal_form(self, e, goal: Optional[Goal] = None):
-        """Abre el formulario de meta en una nueva vista."""
-        route = f"/goal-form?id={goal.id}" if goal and goal.id else "/goal-form"
-        self.page.go(route)
+    def _toggle_form(self, e, goal: Optional[Goal] = None):
+        """Muestra u oculta el formulario de meta."""
+        if self.form_container.visible:
+            # Si está visible, ocultarlo
+            self.form_container.visible = False
+        else:
+            # Si está oculto, mostrarlo y preparar para nueva meta o editar
+            if goal:
+                self._edit_goal_in_form(goal)
+            else:
+                self._new_goal_in_form()
+            self.form_container.visible = True
+        self.page.update()
+    
+    def _new_goal_in_form(self):
+        """Prepara el formulario para crear una nueva meta."""
+        self.form_title_field.value = ""
+        self.form_description_field.value = ""
+        self.form_target_value_field.value = ""
+        self.form_current_value_field.value = "0.0"
+        self.form_unit_field.value = ""
+        self.form_period_field.value = "mes"
+        self._current_editing_goal = None
+        if hasattr(self, '_form_title_text'):
+            self._form_title_text.value = "Nueva Meta"
+    
+    def _edit_goal_in_form(self, goal: Goal):
+        """Prepara el formulario para editar una meta existente."""
+        self.form_title_field.value = goal.title
+        self.form_description_field.value = goal.description or ""
+        self.form_target_value_field.value = str(goal.target_value) if goal.target_value else ""
+        self.form_current_value_field.value = str(goal.current_value) if goal.current_value else "0.0"
+        self.form_unit_field.value = goal.unit or ""
+        self.form_period_field.value = goal.period if goal.period else "mes"
+        self._current_editing_goal = goal
+        if hasattr(self, '_form_title_text'):
+            self._form_title_text.value = "Editar Meta"
+    
+    def _build_form_container(self) -> ft.Container:
+        """Construye el contenedor del formulario."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        bg_color = ft.Colors.WHITE if not is_dark else ft.Colors.BLACK
+        btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        
+        # Campos del formulario
+        self.form_title_field = ft.TextField(
+            label="Título",
+            hint_text="Ingresa el título de la meta",
+            autofocus=True
+        )
+        
+        self.form_description_field = ft.TextField(
+            label="Descripción",
+            hint_text="Descripción de la meta (opcional)",
+            multiline=True,
+            min_lines=3,
+            max_lines=5
+        )
+        
+        self.form_target_value_field = ft.TextField(
+            label="Valor objetivo",
+            hint_text="Valor objetivo (opcional)"
+        )
+        
+        self.form_current_value_field = ft.TextField(
+            label="Valor actual",
+            hint_text="Valor actual",
+            value="0.0"
+        )
+        
+        self.form_unit_field = ft.TextField(
+            label="Unidad",
+            hint_text="Unidad de medida (ej: días, tareas, horas) - opcional"
+        )
+        
+        # Selector de período
+        period_options = [
+            ft.dropdown.Option("semana", "Semana"),
+            ft.dropdown.Option("mes", "Mes"),
+            ft.dropdown.Option("trimestre", "Trimestre"),
+            ft.dropdown.Option("semestre", "Semestre"),
+            ft.dropdown.Option("anual", "Anual")
+        ]
+        
+        self.form_period_field = ft.Dropdown(
+            label="Período",
+            hint_text="Selecciona el período de la meta",
+            options=period_options,
+            value="mes"
+        )
+        
+        # Variable para rastrear la meta que se está editando
+        self._current_editing_goal = None
+        
+        def save_goal(e):
+            self._save_goal_from_form()
+        
+        def cancel_form(e):
+            self.form_container.visible = False
+            self.page.update()
+        
+        # Botones
+        save_button = ft.ElevatedButton(
+            "Guardar",
+            icon=ft.Icons.SAVE,
+            on_click=save_goal,
+            bgcolor=btn_color,
+            color=ft.Colors.WHITE
+        )
+        
+        cancel_button = ft.ElevatedButton(
+            "Cancelar",
+            icon=ft.Icons.CANCEL,
+            on_click=cancel_form,
+            color=ft.Colors.GREY
+        )
+        
+        # Contenido del formulario
+        form_content = ft.Column(
+            [
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Text(
+                                "Nueva Meta",
+                                size=20,
+                                weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500,
+                                ref=lambda c: setattr(self, '_form_title_text', c) if c else None
+                            ),
+                            ft.Row(
+                                [cancel_button, save_button],
+                                spacing=8
+                            )
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                    ),
+                    padding=16,
+                    bgcolor=ft.Colors.SURFACE
+                ),
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            self.form_title_field,
+                            self.form_description_field,
+                            self.form_period_field,
+                            self.form_target_value_field,
+                            self.form_current_value_field,
+                            self.form_unit_field
+                        ],
+                        spacing=16,
+                        scroll=ft.ScrollMode.AUTO,
+                        expand=True
+                    ),
+                    padding=16,
+                    expand=True,
+                    bgcolor=bg_color
+                )
+            ],
+            spacing=0,
+            expand=True
+        )
+        
+        container = ft.Container(
+            content=form_content,
+            visible=False,  # Oculto por defecto
+            border=ft.border.all(2, btn_color),
+            border_radius=8,
+            margin=ft.margin.symmetric(horizontal=16, vertical=8)
+        )
+        
+        return container
+    
+    def _save_goal_from_form(self):
+        """Guarda la meta desde el formulario."""
+        title = self.form_title_field.value.strip()
+        if not title:
+            return
+        
+        description = self.form_description_field.value.strip() if self.form_description_field.value else None
+        
+        # Validar valores numéricos
+        try:
+            target_value = float(self.form_target_value_field.value.strip()) if self.form_target_value_field.value.strip() else None
+            current_value = float(self.form_current_value_field.value.strip() or "0.0")
+        except ValueError:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text("Los valores deben ser números válidos"),
+                bgcolor=ft.Colors.RED
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+        
+        unit = self.form_unit_field.value.strip() if self.form_unit_field.value else None
+        period = self.form_period_field.value or "mes"
+        
+        try:
+            if self._current_editing_goal:
+                # Editar meta existente
+                from app.data.models import Goal
+                # Verificar si la meta estaba completa antes del cambio
+                was_completed = self._current_editing_goal.target_value and self._current_editing_goal.current_value >= self._current_editing_goal.target_value
+                old_current_value = self._current_editing_goal.current_value
+                
+                updated_goal = Goal(
+                    id=self._current_editing_goal.id,
+                    title=title,
+                    description=description,
+                    target_value=target_value,
+                    current_value=current_value,
+                    unit=unit,
+                    period=period,
+                    created_at=self._current_editing_goal.created_at
+                )
+                
+                self.goal_service.update_goal(updated_goal)
+                
+                # Si la meta estaba completa y ahora no lo está, restar puntos
+                is_completed_now = target_value and current_value >= target_value
+                if was_completed and not is_completed_now and self.points_service:
+                    self.points_service.add_points(-0.1)  # Restar puntos
+                # Si la meta no estaba completa y ahora lo está, sumar puntos
+                elif not was_completed and is_completed_now and self.points_service:
+                    self.points_service.add_points(0.1)  # Sumar puntos
+            else:
+                # Crear nueva meta
+                self.goal_service.create_goal(
+                    title=title,
+                    description=description,
+                    target_value=target_value,
+                    unit=unit,
+                    current_value=current_value,
+                    period=period,
+                    points_service=self.points_service
+                )
+            
+            # Ocultar formulario y recargar metas
+            self.form_container.visible = False
+            self._load_goals()
+            self.page.update()
+        except Exception as ex:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error al guardar: {str(ex)}"),
+                bgcolor=ft.Colors.RED
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
 

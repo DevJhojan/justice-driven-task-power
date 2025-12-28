@@ -7,7 +7,6 @@ from typing import Optional
 
 from app.data.models import Habit
 from app.services.habit_service import HabitService
-from app.ui.habits.form import HabitForm
 
 
 class HabitsView:
@@ -42,6 +41,9 @@ class HabitsView:
             expand=True
         )
         
+        # Contenedor del formulario (oculto por defecto)
+        self.form_container = self._build_form_container()
+        
         # Barra de título
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
@@ -66,7 +68,7 @@ class HabitsView:
                             ),
                             ft.IconButton(
                                 icon=ft.Icons.ADD,
-                                on_click=self._open_habit_form,
+                                on_click=self._toggle_form,
                                 tooltip="Agregar hábito",
                                 icon_color=btn_color
                             )
@@ -88,6 +90,7 @@ class HabitsView:
             content=ft.Column(
                 [
                     title_bar,
+                    self.form_container,  # Formulario (aparece primero cuando está visible)
                     ft.Container(
                         content=self.habits_container,
                         padding=16,
@@ -157,7 +160,7 @@ class HabitsView:
         
         edit_button = ft.IconButton(
             icon=ft.Icons.EDIT,
-            on_click=lambda e, h=habit: self._open_habit_form(e, h),
+            on_click=lambda e, h=habit: self._toggle_form(e, h),
             tooltip="Editar",
             icon_color=btn_color
         )
@@ -248,10 +251,169 @@ class HabitsView:
         self.page.dialog.open = True
         self.page.update()
     
-    def _open_habit_form(self, e, habit: Optional[Habit] = None):
-        """Abre el formulario de hábito en una nueva vista."""
-        route = f"/habit-form?id={habit.id}" if habit and habit.id else "/habit-form"
-        self.page.go(route)
+    def _toggle_form(self, e, habit: Optional[Habit] = None):
+        """Muestra u oculta el formulario de hábito."""
+        if self.form_container.visible:
+            # Si está visible, ocultarlo
+            self.form_container.visible = False
+        else:
+            # Si está oculto, mostrarlo y preparar para nuevo hábito o editar
+            if habit:
+                self._edit_habit_in_form(habit)
+            else:
+                self._new_habit_in_form()
+            self.form_container.visible = True
+        self.page.update()
+    
+    def _new_habit_in_form(self):
+        """Prepara el formulario para crear un nuevo hábito."""
+        self.form_title_field.value = ""
+        self.form_description_field.value = ""
+        self._current_editing_habit = None
+        if hasattr(self, '_form_title_text'):
+            self._form_title_text.value = "Nuevo Hábito"
+    
+    def _edit_habit_in_form(self, habit: Habit):
+        """Prepara el formulario para editar un hábito existente."""
+        self.form_title_field.value = habit.title
+        self.form_description_field.value = habit.description or ""
+        self._current_editing_habit = habit
+        if hasattr(self, '_form_title_text'):
+            self._form_title_text.value = "Editar Hábito"
+    
+    def _build_form_container(self) -> ft.Container:
+        """Construye el contenedor del formulario."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        bg_color = ft.Colors.WHITE if not is_dark else ft.Colors.BLACK
+        btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        
+        # Campos del formulario
+        self.form_title_field = ft.TextField(
+            label="Título",
+            hint_text="Ingresa el título del hábito",
+            autofocus=True
+        )
+        
+        self.form_description_field = ft.TextField(
+            label="Descripción",
+            hint_text="Descripción del hábito (opcional)",
+            multiline=True,
+            min_lines=3,
+            max_lines=5
+        )
+        
+        # Variable para rastrear el hábito que se está editando
+        self._current_editing_habit = None
+        
+        def save_habit(e):
+            self._save_habit_from_form()
+        
+        def cancel_form(e):
+            self.form_container.visible = False
+            self.page.update()
+        
+        # Botones
+        save_button = ft.ElevatedButton(
+            "Guardar",
+            icon=ft.Icons.SAVE,
+            on_click=save_habit,
+            bgcolor=btn_color,
+            color=ft.Colors.WHITE
+        )
+        
+        cancel_button = ft.ElevatedButton(
+            "Cancelar",
+            icon=ft.Icons.CANCEL,
+            on_click=cancel_form,
+            color=ft.Colors.GREY
+        )
+        
+        # Contenido del formulario
+        form_content = ft.Column(
+            [
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Text(
+                                "Nuevo Hábito",
+                                size=20,
+                                weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500,
+                                ref=lambda c: setattr(self, '_form_title_text', c) if c else None
+                            ),
+                            ft.Row(
+                                [cancel_button, save_button],
+                                spacing=8
+                            )
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                    ),
+                    padding=16,
+                    bgcolor=ft.Colors.SURFACE
+                ),
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            self.form_title_field,
+                            self.form_description_field
+                        ],
+                        spacing=16,
+                        scroll=ft.ScrollMode.AUTO,
+                        expand=True
+                    ),
+                    padding=16,
+                    expand=True,
+                    bgcolor=bg_color
+                )
+            ],
+            spacing=0,
+            expand=True
+        )
+        
+        container = ft.Container(
+            content=form_content,
+            visible=False,  # Oculto por defecto
+            border=ft.border.all(2, btn_color),
+            border_radius=8,
+            margin=ft.margin.symmetric(horizontal=16, vertical=8)
+        )
+        
+        return container
+    
+    def _save_habit_from_form(self):
+        """Guarda el hábito desde el formulario."""
+        title = self.form_title_field.value.strip()
+        if not title:
+            return
+        
+        description = self.form_description_field.value.strip() if self.form_description_field.value else None
+        
+        try:
+            if self._current_editing_habit:
+                # Editar hábito existente
+                from app.data.models import Habit
+                updated_habit = Habit(
+                    id=self._current_editing_habit.id,
+                    title=title,
+                    description=description,
+                    created_at=self._current_editing_habit.created_at
+                )
+                self.habit_service.update_habit(updated_habit)
+            else:
+                # Crear nuevo hábito
+                self.habit_service.create_habit(title, description)
+            
+            # Ocultar formulario y recargar hábitos
+            self.form_container.visible = False
+            self._load_habits()
+            self.page.update()
+        except Exception as ex:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error al guardar: {str(ex)}"),
+                bgcolor=ft.Colors.RED
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
     
     def _open_metrics(self, e):
         """Abre la vista de métricas de hábitos."""
