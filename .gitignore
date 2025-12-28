@@ -48,3 +48,12 @@ token.pickle
 .DS_Store
 Thumbs.db
 
+# Credenciales y configuración sensible
+.env
+android/keystore/*.jks
+android/keystore/*.keystore
+
+# Archivos de versionado generados automáticamente
+.version_code.txt
+flet.toml
+
