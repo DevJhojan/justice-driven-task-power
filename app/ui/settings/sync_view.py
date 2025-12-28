@@ -185,7 +185,7 @@ class FirebaseSyncView:
         
         # Botones de sincronización
         self.sync_up_button = ft.ElevatedButton(
-            "Exportar",
+            "Exportar en la nube",
             on_click=self._sync_to_firebase,
             icon=ft.Icons.UPLOAD,
             disabled=not is_logged_in,
@@ -195,7 +195,7 @@ class FirebaseSyncView:
         )
         
         self.sync_down_button = ft.ElevatedButton(
-            "Importar",
+            "Importar desde la nube",
             on_click=self._sync_from_firebase,
             icon=ft.Icons.DOWNLOAD,
             disabled=not is_logged_in,
@@ -235,28 +235,21 @@ class FirebaseSyncView:
                     self.firebase_password_field,
                     ft.Row([self.login_button, self.register_button], spacing=8) if not is_logged_in else ft.Container(),
                     self.logout_button if is_logged_in else ft.Container(),
-                ], spacing=12),
-                padding=16,
-                bgcolor=ft.Colors.SURFACE if is_dark else ft.Colors.WHITE,
-                border_radius=12,
-                border=ft.border.all(1, ft.Colors.OUTLINE)
-            ),
-            
-            ft.Container(
-                content=ft.Column([
+                    # Mostrar botones de sincronización solo si está autenticado
+                    ft.Divider(height=20) if is_logged_in else ft.Container(),
                     ft.Text(
                         "Sincronización",
-                        size=18,
+                        size=16,
                         weight=ft.FontWeight.BOLD,
                         color=ft.Colors.RED_800 if not is_dark else ft.Colors.RED_400
-                    ),
+                    ) if is_logged_in else ft.Container(),
                     ft.Text(
-                        "Sincroniza tus datos locales con Firebase",
+                        "Exportar: envía tus datos locales a la nube\nImportar: trae los datos de la nube a tu dispositivo",
                         size=12,
                         color=ft.Colors.GREY
-                    ),
-                    self.sync_up_button,
-                    self.sync_down_button,
+                    ) if is_logged_in else ft.Container(),
+                    self.sync_up_button if is_logged_in else ft.Container(),
+                    self.sync_down_button if is_logged_in else ft.Container(),
                 ], spacing=12),
                 padding=16,
                 bgcolor=ft.Colors.SURFACE if is_dark else ft.Colors.WHITE,
@@ -441,17 +434,8 @@ class FirebaseSyncView:
         try:
             success = self.firebase_sync_service.login(email, password)
             if success:
-                self._show_snackbar("Sesión iniciada correctamente. Sincronizando datos...", ft.Colors.GREEN)
-                # Sincronizar automáticamente después del login
-                try:
-                    sync_result = self.firebase_sync_service.sync_to_firebase()
-                    if sync_result.get("success"):
-                        self._show_snackbar(f"Login exitoso. {sync_result.get('message', 'Datos sincronizados')}", ft.Colors.GREEN)
-                    else:
-                        self._show_snackbar(f"Login exitoso. Advertencia: {sync_result.get('message', '')}", ft.Colors.ORANGE)
-                except Exception as sync_ex:
-                    self._show_snackbar(f"Login exitoso. Error en sincronización: {str(sync_ex)}", ft.Colors.ORANGE)
-                # Reconstruir UI para reflejar el estado de login
+                self._show_snackbar("Sesión iniciada correctamente", ft.Colors.GREEN)
+                # Reconstruir UI para mostrar botones de sincronización
                 self._rebuild_ui()
             else:
                 self._show_snackbar("Error al iniciar sesión. Verifica tus credenciales.", ft.Colors.RED)
@@ -483,17 +467,8 @@ class FirebaseSyncView:
         try:
             success = self.firebase_sync_service.register(email, password)
             if success:
-                self._show_snackbar("Usuario registrado correctamente. Sincronizando datos...", ft.Colors.GREEN)
-                # Sincronizar automáticamente después del registro
-                try:
-                    sync_result = self.firebase_sync_service.sync_to_firebase()
-                    if sync_result.get("success"):
-                        self._show_snackbar(f"Registro exitoso. {sync_result.get('message', 'Datos sincronizados')}", ft.Colors.GREEN)
-                    else:
-                        self._show_snackbar(f"Registro exitoso. Advertencia: {sync_result.get('message', '')}", ft.Colors.ORANGE)
-                except Exception as sync_ex:
-                    self._show_snackbar(f"Registro exitoso. Error en sincronización: {str(sync_ex)}", ft.Colors.ORANGE)
-                # Reconstruir UI para reflejar el estado de login
+                self._show_snackbar("Usuario registrado correctamente", ft.Colors.GREEN)
+                # Reconstruir UI para mostrar botones de sincronización
                 self._rebuild_ui()
             else:
                 self._show_snackbar("Error al registrar usuario", ft.Colors.RED)
