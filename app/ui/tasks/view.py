@@ -24,6 +24,7 @@ class TasksView:
         self.task_service = task_service
         self.points_service = points_service
         self.tasks_container = None
+        self._editing_task_id = None  # ID de la tarea que se está editando (None si no hay ninguna)
     
     def build_ui(self) -> ft.Container:
         """
@@ -35,9 +36,7 @@ class TasksView:
         # Contenedor para las tareas
         self.tasks_container = ft.Column(
             [],
-            spacing=8,
-            scroll=ft.ScrollMode.AUTO,
-            expand=True
+            spacing=8
         )
         
         # Contenedor del formulario (oculto por defecto)
@@ -81,11 +80,11 @@ class TasksView:
                     self.form_container,  # Formulario (aparece primero cuando está visible)
                     ft.Container(
                         content=self.tasks_container,
-                        padding=16,
-                        expand=True
+                        padding=16
                     )
                 ],
                 spacing=0,
+                scroll=ft.ScrollMode.AUTO,
                 expand=True
             ),
             expand=True
@@ -113,9 +112,15 @@ class TasksView:
             )
         else:
             for task in tasks:
-                self.tasks_container.controls.append(
-                    self._build_task_card(task)
-                )
+                # Si esta tarea se está editando, mostrar formulario inline en lugar de la tarjeta
+                if self._editing_task_id == task.id:
+                    self.tasks_container.controls.append(
+                        self._build_inline_form(task)
+                    )
+                else:
+                    self.tasks_container.controls.append(
+                        self._build_task_card(task)
+                    )
         
         if self.page:
             self.page.update()
@@ -273,17 +278,28 @@ class TasksView:
     
     def _toggle_form(self, e, task: Optional[Task] = None):
         """Muestra u oculta el formulario de tarea."""
-        if self.form_container.visible:
-            # Si está visible, ocultarlo
-            self.form_container.visible = False
-        else:
-            # Si está oculto, mostrarlo y preparar para nueva tarea o editar
-            if task:
-                self._edit_task_in_form(task)
+        if task and task.id:
+            # Editar tarea específica - modo inline
+            if self._editing_task_id == task.id:
+                # Si ya está en edición, cancelar
+                self._editing_task_id = None
             else:
+                # Iniciar edición inline
+                self._editing_task_id = task.id
+                self._edit_task_in_form(task)
+            self._load_tasks()  # Recargar para mostrar/ocultar formulario
+            self.page.update()
+        else:
+            # Crear nueva tarea - modo formulario superior
+            if self.form_container.visible:
+                # Si está visible, ocultarlo
+                self.form_container.visible = False
+                self._editing_task_id = None
+            else:
+                # Si está oculto, mostrarlo y preparar para nueva tarea
                 self._new_task_in_form()
-            self.form_container.visible = True
-        self.page.update()
+                self.form_container.visible = True
+            self.page.update()
     
     def _new_task_in_form(self):
         """Prepara el formulario para crear una nueva tarea."""
@@ -359,6 +375,8 @@ class TasksView:
         
         def cancel_form(e):
             self.form_container.visible = False
+            self._editing_task_id = None
+            self._load_tasks()
             self.page.update()
         
         def add_subtask(e):
@@ -451,6 +469,231 @@ class TasksView:
         )
         
         return container
+    
+    def _build_inline_form(self, task: Task) -> ft.Container:
+        """Construye un formulario inline para editar una tarea en su posición."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        bg_color = ft.Colors.WHITE if not is_dark else ft.Colors.SURFACE
+        btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        
+        # Campos del formulario inline (crear nuevos para evitar conflictos)
+        inline_title_field = ft.TextField(
+            label="Título",
+            hint_text="Ingresa el título de la tarea",
+            value=task.title,
+            autofocus=True
+        )
+        
+        inline_description_field = ft.TextField(
+            label="Descripción",
+            hint_text="Descripción de la tarea (opcional)",
+            multiline=True,
+            min_lines=2,
+            max_lines=4,
+            value=task.description or ""
+        )
+        
+        inline_due_date_field = ft.TextField(
+            label="Fecha de vencimiento",
+            hint_text="YYYY-MM-DD (opcional)",
+            value=task.due_date.isoformat() if task.due_date else ""
+        )
+        
+        # Cargar subtareas existentes
+        existing_subtasks = self.task_service.get_subtasks(task.id) if task.id else []
+        inline_subtasks_list = []
+        for subtask in existing_subtasks:
+            inline_subtasks_list.append(subtask)
+        
+        # Campo para nueva subtarea
+        inline_new_subtask_field = ft.TextField(
+            label="Nueva subtarea",
+            hint_text="Ingresa el título de la subtarea",
+            expand=True
+        )
+        
+        # Contenedor de subtareas
+        inline_subtasks_container = ft.Container(
+            content=ft.Column([], spacing=4)
+        )
+        
+        def rebuild_inline_subtasks():
+            """Reconstruye la lista de subtareas en el formulario inline."""
+            subtasks_col = ft.Column([], spacing=4)
+            for idx, subtask in enumerate(inline_subtasks_list):
+                subtask_row = ft.Row(
+                    [
+                        ft.Checkbox(
+                            value=subtask.completed,
+                            on_change=lambda e, i=idx: (setattr(inline_subtasks_list[i], 'completed', e.control.value), rebuild_inline_subtasks(), self.page.update())
+                        ),
+                        ft.Text(subtask.title, expand=True),
+                        ft.IconButton(
+                            icon=ft.Icons.DELETE,
+                            icon_size=16,
+                            on_click=lambda e, i=idx: (inline_subtasks_list.pop(i), rebuild_inline_subtasks(), self.page.update()),
+                            tooltip="Eliminar",
+                            icon_color=ft.Colors.RED
+                        )
+                    ],
+                    spacing=8
+                )
+                subtasks_col.controls.append(subtask_row)
+            inline_subtasks_container.content = subtasks_col
+        
+        def add_inline_subtask(e):
+            """Agrega una subtarea al formulario inline."""
+            title = inline_new_subtask_field.value.strip()
+            if not title:
+                return
+            from app.data.models import Subtask
+            inline_subtasks_list.append(Subtask(id=None, task_id=task.id, title=title, completed=False))
+            inline_new_subtask_field.value = ""
+            rebuild_inline_subtasks()
+            self.page.update()
+        
+        # Reconstruir subtareas iniciales
+        rebuild_inline_subtasks()
+        
+        def save_inline_task(e):
+            """Guarda la tarea desde el formulario inline."""
+            title = inline_title_field.value.strip()
+            if not title:
+                return
+            
+            description = inline_description_field.value.strip() if inline_description_field.value else None
+            due_date_str = inline_due_date_field.value.strip() if inline_due_date_field.value else None
+            
+            due_date = None
+            if due_date_str:
+                try:
+                    from datetime import datetime
+                    due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
+                except:
+                    pass
+            
+            try:
+                # Actualizar tarea
+                from app.data.models import Task
+                updated_task = Task(
+                    id=task.id,
+                    title=title,
+                    description=description,
+                    due_date=due_date,
+                    status=task.status,
+                    created_at=task.created_at
+                )
+                self.task_service.update_task(updated_task)
+                
+                # Eliminar todas las subtareas existentes y crear las nuevas
+                existing_subtasks_db = self.task_service.get_subtasks(task.id)
+                for subtask in existing_subtasks_db:
+                    if subtask.id:
+                        self.task_service.delete_subtask(subtask.id)
+                
+                # Crear las nuevas subtareas
+                for subtask in inline_subtasks_list:
+                    if subtask.title.strip():
+                        created_subtask = self.task_service.create_subtask(task.id, subtask.title)
+                        # Si la subtarea estaba completada, actualizarla
+                        if created_subtask and created_subtask.id and subtask.completed:
+                            self.task_service.toggle_subtask(created_subtask.id)
+                
+                # Cancelar edición y recargar
+                self._editing_task_id = None
+                self._load_tasks()
+                self.page.update()
+            except Exception as ex:
+                self._show_error(ex, "Error al guardar tarea")
+        
+        def cancel_inline_form(e):
+            """Cancela la edición inline."""
+            self._editing_task_id = None
+            self._load_tasks()
+            self.page.update()
+        
+        # Botones
+        save_button = ft.ElevatedButton(
+            "Guardar",
+            icon=ft.Icons.SAVE,
+            on_click=save_inline_task,
+            bgcolor=btn_color,
+            color=ft.Colors.WHITE
+        )
+        
+        cancel_button = ft.ElevatedButton(
+            "Cancelar",
+            icon=ft.Icons.CANCEL,
+            on_click=cancel_inline_form,
+            color=ft.Colors.GREY
+        )
+        
+        add_subtask_button = ft.ElevatedButton(
+            "Agregar",
+            icon=ft.Icons.ADD,
+            on_click=add_inline_subtask,
+            bgcolor=btn_color,
+            color=ft.Colors.WHITE
+        )
+        
+        # Contenido del formulario inline
+        form_content = ft.Column(
+            [
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Text(
+                                "Editar Tarea",
+                                size=18,
+                                weight=ft.FontWeight.BOLD,
+                                color=btn_color
+                            ),
+                            ft.Row(
+                                [cancel_button, save_button],
+                                spacing=8
+                            )
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                    ),
+                    padding=16,
+                    bgcolor=ft.Colors.SURFACE
+                ),
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            inline_title_field,
+                            inline_description_field,
+                            inline_due_date_field,
+                            ft.Divider(),
+                            ft.Text(
+                                "Subtareas",
+                                size=14,
+                                weight=ft.FontWeight.BOLD,
+                                color=btn_color
+                            ),
+                            inline_subtasks_container,
+                            ft.Row(
+                                [inline_new_subtask_field, add_subtask_button],
+                                spacing=8
+                            )
+                        ],
+                        spacing=12
+                    ),
+                    padding=16,
+                    bgcolor=bg_color
+                )
+            ],
+            spacing=0
+        )
+        
+        return ft.Container(
+            content=form_content,
+            padding=16,
+            bgcolor=bg_color,
+            border_radius=8,
+            border=ft.border.all(2, btn_color),
+            margin=ft.margin.only(bottom=8)
+        )
     
     def _add_subtask_to_form(self, e):
         """Agrega una subtarea al formulario."""
@@ -552,7 +795,7 @@ class TasksView:
                 # Crear las nuevas subtareas
                 for subtask in self._form_subtasks:
                     if subtask.title.strip():
-                        self.task_service.add_subtask(self._current_editing_task.id, subtask.title)
+                        self.task_service.create_subtask(self._current_editing_task.id, subtask.title)
             else:
                 # Crear nueva tarea
                 due_date_str = due_date.isoformat() if due_date else None
@@ -564,10 +807,11 @@ class TasksView:
                 # Agregar subtareas
                 for subtask in self._form_subtasks:
                     if subtask.title.strip():
-                        self.task_service.add_subtask(task.id, subtask.title)
+                        self.task_service.create_subtask(task.id, subtask.title)
             
             # Ocultar formulario y recargar tareas
             self.form_container.visible = False
+            self._editing_task_id = None
             self._load_tasks()
             self.page.update()
         except Exception as ex:

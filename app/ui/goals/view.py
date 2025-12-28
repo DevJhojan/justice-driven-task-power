@@ -24,6 +24,7 @@ class GoalsView:
         self.goal_service = goal_service
         self.points_service = points_service
         self.goals_container = None
+        self._editing_goal_id = None  # ID de la meta que se está editando (None si no hay ninguna)
     
     def build_ui(self) -> ft.Container:
         """
@@ -35,10 +36,11 @@ class GoalsView:
         # Contenedor para las metas
         self.goals_container = ft.Column(
             [],
-            spacing=8,
-            scroll=ft.ScrollMode.AUTO,
-            expand=True
+            spacing=8
         )
+        
+        # Contenedor del formulario (oculto por defecto)
+        self.form_container = self._build_form_container()
         
         # Barra de título
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
@@ -75,13 +77,14 @@ class GoalsView:
             content=ft.Column(
                 [
                     title_bar,
+                    self.form_container,  # Formulario (aparece primero cuando está visible)
                     ft.Container(
                         content=self.goals_container,
-                        padding=16,
-                        expand=True
+                        padding=16
                     )
                 ],
                 spacing=0,
+                scroll=ft.ScrollMode.AUTO,
                 expand=True
             ),
             expand=True

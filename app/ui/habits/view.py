@@ -25,6 +25,7 @@ class HabitsView:
         self.habit_service = habit_service
         self.points_service = points_service
         self.habits_container = None
+        self._editing_habit_id = None  # ID del hábito que se está editando (None si no hay ninguno)
     
     def build_ui(self) -> ft.Container:
         """
@@ -36,9 +37,7 @@ class HabitsView:
         # Contenedor para los hábitos
         self.habits_container = ft.Column(
             [],
-            spacing=8,
-            scroll=ft.ScrollMode.AUTO,
-            expand=True
+            spacing=8
         )
         
         # Contenedor del formulario (oculto por defecto)
@@ -93,11 +92,11 @@ class HabitsView:
                     self.form_container,  # Formulario (aparece primero cuando está visible)
                     ft.Container(
                         content=self.habits_container,
-                        padding=16,
-                        expand=True
+                        padding=16
                     )
                 ],
                 spacing=0,
+                scroll=ft.ScrollMode.AUTO,
                 expand=True
             ),
             expand=True
@@ -125,9 +124,15 @@ class HabitsView:
             )
         else:
             for habit in habits:
-                self.habits_container.controls.append(
-                    self._build_habit_card(habit)
-                )
+                # Si este hábito se está editando, mostrar formulario inline en lugar de la tarjeta
+                if self._editing_habit_id == habit.id:
+                    self.habits_container.controls.append(
+                        self._build_inline_form(habit)
+                    )
+                else:
+                    self.habits_container.controls.append(
+                        self._build_habit_card(habit)
+                    )
         
         if self.page:
             self.page.update()
@@ -253,10 +258,28 @@ class HabitsView:
     
     def _toggle_form(self, e, habit: Optional[Habit] = None):
         """Muestra u oculta el formulario de hábito."""
-        if self.form_container.visible:
-            # Si está visible, ocultarlo
-            self.form_container.visible = False
+        if habit and habit.id:
+            # Editar hábito específico - modo inline
+            if self._editing_habit_id == habit.id:
+                # Si ya está en edición, cancelar
+                self._editing_habit_id = None
+            else:
+                # Iniciar edición inline
+                self._editing_habit_id = habit.id
+                self._edit_habit_in_form(habit)
+            self._load_habits()  # Recargar para mostrar/ocultar formulario
+            self.page.update()
         else:
+            # Crear nuevo hábito - modo formulario superior
+            if self.form_container.visible:
+                # Si está visible, ocultarlo
+                self.form_container.visible = False
+                self._editing_habit_id = None
+            else:
+                # Si está oculto, mostrarlo y preparar para nuevo hábito
+                self._new_habit_in_form()
+                self.form_container.visible = True
+            self.page.update()
             # Si está oculto, mostrarlo y preparar para nuevo hábito o editar
             if habit:
                 self._edit_habit_in_form(habit)
@@ -310,6 +333,8 @@ class HabitsView:
         
         def cancel_form(e):
             self.form_container.visible = False
+            self._editing_habit_id = None
+            self._load_habits()
             self.page.update()
         
         # Botones
@@ -380,6 +405,128 @@ class HabitsView:
         
         return container
     
+    def _build_inline_form(self, habit: Habit) -> ft.Container:
+        """Construye un formulario inline para editar un hábito en su posición."""
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        bg_color = ft.Colors.WHITE if not is_dark else ft.Colors.SURFACE
+        btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        
+        # Campos del formulario inline
+        inline_title_field = ft.TextField(
+            label="Título",
+            hint_text="Ingresa el título del hábito",
+            value=habit.title,
+            autofocus=True
+        )
+        
+        inline_description_field = ft.TextField(
+            label="Descripción",
+            hint_text="Descripción del hábito (opcional)",
+            multiline=True,
+            min_lines=2,
+            max_lines=4,
+            value=habit.description or ""
+        )
+        
+        def save_inline_habit(e):
+            """Guarda el hábito desde el formulario inline."""
+            title = inline_title_field.value.strip()
+            if not title:
+                return
+            
+            description = inline_description_field.value.strip() if inline_description_field.value else None
+            
+            try:
+                # Actualizar hábito
+                from app.data.models import Habit
+                updated_habit = Habit(
+                    id=habit.id,
+                    title=title,
+                    description=description,
+                    created_at=habit.created_at
+                )
+                self.habit_service.update_habit(updated_habit)
+                
+                # Cancelar edición y recargar
+                self._editing_habit_id = None
+                self._load_habits()
+                self.page.update()
+            except Exception as ex:
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"Error al guardar: {str(ex)}"),
+                    bgcolor=ft.Colors.RED
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
+        
+        def cancel_inline_form(e):
+            """Cancela la edición inline."""
+            self._editing_habit_id = None
+            self._load_habits()
+            self.page.update()
+        
+        # Botones
+        save_button = ft.ElevatedButton(
+            "Guardar",
+            icon=ft.Icons.SAVE,
+            on_click=save_inline_habit,
+            bgcolor=btn_color,
+            color=ft.Colors.WHITE
+        )
+        
+        cancel_button = ft.ElevatedButton(
+            "Cancelar",
+            icon=ft.Icons.CANCEL,
+            on_click=cancel_inline_form,
+            color=ft.Colors.GREY
+        )
+        
+        # Contenido del formulario inline
+        form_content = ft.Column(
+            [
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Text(
+                                "Editar Hábito",
+                                size=18,
+                                weight=ft.FontWeight.BOLD,
+                                color=btn_color
+                            ),
+                            ft.Row(
+                                [cancel_button, save_button],
+                                spacing=8
+                            )
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                    ),
+                    padding=16,
+                    bgcolor=ft.Colors.SURFACE
+                ),
+                ft.Container(
+                    content=ft.Column(
+                        [
+                            inline_title_field,
+                            inline_description_field
+                        ],
+                        spacing=12
+                    ),
+                    padding=16,
+                    bgcolor=bg_color
+                )
+            ],
+            spacing=0
+        )
+        
+        return ft.Container(
+            content=form_content,
+            padding=16,
+            bgcolor=bg_color,
+            border_radius=8,
+            border=ft.border.all(2, btn_color),
+            margin=ft.margin.only(bottom=8)
+        )
+    
     def _save_habit_from_form(self):
         """Guarda el hábito desde el formulario."""
         title = self.form_title_field.value.strip()
@@ -405,6 +552,7 @@ class HabitsView:
             
             # Ocultar formulario y recargar hábitos
             self.form_container.visible = False
+            self._editing_habit_id = None
             self._load_habits()
             self.page.update()
         except Exception as ex:
