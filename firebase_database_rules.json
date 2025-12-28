@@ -1,0 +1,34 @@
+{
+  "rules": {
+    "users": {
+      "$userId": {
+        ".read": "$userId === auth.uid",
+        ".write": "$userId === auth.uid",
+        "tasks": {
+          "$taskId": {
+            ".read": "$userId === auth.uid",
+            ".write": "$userId === auth.uid",
+            ".validate": "newData.hasChildren(['id', 'title', 'status']) && newData.child('id').val() == $taskId"
+          }
+        },
+        "habits": {
+          "$habitId": {
+            ".read": "$userId === auth.uid",
+            ".write": "$userId === auth.uid",
+            ".validate": "newData.hasChildren(['id', 'title']) && newData.child('id').val() == $habitId"
+          }
+        },
+        "goals": {
+          "$goalId": {
+            ".read": "$userId === auth.uid",
+            ".write": "$userId === auth.uid",
+            ".validate": "newData.hasChildren(['id', 'title']) && newData.child('id').val() == $goalId"
+          }
+        }
+      }
+    },
+    ".read": false,
+    ".write": false
+  }
+}
+

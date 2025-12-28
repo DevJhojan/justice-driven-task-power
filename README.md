@@ -1,186 +1,132 @@
-# Aplicación de Tareas (Todo App)
+# Aplicación de Productividad Personal
 
-Aplicación móvil de gestión de tareas desarrollada con Flet (Python) y base de datos SQLite local.
+Aplicación completa de productividad personal para gestionar tareas, hábitos y metas.
 
-## Características
+## 🎯 Características
 
-- ✅ Crear, editar y eliminar tareas
-- ✅ Marcar tareas como completadas/pendientes
-- ✅ Prioridades (Baja, Media, Alta)
-- ✅ Filtrado por estado (Todas, Pendientes, Completadas)
-- ✅ Estadísticas de tareas
-- ✅ Base de datos local SQLite
-- ✅ Interfaz moderna y responsive
-- ✅ Diseño optimizado para móviles
+### Módulos Principales
 
-## Estructura del Proyecto
+- **📋 Tareas**: Gestión completa de tareas con estados (pendiente/completada)
+- **🔁 Hábitos**: Seguimiento diario de hábitos con métricas (completados, rachas)
+- **🎯 Metas**: Definición y monitoreo de metas con progreso
+- **⚙️ Configuración**: Ajustes básicos de la aplicación
+
+## 🏗️ Arquitectura
+
+La aplicación sigue una arquitectura modular y escalable:
 
 ```
-App_movil_real_live/
+app/
+├── data/           # Capa de persistencia
+│   ├── models.py              # Modelos de datos
+│   ├── database.py            # Gestión de SQLite
+│   ├── task_repository.py     # CRUD de tareas
+│   ├── habit_repository.py    # CRUD de hábitos
+│   └── goal_repository.py     # CRUD de metas
 │
-├── app/
-│   ├── main.py                 # Punto de entrada
-│   ├── ui/
-│   │   ├── home_view.py        # Vista principal
-│   │   ├── task_form.py        # Formulario de tareas
-│   │   └── widgets.py          # Componentes reutilizables
-│   │
-│   ├── data/
-│   │   ├── database.py         # Configuración de BD
-│   │   ├── task_repository.py  # Operaciones CRUD
-│   │   └── models.py           # Modelos de datos
-│   │
-│   ├── services/
-│   │   └── task_service.py     # Lógica de negocio
+├── services/       # Lógica de negocio
+│   ├── task_service.py
+│   ├── habit_service.py
+│   └── goal_service.py
 │
-├── assets/                     # Recursos (imágenes, etc.)
-├── pyproject.toml              # Configuración del proyecto
-├── requirements.txt            # Dependencias
-└── README.md                   # Este archivo
+└── ui/            # Interfaz de usuario
+    ├── home_view.py           # Vista principal con navegación
+    ├── tasks/                 # Módulo de tareas
+    ├── habits/                # Módulo de hábitos
+    ├── goals/                 # Módulo de metas
+    └── settings/              # Configuración
 ```
 
-## Requisitos
+## 🚀 Instalación
 
-- Python 3.8 o superior
-- Flet 0.28.0 o superior
-
-## Instalación
-
-1. Clonar o descargar el proyecto
-
-2. Crear un entorno virtual (recomendado):
-```bash
-python3 -m venv venv
-source venv/bin/activate  # En Windows: venv\Scripts\activate
-```
-
-3. Instalar dependencias:
+1. **Instalar dependencias:**
 ```bash
 pip install -r requirements.txt
 ```
 
-O instalar directamente:
-```bash
-pip install flet
-```
-
-## Uso
-
-### Ejecutar la aplicación
-
-Desde el directorio raíz del proyecto:
-
-```bash
-python -m app.main
-```
-
-O ejecutar directamente:
-
+2. **Ejecutar la aplicación:**
 ```bash
 python app/main.py
 ```
 
-### Modos de ejecución
-
-La aplicación puede ejecutarse en diferentes modos modificando `main.py`:
-
-- **Móvil (por defecto)**: `ft.AppView.FLET_APP`
-- **Web**: `ft.AppView.WEB_BROWSER`
-- **Desktop**: `ft.AppView.FLET_APP_HIDDEN` o sin especificar view
-
-## Base de Datos
-
-La aplicación utiliza SQLite para almacenar las tareas localmente. La base de datos se crea automáticamente en el archivo `tasks.db` dentro del directorio de la aplicación.
-
-### Esquema de la base de datos
-
-```sql
-CREATE TABLE tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    description TEXT,
-    completed INTEGER NOT NULL DEFAULT 0,
-    priority TEXT NOT NULL DEFAULT 'medium',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-)
-```
-
-## Funcionalidades
-
-### Gestión de Tareas
-
-- **Crear**: Presiona el botón flotante "+" para crear una nueva tarea
-- **Editar**: Presiona el icono de editar en cualquier tarea
-- **Eliminar**: Presiona el icono de eliminar (se pedirá confirmación)
-- **Completar**: Presiona el icono de estado para marcar/desmarcar como completada
-
-### Filtros
-
-- **Todas**: Muestra todas las tareas
-- **Pendientes**: Muestra solo las tareas no completadas
-- **Completadas**: Muestra solo las tareas completadas
-
-### Prioridades
-
-- **Baja** (Verde): Tareas de baja prioridad
-- **Media** (Naranja): Tareas de prioridad media
-- **Alta** (Rojo): Tareas de alta prioridad
-
-## Desarrollo
-
-### Estructura de Código
-
-- **models.py**: Define el modelo de datos `Task`
-- **database.py**: Gestiona la conexión y creación de la base de datos
-- **task_repository.py**: Implementa las operaciones CRUD en la base de datos
-- **task_service.py**: Contiene la lógica de negocio y validaciones
-- **widgets.py**: Componentes UI reutilizables (tarjetas, estadísticas, etc.)
-- **task_form.py**: Formulario para crear/editar tareas
-- **home_view.py**: Vista principal que coordina todos los componentes
-- **main.py**: Punto de entrada de la aplicación
-
-## Personalización
-
-### Cambiar el tema
-
-En `main.py`, modifica:
-```python
-page.theme_mode = ft.ThemeMode.LIGHT  # o ft.ThemeMode.DARK
-```
-
-### Cambiar colores
-
-Los colores se pueden modificar en `widgets.py` y `home_view.py` según sea necesario.
-
-## Licencia
-
-Este proyecto es de código abierto y está disponible para uso personal y comercial.
-
-## Construir APK y AAB para Android
-
-Para construir tanto el APK (instalación directa) como el AAB (Google Play Store) usando la configuración de `pyproject.toml`:
-
+O desde el directorio raíz:
 ```bash
-./build_android.sh
+python main.py
 ```
 
-Este script:
-1. Lee la configuración del proyecto desde `pyproject.toml` (nombre, versión, descripción)
-2. Convierte el icono ICO a PNG si existe (`assets/task_logo.ico`)
-3. Construye el APK inicial
-4. Reemplaza los iconos personalizados en todas las resoluciones necesarias
-5. Reconstruye el APK con los iconos personalizados
-6. Construye el AAB (Android App Bundle) para Google Play Store
-7. Verifica que ambos archivos se generaron correctamente
+## 📱 Plataformas
 
-**Archivos generados:**
-- `build/apk/app-release.apk` - Para instalación directa
-- `build/aab/app-release.aab` - Para subir a Google Play Store
+- **💻 Escritorio**: Linux, Windows, macOS
+- **📱 Android**: Compilar con `build_android.sh`
 
-**Nota:** El script usa automáticamente el nombre, versión y descripción definidos en `pyproject.toml`.
+## 🗄️ Base de Datos
 
-## Contribuciones
+La aplicación utiliza SQLite como base de datos local. La base de datos se crea automáticamente en:
+- Linux/macOS: `~/.productivity_app/app.db`
+- Windows: `%USERPROFILE%\.productivity_app\app.db`
 
-Las contribuciones son bienvenidas. Por favor, crea un issue o pull request para cualquier mejora.
+### Esquema de Base de Datos
 
+- **tasks**: Tareas con título, descripción, fecha de vencimiento y estado
+- **habits**: Hábitos con título y descripción
+- **habit_completions**: Registros diarios de completación de hábitos
+- **goals**: Metas con título, descripción, valor objetivo, valor actual y unidad
+
+## 🎨 Características de la UI
+
+- **Barra de navegación inferior**: Acceso rápido a todas las secciones
+- **Modo oscuro/claro**: Toggle en configuración
+- **Interfaz intuitiva**: Diseño limpio y fácil de usar
+- **Formularios modales**: Para crear y editar elementos
+
+## 📋 Funcionalidades por Módulo
+
+### Tareas
+- Crear, editar y eliminar tareas
+- Marcar como completada/pendiente
+- Fecha de vencimiento opcional
+- Descripción opcional
+
+### Hábitos
+- Crear, editar y eliminar hábitos
+- Marcar completación diaria
+- Métricas: días completados y racha actual
+- Histórico de completaciones
+
+### Metas
+- Crear, editar y eliminar metas
+- Valor objetivo y valor actual
+- Unidad de medida personalizable
+- Barra de progreso visual
+- Porcentaje de completación
+
+### Configuración
+- Cambio de tema (oscuro/claro)
+- Información de la aplicación
+
+## 🔧 Desarrollo
+
+La aplicación está diseñada para ser fácilmente extensible:
+
+1. **Agregar nuevas entidades**: Crear modelo, repository y service siguiendo el patrón existente
+2. **Nuevas vistas**: Agregar módulo en `ui/` y registrar en `home_view.py`
+3. **Nuevas funcionalidades**: Extender servicios con nueva lógica de negocio
+
+## 📝 Notas Técnicas
+
+- **Offline-first**: Todos los datos se almacenan localmente
+- **Sin dependencias externas**: Solo SQLite y Flet
+- **Arquitectura limpia**: Separación clara de responsabilidades
+- **Código documentado**: Docstrings en todas las clases y métodos principales
+
+## 🐛 Solución de Problemas
+
+Si la aplicación no se ejecuta:
+
+1. Verificar que todas las dependencias estén instaladas
+2. Verificar que Python 3.8+ esté instalado
+3. Verificar permisos de escritura en el directorio home del usuario
+
+## 📄 Licencia
+
+Este proyecto es de uso personal.
