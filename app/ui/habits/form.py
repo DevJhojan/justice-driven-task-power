@@ -43,42 +43,75 @@ class HabitForm:
             max_lines=5,
             value=habit.description if habit else ""
         )
-        
-        self._show_dialog()
     
-    def _show_dialog(self):
-        """Muestra el diálogo del formulario."""
+    def build_view(self) -> ft.View:
+        """Construye una vista completa para el formulario."""
         is_editing = self.habit is not None
-        
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        bg_color = ft.Colors.WHITE if not is_dark else ft.Colors.BLACK
+        btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
         
-        self.page.dialog = ft.AlertDialog(
-            title=ft.Text(
-                "Editar hábito" if is_editing else "Nuevo hábito",
-                color=title_color,
-                weight=ft.FontWeight.BOLD
+        # Barra superior con título y botones
+        header = ft.Container(
+            content=ft.Row(
+                [
+                    ft.IconButton(
+                        icon=ft.Icons.ARROW_BACK,
+                        icon_color=title_color,
+                        on_click=self._cancel,
+                        tooltip="Volver"
+                    ),
+                    ft.Text(
+                        "Editar hábito" if is_editing else "Nuevo hábito",
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                        color=title_color,
+                        expand=True
+                    ),
+                    ft.ElevatedButton(
+                        "Guardar",
+                        icon=ft.Icons.SAVE,
+                        on_click=self._save,
+                        bgcolor=btn_color,
+                        color=ft.Colors.WHITE
+                    )
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN
             ),
-            content=ft.Container(
-                content=ft.Column(
-                    [
-                        self.title_field,
-                        self.description_field
-                    ],
-                    spacing=16,
-                    tight=True
-                ),
-                width=400,
-                padding=16
-            ),
-            actions=[
-                ft.TextButton("Cancelar", on_click=self._cancel),
-                ft.TextButton("Guardar", on_click=self._save)
-            ],
-            modal=True
+            padding=16,
+            bgcolor=ft.Colors.SURFACE if is_dark else ft.Colors.WHITE,
+            border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE))
         )
-        self.page.dialog.open = True
-        self.page.update()
+        
+        # Contenido principal con scroll
+        content = ft.Container(
+            content=ft.Column(
+                [
+                    self.title_field,
+                    self.description_field
+                ],
+                spacing=16,
+                scroll=ft.ScrollMode.AUTO,
+                expand=True
+            ),
+            padding=16,
+            expand=True
+        )
+        
+        # Crear la vista
+        route = f"/habit-form?id={self.habit.id}" if self.habit and self.habit.id else "/habit-form"
+        return ft.View(
+            route=route,
+            controls=[
+                ft.Column(
+                    [header, content],
+                    spacing=0,
+                    expand=True
+                )
+            ],
+            bgcolor=bg_color
+        )
     
     def _save(self, e):
         """Guarda el hábito."""
@@ -99,15 +132,16 @@ class HabitForm:
                 # Crear nuevo hábito
                 self.habit_service.create_habit(title, description)
             
-            self.page.close_dialog()
+            # Navegar de vuelta
+            self.page.go("/")
             if self.on_save:
                 self.on_save()
         except Exception as ex:
             self._show_error(f"Error al guardar: {str(ex)}")
     
     def _cancel(self, e):
-        """Cancela el formulario."""
-        self.page.close_dialog()
+        """Cancela el formulario y regresa."""
+        self.page.go("/")
     
     def _show_error(self, message: str):
         """Muestra un mensaje de error."""

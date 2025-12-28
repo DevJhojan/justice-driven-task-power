@@ -238,6 +238,10 @@ class HabitsView:
         self.page.update()
     
     def _open_habit_form(self, e=None, habit: Optional[Habit] = None):
-        """Abre el formulario de hábito."""
-        HabitForm(self.page, self.habit_service, habit, self._load_habits)
+        """Abre el formulario de hábito en una nueva vista."""
+        form = HabitForm(self.page, self.habit_service, habit, self._load_habits)
+        form_view = form.build_view()
+        self.page.views.append(form_view)
+        self.page.go(form_view.route)
+        self.page.update()
 

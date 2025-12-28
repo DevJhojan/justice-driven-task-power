@@ -64,46 +64,78 @@ class GoalForm:
             hint_text="Unidad de medida (ej: días, tareas, horas) - opcional",
             value=goal.unit if goal else ""
         )
-        
-        self._show_dialog()
     
-    def _show_dialog(self):
-        """Muestra el diálogo del formulario."""
+    def build_view(self) -> ft.View:
+        """Construye una vista completa para el formulario."""
         is_editing = self.goal is not None
-        
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        bg_color = ft.Colors.WHITE if not is_dark else ft.Colors.BLACK
+        btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
         
-        self.page.dialog = ft.AlertDialog(
-            title=ft.Text(
-                "Editar meta" if is_editing else "Nueva meta",
-                color=title_color,
-                weight=ft.FontWeight.BOLD
+        # Barra superior con título y botones
+        header = ft.Container(
+            content=ft.Row(
+                [
+                    ft.IconButton(
+                        icon=ft.Icons.ARROW_BACK,
+                        icon_color=title_color,
+                        on_click=self._cancel,
+                        tooltip="Volver"
+                    ),
+                    ft.Text(
+                        "Editar meta" if is_editing else "Nueva meta",
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                        color=title_color,
+                        expand=True
+                    ),
+                    ft.ElevatedButton(
+                        "Guardar",
+                        icon=ft.Icons.SAVE,
+                        on_click=self._save,
+                        bgcolor=btn_color,
+                        color=ft.Colors.WHITE
+                    )
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN
             ),
-            content=ft.Container(
-                content=ft.Column(
-                    [
-                        self.title_field,
-                        self.description_field,
-                        self.target_value_field,
-                        self.current_value_field,
-                        self.unit_field
-                    ],
-                    spacing=16,
-                    tight=True,
-                    scroll=ft.ScrollMode.AUTO
-                ),
-                width=400,
-                padding=16
-            ),
-            actions=[
-                ft.TextButton("Cancelar", on_click=self._cancel),
-                ft.TextButton("Guardar", on_click=self._save)
-            ],
-            modal=True
+            padding=16,
+            bgcolor=ft.Colors.SURFACE if is_dark else ft.Colors.WHITE,
+            border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE))
         )
-        self.page.dialog.open = True
-        self.page.update()
+        
+        # Contenido principal con scroll
+        content = ft.Container(
+            content=ft.Column(
+                [
+                    self.title_field,
+                    self.description_field,
+                    self.target_value_field,
+                    self.current_value_field,
+                    self.unit_field
+                ],
+                spacing=16,
+                scroll=ft.ScrollMode.AUTO,
+                expand=True
+            ),
+            padding=16,
+            expand=True
+        )
+        
+        # Crear la vista
+        route = f"/goal-form?id={self.goal.id}" if self.goal and self.goal.id else "/goal-form"
+        return ft.View(
+            route=route,
+            controls=[
+                ft.Column(
+                    [header, content],
+                    spacing=0,
+                    expand=True
+                )
+            ],
+            bgcolor=bg_color
+        )
     
     def _save(self, e):
         """Guarda la meta."""
@@ -143,15 +175,16 @@ class GoalForm:
                 # Crear nueva meta con valor inicial
                 self.goal_service.create_goal(title, description, target_value, unit, current_value, self.points_service)
             
-            self.page.close_dialog()
+            # Navegar de vuelta
+            self.page.go("/")
             if self.on_save:
                 self.on_save()
         except Exception as ex:
             self._show_error(f"Error al guardar: {str(ex)}")
     
     def _cancel(self, e):
-        """Cancela el formulario."""
-        self.page.close_dialog()
+        """Cancela el formulario y regresa."""
+        self.page.go("/")
     
     def _show_error(self, message: str):
         """Muestra un mensaje de error."""

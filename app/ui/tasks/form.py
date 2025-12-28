@@ -221,74 +221,6 @@ class TaskForm:
             self.subtasks_container.content = self._build_subtasks_list()
             self.page.update()
     
-    def _show_dialog(self):
-        """Muestra el diálogo del formulario."""
-        is_editing = self.task is not None
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
-        
-        # Construir lista de subtareas
-        self.subtasks_container = ft.Container(
-            content=self._build_subtasks_list()
-        )
-        
-        btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
-        
-        add_subtask_button = ft.ElevatedButton(
-            "Agregar subtarea",
-            icon=ft.Icons.ADD,
-            on_click=self._add_subtask,
-            bgcolor=btn_color,
-            color=ft.Colors.WHITE
-        )
-        
-        self.page.dialog = ft.AlertDialog(
-            title=ft.Text(
-                "Editar tarea" if is_editing else "Nueva tarea",
-                color=title_color,
-                weight=ft.FontWeight.BOLD
-            ),
-            content=ft.Container(
-                content=ft.Column(
-                    [
-                        self.title_field,
-                        self.description_field,
-                        self.due_date_field,
-                        ft.Divider(),
-                        ft.Text(
-                            "Subtareas",
-                            size=14,
-                            weight=ft.FontWeight.BOLD,
-                            color=title_color
-                        ),
-                        self.subtasks_container,
-                        ft.Row(
-                            [self.new_subtask_field, add_subtask_button],
-                            spacing=8
-                        )
-                    ],
-                    spacing=12,
-                    tight=True,
-                    scroll=ft.ScrollMode.AUTO
-                ),
-                width=500,
-                height=500,
-                padding=16
-            ),
-            actions=[
-                ft.TextButton("Cancelar", on_click=self._cancel),
-                ft.TextButton(
-                    "Guardar",
-                    on_click=self._save,
-                    style=ft.ButtonStyle(
-                        color=btn_color
-                    )
-                )
-            ],
-            modal=True
-        )
-        self.page.dialog.open = True
-        self.page.update()
     
     def _save(self, e):
         """Guarda la tarea."""
@@ -343,15 +275,16 @@ class TaskForm:
                         # Actualizar subtarea existente
                         self.task_service.update_subtask(subtask)
             
-            self.page.close_dialog()
+            # Navegar de vuelta
+            self.page.go("/")
             if self.on_save:
                 self.on_save()
         except Exception as ex:
             self._show_error(f"Error al guardar: {str(ex)}")
     
     def _cancel(self, e):
-        """Cancela el formulario."""
-        self.page.close_dialog()
+        """Cancela el formulario y regresa."""
+        self.page.go("/")
     
     def _show_error(self, message: str):
         """Muestra un mensaje de error."""
