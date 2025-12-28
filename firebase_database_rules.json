@@ -39,6 +39,13 @@
             ".validate": "(!data.exists() && newData.hasChildren(['id', 'title']) && newData.child('id').val() == $goalId && newData.child('title').isString()) || (data.exists() && (!newData.hasChild('id') || newData.child('id').val() == $goalId) && (!newData.hasChild('title') || newData.child('title').isString()) && (!newData.hasChild('description') || newData.child('description').isString() || newData.child('description').val() == null) && (!newData.hasChild('target_value') || newData.child('target_value').isNumber() || newData.child('target_value').val() == null) && (!newData.hasChild('current_value') || newData.child('current_value').isNumber() || newData.child('current_value').val() == null) && (!newData.hasChild('unit') || newData.child('unit').isString() || newData.child('unit').val() == null) && (!newData.hasChild('period') || newData.child('period').isString() || newData.child('period').val() == null) && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('updated_at') || newData.child('updated_at').isString() || newData.child('updated_at').val() == null))"
           }
         },
+        "rewards": {
+          "$rewardId": {
+            ".read": "auth != null && $userId === auth.uid",
+            ".write": "auth != null && $userId === auth.uid",
+            ".validate": "(!data.exists() && newData.hasChildren(['id', 'name', 'target_points', 'status']) && newData.child('id').val() == $rewardId && newData.child('name').isString() && newData.child('target_points').isNumber() && newData.child('status').isString()) || (data.exists() && (!newData.hasChild('id') || newData.child('id').val() == $rewardId) && (!newData.hasChild('name') || newData.child('name').isString()) && (!newData.hasChild('description') || newData.child('description').isString() || newData.child('description').val() == null) && (!newData.hasChild('target_points') || newData.child('target_points').isNumber()) && (!newData.hasChild('status') || newData.child('status').isString()) && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('claimed_at') || newData.child('claimed_at').isString() || newData.child('claimed_at').val() == null))"
+          }
+        },
         "points": {
           ".read": "auth != null && $userId === auth.uid",
           ".write": "auth != null && $userId === auth.uid",

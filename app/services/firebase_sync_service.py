@@ -26,6 +26,7 @@ from app.services.habit_service import HabitService
 from app.services.goal_service import GoalService
 from app.services.points_service import PointsService
 from app.services.user_settings_service import UserSettingsService
+from app.services.reward_service import RewardService
 from app.data.task_repository import TaskRepository
 from app.data.habit_repository import HabitRepository
 from app.data.goal_repository import GoalRepository
@@ -36,7 +37,8 @@ class FirebaseSyncService:
     
     def __init__(self, db: Database, task_service: TaskService,
                  habit_service: HabitService, goal_service: GoalService,
-                 points_service: PointsService, user_settings_service: UserSettingsService):
+                 points_service: PointsService, user_settings_service: UserSettingsService,
+                 reward_service: RewardService = None):
         """
         Inicializa el servicio de sincronización.
         
@@ -47,6 +49,7 @@ class FirebaseSyncService:
             goal_service: Servicio de metas.
             points_service: Servicio de puntos.
             user_settings_service: Servicio de configuración del usuario.
+            reward_service: Servicio de recompensas (opcional).
         """
         if pyrebase is None:
             raise ImportError(
@@ -59,6 +62,7 @@ class FirebaseSyncService:
         self.goal_service = goal_service
         self.points_service = points_service
         self.user_settings_service = user_settings_service
+        self.reward_service = reward_service
         
         # Cargar configuración de Firebase desde google-services.json
         self.firebase_config = self._load_firebase_config()
@@ -213,6 +217,32 @@ class FirebaseSyncService:
             goal.period or "mes",
             created_at,
             updated_at
+        ))
+        
+        conn.commit()
+        conn.close()
+    
+    def _create_reward_with_id(self, reward):
+        """Crea una recompensa con un ID específico para sincronización, evitando duplicados."""
+        from datetime import datetime
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now().isoformat()
+        created_at = reward.created_at.isoformat() if reward.created_at else now
+        claimed_at = reward.claimed_at.isoformat() if reward.claimed_at else None
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO rewards (id, name, description, target_points, status, created_at, claimed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            reward.id,
+            reward.name,
+            reward.description,
+            reward.target_points,
+            reward.status,
+            created_at,
+            claimed_at
         ))
         
         conn.commit()
@@ -603,7 +633,7 @@ class FirebaseSyncService:
             print(f"DEBUG _perform_sync - Intentando acceder a: users/{self.user_id}")
             
             user_ref = self.db_firebase.child(f"users/{self.user_id}")
-            stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0}
+            stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "rewards_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0, "rewards_created": 0}
             
             # Obtener datos remotos para comparar (pasar token explícitamente)
             print(f"DEBUG _perform_sync - Obteniendo remote_tasks desde: users/{self.user_id}/tasks")
@@ -807,6 +837,45 @@ class FirebaseSyncService:
                     }, token=token)
                     stats["goals_created"] += 1
             
+            # Sincronizar recompensas (solo campos modificados) - solo si reward_service está disponible
+            if self.reward_service:
+                rewards = self.reward_service.get_all_rewards()
+                for reward in rewards:
+                    reward_id_str = str(reward.id)
+                    remote_reward = remote_rewards.get(reward_id_str)
+                    
+                    if remote_reward:
+                        # Actualizar solo campos que hayan cambiado
+                        updates = {}
+                        if reward.name != remote_reward.get("name"):
+                            updates["name"] = reward.name
+                        if reward.description != remote_reward.get("description"):
+                            updates["description"] = reward.description
+                        if reward.target_points != remote_reward.get("target_points"):
+                            updates["target_points"] = reward.target_points
+                        if reward.status != remote_reward.get("status"):
+                            updates["status"] = reward.status
+                        if (reward.created_at.isoformat() if reward.created_at else None) != remote_reward.get("created_at"):
+                            updates["created_at"] = reward.created_at.isoformat() if reward.created_at else None
+                        if (reward.claimed_at.isoformat() if reward.claimed_at else None) != remote_reward.get("claimed_at"):
+                            updates["claimed_at"] = reward.claimed_at.isoformat() if reward.claimed_at else None
+                        
+                        if updates:
+                            user_ref.child(f"rewards/{reward_id_str}").update(updates, token=token)
+                            stats["rewards_updated"] += 1
+                    else:
+                        # Nueva recompensa, crear completa
+                        user_ref.child(f"rewards/{reward_id_str}").set({
+                            "id": reward.id,
+                            "name": reward.name,
+                            "description": reward.description,
+                            "target_points": reward.target_points,
+                            "status": reward.status,
+                            "created_at": reward.created_at.isoformat() if reward.created_at else None,
+                            "claimed_at": reward.claimed_at.isoformat() if reward.claimed_at else None
+                        }, token=token)
+                        stats["rewards_created"] += 1
+            
             # Sincronizar puntos (solo si cambió)
             total_points = self.points_service.get_total_points()
             raw_points = user_ref.child("points").get(token=token).val()
@@ -838,6 +907,8 @@ class FirebaseSyncService:
                 message_parts.append(f"{stats['habits_created']} nuevos, {stats['habits_updated']} actualizados hábitos")
             if stats["goals_created"] > 0 or stats["goals_updated"] > 0:
                 message_parts.append(f"{stats['goals_created']} nuevas, {stats['goals_updated']} actualizadas metas")
+            if self.reward_service and (stats["rewards_created"] > 0 or stats["rewards_updated"] > 0):
+                message_parts.append(f"{stats['rewards_created']} nuevas, {stats['rewards_updated']} actualizadas recompensas")
             
             if not message_parts:
                 message = "Sincronización completa. No hay cambios pendientes."
@@ -885,7 +956,7 @@ class FirebaseSyncService:
                     return {"success": False, "message": error_msg}
             
             user_ref = self.db_firebase.child(f"users/{self.user_id}")
-            stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0}
+            stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "rewards_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0, "rewards_created": 0}
             
             # Descargar datos (pasar token explícitamente)
             raw_tasks = user_ref.child("tasks").get(token=token).val()
@@ -894,6 +965,8 @@ class FirebaseSyncService:
             habits_data = self._normalize_firebase_data(raw_habits)
             raw_goals = user_ref.child("goals").get(token=token).val()
             goals_data = self._normalize_firebase_data(raw_goals)
+            raw_rewards = user_ref.child("rewards").get(token=token).val() if self.reward_service else None
+            rewards_data = self._normalize_firebase_data(raw_rewards) if raw_rewards else {}
             raw_points = user_ref.child("points").get(token=token).val()
             points_data = self._normalize_firebase_data(raw_points) if isinstance(raw_points, (dict, list)) else (raw_points if raw_points else {})
             raw_settings = user_ref.child("user_settings").get(token=token).val()
@@ -903,6 +976,7 @@ class FirebaseSyncService:
             local_tasks = {str(t.id): t for t in self.task_service.get_all_tasks()}
             local_habits = {str(h.id): h for h in self.habit_service.get_all_habits()}
             local_goals = {str(g.id): g for g in self.goal_service.get_all_goals()}
+            local_rewards = {str(r.id): r for r in self.reward_service.get_all_rewards()} if self.reward_service else {}
             
             # Sincronizar tareas
             for task_id_str, remote_task in tasks_data.items():
@@ -1157,6 +1231,79 @@ class FirebaseSyncService:
                     self._create_goal_with_id(new_goal)
                     stats["goals_created"] += 1
             
+            # Sincronizar recompensas - solo si reward_service está disponible
+            if self.reward_service:
+                for reward_id_str, remote_reward in rewards_data.items():
+                    reward_id = int(reward_id_str)
+                    local_reward = local_rewards.get(reward_id_str)
+                    
+                    if local_reward:
+                        # Recompensa existe localmente - actualizar solo campos que cambiaron
+                        remote_created = datetime.fromisoformat(remote_reward.get("created_at")) if remote_reward.get("created_at") else None
+                        local_created = local_reward.created_at if local_reward.created_at else None
+                        
+                        # Solo actualizar si la versión remota es más reciente
+                        if remote_created and (not local_created or remote_created >= local_created):
+                            needs_update = False
+                            if remote_reward.get("name") != local_reward.name:
+                                local_reward.name = remote_reward.get("name")
+                                needs_update = True
+                            if remote_reward.get("description") != local_reward.description:
+                                local_reward.description = remote_reward.get("description")
+                                needs_update = True
+                            if remote_reward.get("target_points") != local_reward.target_points:
+                                local_reward.target_points = float(remote_reward.get("target_points", 0.0))
+                                needs_update = True
+                            if remote_reward.get("status") != local_reward.status:
+                                local_reward.status = remote_reward.get("status")
+                                needs_update = True
+                            
+                            remote_claimed_at = None
+                            if remote_reward.get("claimed_at"):
+                                try:
+                                    remote_claimed_at = datetime.fromisoformat(remote_reward.get("claimed_at"))
+                                except:
+                                    pass
+                            
+                            if remote_claimed_at != local_reward.claimed_at:
+                                local_reward.claimed_at = remote_claimed_at
+                                needs_update = True
+                            
+                            if needs_update:
+                                self.reward_service.update_reward(local_reward)
+                                stats["rewards_updated"] += 1
+                    else:
+                        # Nueva recompensa desde Firebase - crear localmente
+                        from app.data.models import Reward
+                        
+                        created_at = None
+                        if remote_reward.get("created_at"):
+                            try:
+                                created_at = datetime.fromisoformat(remote_reward.get("created_at"))
+                            except:
+                                pass
+                        
+                        claimed_at = None
+                        if remote_reward.get("claimed_at"):
+                            try:
+                                claimed_at = datetime.fromisoformat(remote_reward.get("claimed_at"))
+                            except:
+                                pass
+                        
+                        new_reward = Reward(
+                            id=reward_id,  # Usar el mismo ID para evitar duplicados
+                            name=remote_reward.get("name", ""),
+                            description=remote_reward.get("description"),
+                            target_points=float(remote_reward.get("target_points", 0.0)),
+                            status=remote_reward.get("status", "por_alcanzar"),
+                            created_at=created_at,
+                            claimed_at=claimed_at
+                        )
+                        
+                        # Insertar directamente con ID específico para evitar duplicados
+                        self._create_reward_with_id(new_reward)
+                        stats["rewards_created"] += 1
+            
             # Sincronizar puntos si existen en Firebase
             if points_data and "total_points" in points_data:
                 firebase_points = float(points_data.get("total_points", 0.0))
@@ -1179,6 +1326,8 @@ class FirebaseSyncService:
                 message_parts.append(f"{stats['habits_created']} nuevos, {stats['habits_updated']} actualizados hábitos")
             if stats["goals_created"] > 0 or stats["goals_updated"] > 0:
                 message_parts.append(f"{stats['goals_created']} nuevas, {stats['goals_updated']} actualizadas metas")
+            if self.reward_service and (stats["rewards_created"] > 0 or stats["rewards_updated"] > 0):
+                message_parts.append(f"{stats['rewards_created']} nuevas, {stats['rewards_updated']} actualizadas recompensas")
             
             if not message_parts:
                 message = "Sincronización completa. No hay cambios pendientes."

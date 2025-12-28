@@ -59,7 +59,7 @@ class HomeView:
             from app.services.firebase_sync_service import FirebaseSyncService
             self.firebase_sync_service = FirebaseSyncService(
                 db, self.task_service, self.habit_service, self.goal_service,
-                self.points_service, self.user_settings_service
+                self.points_service, self.user_settings_service, self.reward_service
             )
         except ImportError as e:
             print(f"Firebase no disponible: {e}")
