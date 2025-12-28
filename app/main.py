@@ -55,7 +55,7 @@ def main(page: ft.Page):
     page.dark_theme.color_scheme.on_primary = ft.Colors.WHITE
     page.dark_theme.color_scheme.on_secondary = ft.Colors.WHITE
     
-    # Inicializar home_view
+    # Inicializar home_view primero
     home_view = HomeView(page)
     
     # Configurar el manejador de rutas para formularios
@@ -70,6 +70,18 @@ def main(page: ft.Page):
         
         # Si hay parámetros en la ruta, manejar formularios
         if page.route.startswith("/task-form"):
+            # Verificar si ya existe una vista con esta ruta
+            existing_view = None
+            for view in page.views:
+                if view.route == page.route:
+                    existing_view = view
+                    break
+            
+            if existing_view:
+                # Si ya existe, solo actualizar la página
+                page.update()
+                return
+            
             from app.ui.tasks.form import TaskForm
             from app.services.task_service import TaskService
             from app.data.task_repository import TaskRepository
