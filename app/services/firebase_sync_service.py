@@ -338,11 +338,16 @@ class FirebaseSyncService:
                 return False
         
         try:
+            print(f"DEBUG _refresh_auth_token - Intentando refrescar con refresh_token (longitud: {len(self.refresh_token) if self.refresh_token else 0})")
             # Pyrebase4 maneja el refresh automáticamente, pero podemos intentar refrescar manualmente
             # si tenemos el refresh_token. El método refresh devuelve un nuevo token.
             user = self.auth.refresh(self.refresh_token)
+            print(f"DEBUG _refresh_auth_token - Respuesta de refresh recibida: {user is not None}")
+            
             if user and 'idToken' in user:
                 self.auth_token = user.get('idToken')
+                print(f"DEBUG _refresh_auth_token - Token refrescado exitosamente (longitud: {len(self.auth_token) if self.auth_token else 0})")
+                
                 # Actualizar el refresh_token si está disponible y guardarlo
                 if 'refreshToken' in user:
                     new_refresh_token = user.get('refreshToken')
@@ -350,10 +355,17 @@ class FirebaseSyncService:
                         self.refresh_token = new_refresh_token
                         # Guardar el nuevo refresh_token en BD
                         self.user_settings_service.set_firebase_refresh_token(self.refresh_token)
+                        print(f"DEBUG _refresh_auth_token - refresh_token actualizado y guardado en BD")
                 return True
-            return False
+            else:
+                print(f"DEBUG _refresh_auth_token - ERROR: Respuesta de refresh no contiene idToken")
+                if user:
+                    print(f"DEBUG _refresh_auth_token - Claves en respuesta: {list(user.keys()) if isinstance(user, dict) else 'No es dict'}")
+                return False
         except Exception as e:
-            print(f"Error al refrescar token: {e}")
+            print(f"DEBUG _refresh_auth_token - EXCEPCIÓN al refrescar token: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             # NO borrar la sesión aquí - el estado guardado se mantiene
             # Solo retornar False para que el método que llama decida
             return False
@@ -431,12 +443,20 @@ class FirebaseSyncService:
                 self.refresh_token = saved_refresh_token
                 print(f"DEBUG _get_auth_token - refresh_token restaurado desde BD")
         
-        print(f"DEBUG _get_auth_token - user_id: {self.user_id}, auth_token presente: {self.auth_token is not None}")
+        print(f"DEBUG _get_auth_token - user_id: {self.user_id}, auth_token presente: {self.auth_token is not None}, refresh_token presente: {self.refresh_token is not None}")
         
-        # Si no tenemos token o el token podría estar expirado, intentar refrescar
-        if not self.auth_token and self.refresh_token:
-            print(f"DEBUG _get_auth_token - Intentando refrescar token...")
-            self._refresh_auth_token()
+        # SIEMPRE intentar refrescar el token si no está presente o si tenemos refresh_token
+        # Esto asegura que siempre tengamos un token válido
+        if not self.auth_token:
+            if self.refresh_token:
+                print(f"DEBUG _get_auth_token - No hay auth_token, intentando refrescar con refresh_token...")
+                if self._refresh_auth_token():
+                    print(f"DEBUG _get_auth_token - Token refrescado exitosamente")
+                else:
+                    print(f"DEBUG _get_auth_token - ERROR: No se pudo refrescar el token")
+                    # No retornar None todavía, intentar usar Pyrebase sin token explícito
+            else:
+                print(f"DEBUG _get_auth_token - ERROR: No hay auth_token ni refresh_token")
         
         print(f"DEBUG _get_auth_token - Token final presente: {self.auth_token is not None}")
         return self.auth_token
@@ -511,11 +531,17 @@ class FirebaseSyncService:
             # Obtener token de autenticación
             token = self._get_auth_token()
             if not token:
-                # Si no tenemos token pero tenemos user_id, intentar usar None
-                # Pyrebase puede manejar la autenticación internamente si la sesión está activa
-                print(f"Advertencia: No hay token explícito, pero user_id existe: {self.user_id}")
-                print(f"Intentando continuar sin token explícito...")
-                token = None  # Intentar sin token, Pyrebase puede manejarlo
+                # Si no tenemos token, intentar refrescar una vez más antes de fallar
+                print(f"DEBUG _perform_sync - No hay token, intentando refrescar una vez más...")
+                if self.refresh_token and self._refresh_auth_token():
+                    token = self._get_auth_token()
+                    print(f"DEBUG _perform_sync - Token obtenido después de refresh: {token is not None}")
+                
+                if not token:
+                    # Si aún no tenemos token, no podemos continuar
+                    error_msg = "No se pudo obtener un token de autenticación válido. Por favor, cierra sesión y vuelve a iniciar sesión."
+                    print(f"ERROR: {error_msg}")
+                    return {"success": False, "message": error_msg}
             
             user_ref = self.db_firebase.child(f"users/{self.user_id}")
             stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0}
@@ -756,7 +782,17 @@ class FirebaseSyncService:
             # Obtener token de autenticación
             token = self._get_auth_token()
             if not token:
-                return {"success": False, "message": "Token de autenticación no disponible. Por favor, inicia sesión nuevamente."}
+                # Si no tenemos token, intentar refrescar una vez más antes de fallar
+                print(f"DEBUG _perform_sync (import) - No hay token, intentando refrescar una vez más...")
+                if self.refresh_token and self._refresh_auth_token():
+                    token = self._get_auth_token()
+                    print(f"DEBUG _perform_sync (import) - Token obtenido después de refresh: {token is not None}")
+                
+                if not token:
+                    # Si aún no tenemos token, no podemos continuar
+                    error_msg = "No se pudo obtener un token de autenticación válido. Por favor, cierra sesión y vuelve a iniciar sesión."
+                    print(f"ERROR: {error_msg}")
+                    return {"success": False, "message": error_msg}
             
             user_ref = self.db_firebase.child(f"users/{self.user_id}")
             stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0}
