@@ -73,3 +73,21 @@ class Goal:
         if self.period not in valid_periods:
             raise ValueError(f"Período inválido: {self.period}. Debe ser uno de {valid_periods}")
 
+
+@dataclass
+class Reward:
+    """Modelo de una recompensa."""
+    id: Optional[int]
+    name: str
+    target_points: float  # Puntos objetivo requeridos
+    description: Optional[str] = None
+    status: str = "por_alcanzar"  # por_alcanzar, a_reclamar, reclamada
+    created_at: Optional[datetime] = None
+    claimed_at: Optional[datetime] = None  # Fecha de reclamación
+    
+    def __post_init__(self):
+        """Validar estado después de la inicialización."""
+        valid_statuses = ["por_alcanzar", "a_reclamar", "reclamada"]
+        if self.status not in valid_statuses:
+            raise ValueError(f"Estado inválido: {self.status}. Debe ser uno de {valid_statuses}")
+

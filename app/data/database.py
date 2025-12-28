@@ -131,6 +131,19 @@ class Database:
             VALUES ('theme', 'dark', ?)
         """, (datetime.now().isoformat(),))
         
+        # Tabla de recompensas
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS rewards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT,
+                target_points REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT 'por_alcanzar',
+                created_at TEXT,
+                claimed_at TEXT
+            )
+        """)
+        
         # Crear índices para mejorar el rendimiento
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)
@@ -145,6 +158,12 @@ class Database:
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_habit_completions_date 
             ON habit_completions(completion_date)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_rewards_status ON rewards(status)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_rewards_target_points ON rewards(target_points)
         """)
         
         conn.commit()

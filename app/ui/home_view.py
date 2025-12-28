@@ -46,6 +46,12 @@ class HomeView:
         from app.services.user_settings_service import UserSettingsService
         self.user_settings_service = UserSettingsService(db)
         
+        # Servicio de recompensas
+        from app.data.reward_repository import RewardRepository
+        from app.services.reward_service import RewardService
+        reward_repository = RewardRepository(db)
+        self.reward_service = RewardService(reward_repository, self.points_service)
+        
         # Servicio de sincronización con Firebase
         # Guardar como atributo de HomeView para mantener la misma instancia
         self.firebase_sync_service = None
@@ -69,7 +75,7 @@ class HomeView:
             on_name_changed=self.refresh_header,
             firebase_sync_service=self.firebase_sync_service
         )
-        self.summary_view = SummaryView(page, self.task_service, self.habit_service, self.goal_service, self.points_service)
+        self.summary_view = SummaryView(page, self.task_service, self.habit_service, self.goal_service, self.points_service, self.reward_service)
         
         # NO construir UI aquí - se construirá después de configurar los handlers en main.py
     
