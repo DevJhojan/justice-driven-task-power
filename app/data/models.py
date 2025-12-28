@@ -8,6 +8,17 @@ from typing import Optional
 
 
 @dataclass
+class Subtask:
+    """Modelo de una subtarea."""
+    id: Optional[int]
+    task_id: int
+    title: str
+    completed: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+@dataclass
 class Task:
     """Modelo de una tarea."""
     id: Optional[int]

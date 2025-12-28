@@ -28,12 +28,13 @@ class HomeView:
         from app.data.task_repository import TaskRepository
         from app.data.habit_repository import HabitRepository
         from app.data.goal_repository import GoalRepository
+        from app.data.subtask_repository import SubtaskRepository
         from app.services.task_service import TaskService
         from app.services.habit_service import HabitService
         from app.services.goal_service import GoalService
         
         db = get_db()
-        self.task_service = TaskService(TaskRepository(db))
+        self.task_service = TaskService(TaskRepository(db), SubtaskRepository(db))
         self.habit_service = HabitService(HabitRepository(db))
         self.goal_service = GoalService(GoalRepository(db))
         

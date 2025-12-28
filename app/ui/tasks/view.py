@@ -161,46 +161,73 @@ class TasksView:
         if task.due_date:
             due_date_text = f"📅 {task.due_date.strftime('%d/%m/%Y')}"
         
-        # Contenido de la tarjeta
-        content = ft.Column(
-            [
-                ft.Row(
-                    [
-                        checkbox,
-                        ft.Column(
-                            [
-                                ft.Text(
-                                    task.title,
-                                    size=16,
-                                    weight=ft.FontWeight.BOLD,
-                                    expand=True,
-                                    color=ft.Colors.RED_800 if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.Colors.RED_400
-                                ),
-                                ft.Text(
-                                    task.description or "",
-                                    size=12,
-                                    color=ft.Colors.GREY,
-                                    visible=bool(task.description)
-                                ),
-                                ft.Text(
-                                    due_date_text,
-                                    size=11,
-                                    color=ft.Colors.GREY_700,
-                                    visible=bool(task.due_date)
-                                )
-                            ],
-                            spacing=4,
-                            expand=True
-                        ),
-                        edit_button,
-                        delete_button
-                    ],
-                    spacing=8,
-                    vertical_alignment=ft.CrossAxisAlignment.START
+        # Obtener subtareas
+        subtasks = self.task_service.get_subtasks(task.id) if task.id else []
+        
+        # Construir lista de subtareas
+        subtasks_content = []
+        if subtasks:
+            for subtask in subtasks:
+                subtask_checkbox = ft.Checkbox(
+                    value=subtask.completed,
+                    on_change=lambda e, s=subtask: self._toggle_subtask(s),
+                    label=subtask.title,
+                    data=subtask
                 )
-            ],
-            spacing=4
-        )
+                subtasks_content.append(subtask_checkbox)
+        
+        # Contenido de la tarjeta
+        content_items = [
+            ft.Row(
+                [
+                    checkbox,
+                    ft.Column(
+                        [
+                            ft.Text(
+                                task.title,
+                                size=16,
+                                weight=ft.FontWeight.BOLD,
+                                expand=True,
+                                color=ft.Colors.RED_800 if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.Colors.RED_400
+                            ),
+                            ft.Text(
+                                task.description or "",
+                                size=12,
+                                color=ft.Colors.GREY,
+                                visible=bool(task.description)
+                            ),
+                            ft.Text(
+                                due_date_text,
+                                size=11,
+                                color=ft.Colors.GREY_700,
+                                visible=bool(task.due_date)
+                            )
+                        ],
+                        spacing=4,
+                        expand=True
+                    ),
+                    edit_button,
+                    delete_button
+                ],
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.START
+            )
+        ]
+        
+        # Agregar subtareas si existen
+        if subtasks_content:
+            content_items.append(
+                ft.Container(
+                    content=ft.Column(
+                        subtasks_content,
+                        spacing=4
+                    ),
+                    padding=ft.padding.only(left=32, top=8),
+                    border=ft.border.only(left=ft.border.BorderSide(2, ft.Colors.GREY_400))
+                )
+            )
+        
+        content = ft.Column(content_items, spacing=4)
         
         return ft.Container(
             content=content,
@@ -209,6 +236,11 @@ class TasksView:
             border_radius=8,
             border=ft.border.all(1, ft.Colors.OUTLINE)
         )
+    
+    def _toggle_subtask(self, subtask):
+        """Alterna el estado de una subtarea."""
+        self.task_service.toggle_subtask(subtask.id)
+        self._load_tasks()
     
     def _toggle_task_status(self, task: Task):
         """Alterna el estado de una tarea."""

@@ -2,9 +2,9 @@
 Formulario para crear y editar tareas.
 """
 import flet as ft
-from typing import Optional
+from typing import Optional, List
 
-from app.data.models import Task
+from app.data.models import Task, Subtask
 from app.services.task_service import TaskService
 
 
@@ -26,6 +26,12 @@ class TaskForm:
         self.task_service = task_service
         self.task = task
         self.on_save = on_save
+        self.subtasks: List[Subtask] = []
+        self.subtasks_to_delete: List[int] = []
+        
+        # Cargar subtareas si estamos editando
+        if task and task.id:
+            self.subtasks = self.task_service.get_subtasks(task.id)
         
         # Campos del formulario
         self.title_field = ft.TextField(
@@ -50,13 +56,97 @@ class TaskForm:
             value=task.due_date.isoformat() if task and task.due_date else ""
         )
         
+        # Campo para nueva subtarea
+        self.new_subtask_field = ft.TextField(
+            label="Nueva subtarea",
+            hint_text="Ingresa el título de la subtarea",
+            on_submit=self._add_subtask
+        )
+        
+        self.subtasks_container = None
+        
         self._show_dialog()
+    
+    def _build_subtasks_list(self) -> ft.Column:
+        """Construye la lista de subtareas."""
+        subtasks_items = []
+        
+        for subtask in self.subtasks:
+            if subtask.id and subtask.id in self.subtasks_to_delete:
+                continue
+            
+            subtask_field = ft.TextField(
+                value=subtask.title,
+                on_change=lambda e, s=subtask: setattr(s, 'title', e.control.value),
+                expand=True
+            )
+            
+            delete_btn = ft.IconButton(
+                icon=ft.Icons.DELETE,
+                icon_color=ft.Colors.RED,
+                on_click=lambda e, s=subtask: self._remove_subtask(s),
+                tooltip="Eliminar"
+            )
+            
+            subtasks_items.append(
+                ft.Row(
+                    [subtask_field, delete_btn],
+                    spacing=8
+                )
+            )
+        
+        return ft.Column(subtasks_items, spacing=8)
+    
+    def _add_subtask(self, e):
+        """Agrega una nueva subtarea a la lista."""
+        title = self.new_subtask_field.value.strip()
+        if not title:
+            return
+        
+        new_subtask = Subtask(
+            id=None,  # Nueva subtarea
+            task_id=self.task.id if self.task else 0,
+            title=title,
+            completed=False
+        )
+        
+        self.subtasks.append(new_subtask)
+        self.new_subtask_field.value = ""
+        self._refresh_subtasks_list()
+    
+    def _remove_subtask(self, subtask: Subtask):
+        """Elimina una subtarea de la lista."""
+        if subtask.id:
+            self.subtasks_to_delete.append(subtask.id)
+        self.subtasks.remove(subtask)
+        self._refresh_subtasks_list()
+    
+    def _refresh_subtasks_list(self):
+        """Actualiza la lista de subtareas en el diálogo."""
+        if self.subtasks_container:
+            self.subtasks_container.content = self._build_subtasks_list()
+            self.page.update()
     
     def _show_dialog(self):
         """Muestra el diálogo del formulario."""
         is_editing = self.task is not None
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        
+        # Construir lista de subtareas
+        self.subtasks_container = ft.Container(
+            content=self._build_subtasks_list()
+        )
+        
+        btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        
+        add_subtask_button = ft.ElevatedButton(
+            "Agregar subtarea",
+            icon=ft.Icons.ADD,
+            on_click=self._add_subtask,
+            bgcolor=btn_color,
+            color=ft.Colors.WHITE
+        )
         
         self.page.dialog = ft.AlertDialog(
             title=ft.Text(
@@ -69,12 +159,26 @@ class TaskForm:
                     [
                         self.title_field,
                         self.description_field,
-                        self.due_date_field
+                        self.due_date_field,
+                        ft.Divider(),
+                        ft.Text(
+                            "Subtareas",
+                            size=14,
+                            weight=ft.FontWeight.BOLD,
+                            color=title_color
+                        ),
+                        self.subtasks_container,
+                        ft.Row(
+                            [self.new_subtask_field, add_subtask_button],
+                            spacing=8
+                        )
                     ],
-                    spacing=16,
-                    tight=True
+                    spacing=12,
+                    tight=True,
+                    scroll=ft.ScrollMode.AUTO
                 ),
-                width=400,
+                width=500,
+                height=500,
                 padding=16
             ),
             actions=[
@@ -83,7 +187,7 @@ class TaskForm:
                     "Guardar",
                     on_click=self._save,
                     style=ft.ButtonStyle(
-                        color=ft.Colors.RED_700 if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.Colors.RED_500
+                        color=btn_color
                     )
                 )
             ],
@@ -112,6 +216,7 @@ class TaskForm:
                 return
         
         try:
+            task_id = None
             if self.task:
                 # Actualizar tarea existente
                 self.task.title = title
@@ -122,9 +227,27 @@ class TaskForm:
                 else:
                     self.task.due_date = None
                 self.task_service.update_task(self.task)
+                task_id = self.task.id
             else:
                 # Crear nueva tarea
-                self.task_service.create_task(title, description, due_date_str)
+                new_task = self.task_service.create_task(title, description, due_date_str)
+                task_id = new_task.id
+            
+            # Gestionar subtareas
+            if task_id:
+                # Eliminar subtareas marcadas para eliminar
+                for subtask_id in self.subtasks_to_delete:
+                    self.task_service.delete_subtask(subtask_id)
+                
+                # Crear o actualizar subtareas
+                for subtask in self.subtasks:
+                    if subtask.id is None:
+                        # Nueva subtarea
+                        subtask.task_id = task_id
+                        self.task_service.create_subtask(task_id, subtask.title)
+                    else:
+                        # Actualizar subtarea existente
+                        self.task_service.update_subtask(subtask)
             
             self.page.close_dialog()
             if self.on_save:
