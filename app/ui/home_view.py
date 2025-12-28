@@ -144,13 +144,13 @@ class HomeView:
                 [
                     ft.Column(
                         [
-                            ft.Text(
+                    ft.Text(
                                 f"{user_name}{level_text}",
                                 size=20,
                                 weight=ft.FontWeight.BOLD,
                                 color=text_color
-                            )
-                        ],
+                    )
+                ],
                         spacing=0
                     )
                 ],
@@ -175,7 +175,7 @@ class HomeView:
         else:
             return ft.Container(
                 content=ft.Text("Sección no encontrada"),
-                expand=True,
+            expand=True,
                 alignment=ft.alignment.center
             )
     
@@ -202,15 +202,15 @@ class HomeView:
         for section, icon, label in nav_items:
             is_selected = self.current_section == section
             button = ft.ElevatedButton(
-                content=ft.Column(
-                    [
+            content=ft.Column(
+                [
                         ft.Icon(icon, size=24, color=ft.Colors.WHITE if is_selected else unselected_icon_color),
                         ft.Text(label, size=12, color=ft.Colors.WHITE if is_selected else unselected_icon_color)
-                    ],
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=4,
-                    tight=True
-                ),
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=4,
+                tight=True
+            ),
                 bgcolor=selected_color if is_selected else None,
                 color=ft.Colors.WHITE if is_selected else None,
                 on_click=lambda e, s=section: self._navigate_to_section(s),

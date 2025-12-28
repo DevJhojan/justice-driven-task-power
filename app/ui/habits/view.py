@@ -280,6 +280,10 @@ class HabitsView:
         """Alterna la completación de hoy para un hábito."""
         self.habit_service.toggle_completion(habit.id, date.today(), self.points_service)
         self._load_habits()
+        # Actualizar header y resumen si están visibles
+        if hasattr(self.page, '_home_view_ref'):
+            home_view = self.page._home_view_ref
+            home_view._build_ui()
     
     def _delete_habit(self, habit: Habit):
         """Elimina un hábito."""

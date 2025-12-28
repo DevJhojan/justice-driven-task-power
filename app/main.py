@@ -22,7 +22,7 @@ def main(page: ft.Page):
     page.title = "Productividad Personal"
     page.padding = 0
     page.spacing = 0
-    
+
     # Configurar icono de la ventana para escritorio
     try:
         icon_path = Path("assets/app_icon.png")

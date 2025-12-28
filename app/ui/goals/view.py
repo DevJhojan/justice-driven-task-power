@@ -498,15 +498,18 @@ class GoalsView:
                         created_at=goal.created_at,
                         updated_at=goal.updated_at
                     )
+                    # Verificar si la meta cambió de estado (completa/incompleta)
+                    is_completed_now = target_value and current_value >= target_value
+                    
+                    # Actualizar el goal
                     self.goal_service.update_goal(updated_goal)
                     
-                    # Si la meta estaba completa y ahora no lo está, restar puntos
-                    is_completed_now = target_value and current_value >= target_value
-                    if was_completed and not is_completed_now and self.points_service:
-                        self.points_service.add_points(-0.1)  # Restar puntos
-                    # Si la meta no estaba completa y ahora lo está, sumar puntos
-                    elif not was_completed and is_completed_now and self.points_service:
-                        self.points_service.add_points(0.1)  # Sumar puntos
+                    # Si el estado cambió, manejar los puntos
+                    if was_completed != is_completed_now:
+                        if is_completed_now and not was_completed and self.points_service:
+                            self.points_service.add_points(1.00)  # Sumar 1.00 puntos por completar
+                        elif was_completed and not is_completed_now and self.points_service:
+                            self.points_service.add_points(-1.00)  # Restar 1.00 puntos por descompletar
             else:
                 # Crear nueva meta
                 self.goal_service.create_goal(
@@ -515,7 +518,8 @@ class GoalsView:
                     target_value=target_value,
                     current_value=current_value,
                     unit=unit,
-                    period=period
+                    period=period,
+                    points_service=self.points_service
                 )
             
             # Ocultar formulario y recargar metas
@@ -523,7 +527,12 @@ class GoalsView:
                 self.form_container.visible = False
             self._editing_goal_id = None
             self._load_goals()
-            self.page.update()
+            # Actualizar header y resumen si están visibles
+            if hasattr(self.page, '_home_view_ref'):
+                home_view = self.page._home_view_ref
+                home_view._build_ui()
+            else:
+                self.page.update()
         except Exception as ex:
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(f"Error al guardar: {str(ex)}"),
@@ -535,12 +544,18 @@ class GoalsView:
     def _delete_goal(self, goal: Goal):
         """Elimina una meta."""
         try:
+            # Si la meta estaba completada, restar puntos antes de eliminar
+            was_completed = goal.target_value and goal.current_value >= goal.target_value
             self.goal_service.delete_goal(goal.id)
-            # Si la meta estaba completada, restar puntos
-            if goal.target_value and goal.current_value >= goal.target_value and self.points_service:
-                self.points_service.add_points(-0.1)
+            if was_completed and self.points_service:
+                self.points_service.add_points(-1.00)  # Restar 1.00 puntos (el valor que se otorga por completar)
             self._load_goals()
-            self.page.update()
+            # Actualizar header y resumen si están visibles
+            if hasattr(self.page, '_home_view_ref'):
+                home_view = self.page._home_view_ref
+                home_view._build_ui()
+            else:
+                self.page.update()
         except Exception as ex:
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(f"Error al eliminar: {str(ex)}"),
@@ -687,15 +702,20 @@ class GoalsView:
             # Si la meta estaba completa y ahora no lo está, restar puntos
             is_completed_now = target_value and current_value >= target_value
             if was_completed and not is_completed_now and self.points_service:
-                self.points_service.add_points(-0.1)  # Restar puntos
+                self.points_service.add_points(-1.00)  # Restar 1.00 puntos
             # Si la meta no estaba completa y ahora lo está, sumar puntos
             elif not was_completed and is_completed_now and self.points_service:
-                self.points_service.add_points(0.1)  # Sumar puntos
+                self.points_service.add_points(1.00)  # Sumar 1.00 puntos
             
             # Ocultar formulario y recargar metas
             self._editing_goal_id = None
             self._load_goals()
-            self.page.update()
+            # Actualizar header y resumen si están visibles
+            if hasattr(self.page, '_home_view_ref'):
+                home_view = self.page._home_view_ref
+                home_view._build_ui()
+            else:
+                self.page.update()
         except Exception as ex:
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(f"Error al guardar: {str(ex)}"),

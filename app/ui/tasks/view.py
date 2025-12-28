@@ -395,6 +395,10 @@ class TasksView:
         else:
             self.task_service.mark_as_completed(task.id, self.points_service)
         self._load_tasks()
+        # Actualizar header y resumen si están visibles
+        if hasattr(self.page, '_home_view_ref'):
+            home_view = self.page._home_view_ref
+            home_view._build_ui()
     
     def _delete_task(self, task: Task):
         """Elimina una tarea."""
