@@ -118,6 +118,31 @@ class FirebaseSyncService:
         conn.commit()
         conn.close()
     
+    def _create_subtask_with_id(self, subtask):
+        """Crea una subtarea con un ID específico para sincronización, evitando duplicados."""
+        from datetime import datetime
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now().isoformat()
+        created_at = subtask.created_at.isoformat() if subtask.created_at else now
+        updated_at = subtask.updated_at.isoformat() if subtask.updated_at else now
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO subtasks (id, task_id, title, completed, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            subtask.id,
+            subtask.task_id,
+            subtask.title,
+            1 if subtask.completed else 0,
+            created_at,
+            updated_at
+        ))
+        
+        conn.commit()
+        conn.close()
+    
     def _create_goal_with_id(self, goal):
         """Crea una meta con un ID específico para sincronización, evitando duplicados."""
         from datetime import datetime
@@ -279,13 +304,57 @@ class FirebaseSyncService:
                     })
                     stats["tasks_created"] += 1
             
+            # Sincronizar subtareas individualmente (sincronización estricta granular)
+            for task in tasks:
+                if not task.id:
+                    continue
+                    
+                task_id_str = str(task.id)
+                local_subtasks = self.task_service.get_subtasks(task.id)
+                
+                # Obtener subtareas remotas para esta tarea
+                remote_subtasks = user_ref.child(f"tasks/{task_id_str}/subtasks").get().val() or {}
+                local_subtask_ids = {str(s.id) for s in local_subtasks}
+                
+                # Sincronizar cada subtarea local
+                for subtask in local_subtasks:
+                    subtask_id_str = str(subtask.id)
+                    remote_subtask = remote_subtasks.get(subtask_id_str)
+                    
+                    if remote_subtask:
+                        # Subtarea existe, actualizar solo si cambió
+                        updates = {}
+                        if subtask.title != remote_subtask.get("title"):
+                            updates["title"] = subtask.title
+                        if subtask.completed != remote_subtask.get("completed"):
+                            updates["completed"] = subtask.completed
+                        if (subtask.updated_at.isoformat() if subtask.updated_at else None) != remote_subtask.get("updated_at"):
+                            updates["updated_at"] = subtask.updated_at.isoformat() if subtask.updated_at else None
+                        
+                        if updates:
+                            user_ref.child(f"tasks/{task_id_str}/subtasks/{subtask_id_str}").update(updates)
+                    else:
+                        # Nueva subtarea, crear individualmente
+                        user_ref.child(f"tasks/{task_id_str}/subtasks/{subtask_id_str}").set({
+                            "id": subtask.id,
+                            "task_id": subtask.task_id,
+                            "title": subtask.title,
+                            "completed": subtask.completed,
+                            "created_at": subtask.created_at.isoformat() if subtask.created_at else None,
+                            "updated_at": subtask.updated_at.isoformat() if subtask.updated_at else None
+                        })
+                
+                # Eliminar subtareas remotas que ya no existen localmente
+                for remote_subtask_id in remote_subtasks:
+                    if remote_subtask_id not in local_subtask_ids:
+                        user_ref.child(f"tasks/{task_id_str}/subtasks/{remote_subtask_id}").remove()
+            
             # Sincronizar hábitos (solo campos modificados)
             habits = self.habit_service.get_all_habits()
             for habit in habits:
                 habit_id_str = str(habit.id)
                 remote_habit = remote_habits.get(habit_id_str)
-                completions = self.habit_service.get_completions(habit.id)
-                completions_iso = [d.isoformat() for d in completions]
+                local_completions = self.habit_service.get_completions(habit.id)
                 
                 if remote_habit:
                     # Actualizar solo campos que hayan cambiado
@@ -297,26 +366,36 @@ class FirebaseSyncService:
                     if (habit.updated_at.isoformat() if habit.updated_at else None) != remote_habit.get("updated_at"):
                         updates["updated_at"] = habit.updated_at.isoformat() if habit.updated_at else None
                     
-                    # Comparar completions (solo si hay cambios)
-                    remote_completions = set(remote_habit.get("completions", []))
-                    local_completions_set = set(completions_iso)
-                    if remote_completions != local_completions_set:
-                        updates["completions"] = completions_iso
-                    
                     if updates:
                         user_ref.child(f"habits/{habit_id_str}").update(updates)
                         stats["habits_updated"] += 1
                 else:
-                    # Nuevo hábito, crear completo
+                    # Nuevo hábito, crear completo (sin completaciones, se sincronizan por separado)
                     user_ref.child(f"habits/{habit_id_str}").set({
                         "id": habit.id,
                         "title": habit.title,
                         "description": habit.description,
                         "created_at": habit.created_at.isoformat() if habit.created_at else None,
-                        "updated_at": habit.updated_at.isoformat() if habit.updated_at else None,
-                        "completions": completions_iso
+                        "updated_at": habit.updated_at.isoformat() if habit.updated_at else None
                     })
                     stats["habits_created"] += 1
+                
+                # Sincronizar completaciones individualmente (sincronización estricta granular)
+                remote_completions_ref = user_ref.child(f"habits/{habit_id_str}/completions")
+                remote_completions = remote_completions_ref.get().val() or {}
+                local_completions_set = {d.isoformat() for d in local_completions}
+                
+                # Agregar/actualizar completaciones locales
+                for completion_date in local_completions:
+                    date_str = completion_date.isoformat()
+                    if date_str not in remote_completions:
+                        # Nueva completación, agregar individualmente
+                        remote_completions_ref.child(date_str).set(True)
+                
+                # Eliminar completaciones que ya no existen localmente
+                for remote_date_str in remote_completions:
+                    if remote_date_str not in local_completions_set:
+                        remote_completions_ref.child(remote_date_str).remove()
             
             # Sincronizar metas (solo campos modificados)
             goals = self.goal_service.get_all_goals()
@@ -495,6 +574,59 @@ class FirebaseSyncService:
                     # Insertar directamente con ID específico para evitar duplicados
                     self._create_task_with_id(new_task)
                     stats["tasks_created"] += 1
+                
+                # Sincronizar subtareas individualmente (sincronización estricta granular)
+                remote_subtasks_data = user_ref.child(f"tasks/{task_id_str}/subtasks").get().val() or {}
+                local_subtasks = self.task_service.get_subtasks(task_id) if task_id else []
+                local_subtasks_dict = {str(s.id): s for s in local_subtasks}
+                
+                for subtask_id_str, remote_subtask in remote_subtasks_data.items():
+                    subtask_id = int(subtask_id_str)
+                    local_subtask = local_subtasks_dict.get(subtask_id_str)
+                    
+                    if local_subtask:
+                        # Subtarea existe localmente - actualizar solo si cambió
+                        remote_updated = datetime.fromisoformat(remote_subtask.get("updated_at")) if remote_subtask.get("updated_at") else None
+                        local_updated = local_subtask.updated_at if local_subtask.updated_at else None
+                        
+                        if remote_updated and (not local_updated or remote_updated > local_updated):
+                            needs_update = False
+                            if remote_subtask.get("title") != local_subtask.title:
+                                local_subtask.title = remote_subtask.get("title")
+                                needs_update = True
+                            if remote_subtask.get("completed") != local_subtask.completed:
+                                local_subtask.completed = remote_subtask.get("completed", False)
+                                needs_update = True
+                            
+                            if needs_update:
+                                self.task_service.update_subtask(local_subtask)
+                    else:
+                        # Nueva subtarea desde Firebase - crear localmente
+                        from app.data.models import Subtask
+                        created_at = None
+                        if remote_subtask.get("created_at"):
+                            try:
+                                created_at = datetime.fromisoformat(remote_subtask.get("created_at"))
+                            except:
+                                pass
+                        
+                        new_subtask = Subtask(
+                            id=subtask_id,
+                            task_id=task_id,
+                            title=remote_subtask.get("title", ""),
+                            completed=remote_subtask.get("completed", False),
+                            created_at=created_at,
+                            updated_at=datetime.fromisoformat(remote_subtask.get("updated_at")) if remote_subtask.get("updated_at") else None
+                        )
+                        
+                        # Crear subtarea con ID específico
+                        self._create_subtask_with_id(new_subtask)
+                
+                # Eliminar subtareas locales que ya no existen en Firebase
+                remote_subtask_ids = set(remote_subtasks_data.keys())
+                for local_subtask in local_subtasks:
+                    if str(local_subtask.id) not in remote_subtask_ids:
+                        self.task_service.delete_subtask(local_subtask.id)
             
             # Sincronizar hábitos
             for habit_id_str, remote_habit in habits_data.items():
@@ -514,18 +646,6 @@ class FirebaseSyncService:
                         if remote_habit.get("description") != local_habit.description:
                             local_habit.description = remote_habit.get("description")
                             needs_update = True
-                        
-                        # Sincronizar completions (solo agregar las que no existen localmente)
-                        remote_completions = set(remote_habit.get("completions", []))
-                        local_completions_dates = {d.isoformat() for d in self.habit_service.get_completions(habit_id)}
-                        
-                        for completion_date_str in remote_completions:
-                            if completion_date_str not in local_completions_dates:
-                                try:
-                                    completion_date = date.fromisoformat(completion_date_str)
-                                    self.habit_service.add_completion(habit_id, completion_date)
-                                except:
-                                    pass
                         
                         if needs_update:
                             self.habit_service.update_habit(local_habit)
@@ -550,16 +670,33 @@ class FirebaseSyncService:
                     
                     # Insertar directamente con ID específico para evitar duplicados
                     self._create_habit_with_id(new_habit)
-                    
-                    # Agregar completions
-                    for completion_date_str in remote_habit.get("completions", []):
+                    stats["habits_created"] += 1
+                
+                # Sincronizar completaciones individualmente (sincronización estricta granular)
+                remote_completions_data = user_ref.child(f"habits/{habit_id_str}/completions").get().val() or {}
+                local_completions = self.habit_service.get_completions(habit_id)
+                local_completions_set = {d.isoformat() for d in local_completions}
+                
+                # Agregar completaciones que existen en Firebase pero no localmente
+                for completion_date_str in remote_completions_data:
+                    if completion_date_str not in local_completions_set:
                         try:
                             completion_date = date.fromisoformat(completion_date_str)
-                            self.habit_service.add_completion(habit_id, completion_date)
+                            # Usar el servicio para agregar completación (evita puntos duplicados)
+                            local_completions_check = self.habit_service.get_completions(habit_id)
+                            if completion_date not in local_completions_check:
+                                self.habit_service.repository.add_completion(habit_id, completion_date)
                         except:
                             pass
-                    
-                    stats["habits_created"] += 1
+                
+                # Eliminar completaciones locales que ya no existen en Firebase
+                for local_completion_date in local_completions:
+                    date_str = local_completion_date.isoformat()
+                    if date_str not in remote_completions_data:
+                        try:
+                            self.habit_service.repository.remove_completion(habit_id, local_completion_date)
+                        except:
+                            pass
             
             # Sincronizar metas
             for goal_id_str, remote_goal in goals_data.items():

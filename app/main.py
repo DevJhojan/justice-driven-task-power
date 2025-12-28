@@ -38,27 +38,27 @@ def main(page: ft.Page):
     # Configurar tema con matices rojos - Tema claro
     page.theme = ft.Theme(
         color_scheme_seed=ft.Colors.RED_700,  # Rojo principal
-        primary_swatch=ft.Colors.RED,
     )
     
     # Configurar tema oscuro con matices rojos
     page.dark_theme = ft.Theme(
         color_scheme_seed=ft.Colors.RED_900,  # Rojo oscuro principal
-        primary_swatch=ft.Colors.RED,
     )
     
-    # Personalizar colores del tema
+    # Personalizar colores del tema (solo si color_scheme está disponible)
     # Tema claro
-    page.theme.color_scheme.primary = ft.Colors.RED_700
-    page.theme.color_scheme.secondary = ft.Colors.RED_600
-    page.theme.color_scheme.on_primary = ft.Colors.WHITE
-    page.theme.color_scheme.on_secondary = ft.Colors.WHITE
+    if page.theme.color_scheme:
+        page.theme.color_scheme.primary = ft.Colors.RED_700
+        page.theme.color_scheme.secondary = ft.Colors.RED_600
+        page.theme.color_scheme.on_primary = ft.Colors.WHITE
+        page.theme.color_scheme.on_secondary = ft.Colors.WHITE
     
     # Tema oscuro
-    page.dark_theme.color_scheme.primary = ft.Colors.RED_600
-    page.dark_theme.color_scheme.secondary = ft.Colors.RED_500
-    page.dark_theme.color_scheme.on_primary = ft.Colors.WHITE
-    page.dark_theme.color_scheme.on_secondary = ft.Colors.WHITE
+    if page.dark_theme.color_scheme:
+        page.dark_theme.color_scheme.primary = ft.Colors.RED_600
+        page.dark_theme.color_scheme.secondary = ft.Colors.RED_500
+        page.dark_theme.color_scheme.on_primary = ft.Colors.WHITE
+        page.dark_theme.color_scheme.on_secondary = ft.Colors.WHITE
     
     # Establecer tema inicial desde configuración del usuario ANTES de cualquier otra cosa
     from app.data.database import get_db
@@ -291,23 +291,23 @@ def main(page: ft.Page):
     page.on_route_change = route_change
     page.on_view_pop = view_pop
     
+    # Establecer la ruta inicial si no está establecida
+    if not page.route:
+        page.route = "/"
+    
     # Construir la UI inicial después de que todo esté configurado
     # Esto asegura que el tema se haya aplicado correctamente antes de construir las vistas
-    if len(page.views) == 0:
-        home_view._build_ui()
+    # Llamar directamente a _build_ui para construir la UI inicial
+    home_view._build_ui()
 
 
 if __name__ == "__main__":
     # Ejecutar la aplicación
     # Para desarrollo: ventana nativa Flet
     # Para producción Android: se construye con build_android.sh
-    # Configurar icono desde assets
-    from pathlib import Path
-    icon_path = Path("assets/app_icon.png")
     ft.app(
         target=main, 
         view=ft.AppView.FLET_APP, 
-        assets_dir="assets",
-        icon=str(icon_path) if icon_path.exists() else None
+        assets_dir="assets"
     )
 

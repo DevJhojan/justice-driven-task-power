@@ -279,7 +279,34 @@ class GoalsView:
                         ft.Container(
                             content=ft.Column(
                                 [
-                                    ft.Text("Progreso", size=12, color=ft.Colors.GREY_700),
+                                    ft.Row(
+                                        [
+                                            ft.Text("Progreso", size=12, color=ft.Colors.GREY_700),
+                                            # Botones de incremento/decremento
+                                            ft.Row(
+                                                [
+                                                    ft.IconButton(
+                                                        icon=ft.Icons.REMOVE,
+                                                        icon_size=20,
+                                                        tooltip="Decrementar",
+                                                        on_click=lambda e, g=goal: self._decrement_progress(g),
+                                                        icon_color=btn_color,
+                                                        disabled=goal.current_value <= 0
+                                                    ),
+                                                    ft.IconButton(
+                                                        icon=ft.Icons.ADD,
+                                                        icon_size=20,
+                                                        tooltip="Incrementar",
+                                                        on_click=lambda e, g=goal: self._increment_progress(g),
+                                                        icon_color=btn_color
+                                                    )
+                                                ],
+                                                spacing=4,
+                                                tight=True
+                                            )
+                                        ],
+                                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                                    ),
                                     ft.Text(progress_text, size=14, weight=ft.FontWeight.BOLD),
                                     ft.ProgressBar(
                                         value=progress / 100,
@@ -536,6 +563,62 @@ class GoalsView:
         except Exception as ex:
             self.page.snack_bar = ft.SnackBar(
                 content=ft.Text(f"Error al guardar: {str(ex)}"),
+                bgcolor=ft.Colors.RED
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+    
+    def _increment_progress(self, goal: Goal):
+        """Incrementa el progreso de una meta en 1.0."""
+        try:
+            if goal.id:
+                # Usar el método increment_progress del servicio
+                success = self.goal_service.increment_progress(
+                    goal.id, 
+                    increment=1.0, 
+                    points_service=self.points_service
+                )
+                if success:
+                    self._load_goals()
+                    # Actualizar header y resumen si están visibles
+                    if hasattr(self.page, '_home_view_ref'):
+                        home_view = self.page._home_view_ref
+                        home_view._build_ui()
+        except Exception as e:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error al incrementar progreso: {str(e)}"),
+                bgcolor=ft.Colors.RED
+            )
+            self.page.snack_bar.open = True
+            self.page.update()
+    
+    def _decrement_progress(self, goal: Goal):
+        """Decrementa el progreso de una meta en 1.0."""
+        try:
+            if goal.id and goal.current_value > 0:
+                # Verificar si la meta estaba completa antes de decrementar
+                was_completed = goal.target_value and goal.current_value >= goal.target_value
+                
+                # Obtener la meta actualizada y decrementar
+                updated_goal = self.goal_service.get_goal(goal.id)
+                if updated_goal:
+                    new_value = max(0.0, updated_goal.current_value - 1.0)
+                    updated_goal.current_value = new_value
+                    self.goal_service.update_goal(updated_goal)
+                    
+                    # Si la meta estaba completa y ahora no lo está, restar puntos
+                    if was_completed and self.points_service:
+                        if not updated_goal.target_value or new_value < updated_goal.target_value:
+                            self.points_service.add_points(-1.00)  # Restar 1.00 puntos
+                    
+                    self._load_goals()
+                    # Actualizar header y resumen si están visibles
+                    if hasattr(self.page, '_home_view_ref'):
+                        home_view = self.page._home_view_ref
+                        home_view._build_ui()
+        except Exception as e:
+            self.page.snack_bar = ft.SnackBar(
+                content=ft.Text(f"Error al decrementar progreso: {str(e)}"),
                 bgcolor=ft.Colors.RED
             )
             self.page.snack_bar.open = True

@@ -8,14 +8,28 @@
           "$taskId": {
             ".read": "$userId === auth.uid",
             ".write": "$userId === auth.uid",
-            ".validate": "(newData.hasChildren(['id', 'title', 'status']) || data.exists()) && (!newData.hasChild('id') || newData.child('id').val() == $taskId) && (!newData.hasChild('title') || newData.child('title').isString()) && (!newData.hasChild('status') || newData.child('status').isString()) && (!newData.hasChild('description') || newData.child('description').isString() || newData.child('description').val() == null) && (!newData.hasChild('due_date') || newData.child('due_date').isString() || newData.child('due_date').val() == null) && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('updated_at') || newData.child('updated_at').isString() || newData.child('updated_at').val() == null)"
+            ".validate": "(newData.hasChildren(['id', 'title', 'status']) || data.exists()) && (!newData.hasChild('id') || newData.child('id').val() == $taskId) && (!newData.hasChild('title') || newData.child('title').isString()) && (!newData.hasChild('status') || newData.child('status').isString()) && (!newData.hasChild('description') || newData.child('description').isString() || newData.child('description').val() == null) && (!newData.hasChild('due_date') || newData.child('due_date').isString() || newData.child('due_date').val() == null) && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('updated_at') || newData.child('updated_at').isString() || newData.child('updated_at').val() == null)",
+            "subtasks": {
+              "$subtaskId": {
+                ".read": "$userId === auth.uid",
+                ".write": "$userId === auth.uid",
+                ".validate": "(newData.hasChildren(['id', 'task_id', 'title', 'completed']) || data.exists()) && (!newData.hasChild('id') || newData.child('id').val() == $subtaskId) && (!newData.hasChild('task_id') || newData.child('task_id').val() == $taskId) && (!newData.hasChild('title') || newData.child('title').isString()) && (!newData.hasChild('completed') || typeof newData.child('completed').val() === 'boolean') && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('updated_at') || newData.child('updated_at').isString() || newData.child('updated_at').val() == null)"
+              }
+            }
           }
         },
         "habits": {
           "$habitId": {
             ".read": "$userId === auth.uid",
             ".write": "$userId === auth.uid",
-            ".validate": "(newData.hasChildren(['id', 'title']) || data.exists()) && (!newData.hasChild('id') || newData.child('id').val() == $habitId) && (!newData.hasChild('title') || newData.child('title').isString()) && (!newData.hasChild('description') || newData.child('description').isString() || newData.child('description').val() == null) && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('updated_at') || newData.child('updated_at').isString() || newData.child('updated_at').val() == null)"
+            ".validate": "(newData.hasChildren(['id', 'title']) || data.exists()) && (!newData.hasChild('id') || newData.child('id').val() == $habitId) && (!newData.hasChild('title') || newData.child('title').isString()) && (!newData.hasChild('description') || newData.child('description').isString() || newData.child('description').val() == null) && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('updated_at') || newData.child('updated_at').isString() || newData.child('updated_at').val() == null)",
+            "completions": {
+              "$date": {
+                ".read": "$userId === auth.uid",
+                ".write": "$userId === auth.uid",
+                ".validate": "$date.matches(/^\\d{4}-\\d{2}-\\d{2}$/) && (newData.val() === true || newData.val() === null)"
+              }
+            }
           }
         },
         "goals": {

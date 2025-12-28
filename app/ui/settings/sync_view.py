@@ -336,10 +336,11 @@ class FirebaseSyncView:
             ft.Row([
                 ft.Icon(status_icon, color=status_color, size=24),
                 ft.Text(
-                    status_text,
-                    size=16,
+                    title_text,
+                    size=18,
                     weight=ft.FontWeight.BOLD,
-                    color=status_color
+                    color=status_color,
+                    expand=True
                 )
             ], spacing=8),
             ft.Divider(height=10),
