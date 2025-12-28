@@ -43,18 +43,24 @@ class HabitsView:
         )
         
         # Barra de título
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_600
+        
         title_bar = ft.Container(
             content=ft.Row(
                 [
                     ft.Text(
                         "🔁 Mis Hábitos",
                         size=24,
-                        weight=ft.FontWeight.BOLD
+                        weight=ft.FontWeight.BOLD,
+                        color=title_color
                     ),
                     ft.IconButton(
                         icon=ft.Icons.ADD,
                         on_click=self._open_habit_form,
-                        tooltip="Agregar hábito"
+                        tooltip="Agregar hábito",
+                        icon_color=btn_color
                     )
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN
@@ -135,10 +141,14 @@ class HabitsView:
         )
         
         # Botones de acción
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        
         edit_button = ft.IconButton(
             icon=ft.Icons.EDIT,
             on_click=lambda e, h=habit: self._open_habit_form(h),
-            tooltip="Editar"
+            tooltip="Editar",
+            icon_color=btn_color
         )
         
         delete_button = ft.IconButton(
@@ -165,7 +175,8 @@ class HabitsView:
                                     habit.title,
                                     size=16,
                                     weight=ft.FontWeight.BOLD,
-                                    expand=True
+                                    expand=True,
+                                    color=ft.Colors.RED_800 if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.Colors.RED_400
                                 ),
                                 ft.Text(
                                     habit.description or "",

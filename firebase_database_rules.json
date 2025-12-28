@@ -24,6 +24,16 @@
             ".write": "$userId === auth.uid",
             ".validate": "newData.hasChildren(['id', 'title']) && newData.child('id').val() == $goalId"
           }
+        },
+        "points": {
+          ".read": "$userId === auth.uid",
+          ".write": "$userId === auth.uid",
+          ".validate": "newData.hasChildren(['total_points']) && newData.child('total_points').isNumber()"
+        },
+        "user_settings": {
+          ".read": "$userId === auth.uid",
+          ".write": "$userId === auth.uid",
+          ".validate": "newData.hasChildren(['user_name']) && newData.child('user_name').isString()"
         }
       }
     },

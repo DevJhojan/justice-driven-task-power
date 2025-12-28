@@ -40,13 +40,17 @@ class SummaryView:
             Container con la vista de resumen.
         """
         # Barra de título
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        
         title_bar = ft.Container(
             content=ft.Row(
                 [
                     ft.Text(
                         "📊 Resumen",
                         size=24,
-                        weight=ft.FontWeight.BOLD
+                        weight=ft.FontWeight.BOLD,
+                        color=title_color
                     )
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN
@@ -211,7 +215,7 @@ class SummaryView:
                         title,
                         size=18,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.PRIMARY
+                        color=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
                     ),
                     ft.Row(
                         stat_items,
@@ -257,7 +261,7 @@ class SummaryView:
                         "📈 Resumen General",
                         size=18,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.PRIMARY
+                        color=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
                     ),
                     ft.Divider(),
                     ft.Row(
@@ -308,7 +312,7 @@ class SummaryView:
             padding=20,
             bgcolor=bg_color,
             border_radius=12,
-            border=ft.border.all(2, ft.Colors.PRIMARY)
+            border=ft.border.all(2, ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500)
         )
     
     def _build_level_card(self) -> ft.Container:
@@ -350,7 +354,7 @@ class SummaryView:
                         "🏆 Tu Nivel",
                         size=18,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.PRIMARY
+                        color=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
                     ),
                     ft.Container(
                         content=ft.Column(

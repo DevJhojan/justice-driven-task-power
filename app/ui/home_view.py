@@ -50,7 +50,8 @@ class HomeView:
         try:
             from app.services.firebase_sync_service import FirebaseSyncService
             firebase_sync_service = FirebaseSyncService(
-                db, self.task_service, self.habit_service, self.goal_service
+                db, self.task_service, self.habit_service, self.goal_service,
+                self.points_service, self.user_settings_service
             )
         except ImportError as e:
             print(f"Firebase no disponible: {e}")
@@ -109,7 +110,8 @@ class HomeView:
         """Construye el encabezado con el nombre del usuario y nivel."""
         user_name = self.user_settings_service.get_user_name()
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        bg_color = ft.Colors.PRIMARY
+        # Usar rojos para el header
+        bg_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_900
         text_color = ft.Colors.WHITE
         
         # Obtener nivel y puntos
@@ -163,7 +165,8 @@ class HomeView:
         # Determinar color según el tema
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         bg_color = ft.Colors.SURFACE if is_dark else ft.Colors.WHITE
-        selected_color = ft.Colors.PRIMARY
+        # Usar rojos para la selección
+        selected_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_600
         
         # Iconos y textos para cada sección
         nav_items = [

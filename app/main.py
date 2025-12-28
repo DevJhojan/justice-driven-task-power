@@ -21,6 +21,31 @@ def main(page: ft.Page):
     page.horizontal_alignment = ft.CrossAxisAlignment.STRETCH
     page.vertical_alignment = ft.MainAxisAlignment.START
     
+    # Configurar tema con matices rojos - Tema claro
+    page.theme = ft.Theme(
+        color_scheme_seed=ft.Colors.RED_700,  # Rojo principal
+        primary_swatch=ft.Colors.RED,
+    )
+    
+    # Configurar tema oscuro con matices rojos
+    page.dark_theme = ft.Theme(
+        color_scheme_seed=ft.Colors.RED_900,  # Rojo oscuro principal
+        primary_swatch=ft.Colors.RED,
+    )
+    
+    # Personalizar colores del tema
+    # Tema claro
+    page.theme.color_scheme.primary = ft.Colors.RED_700
+    page.theme.color_scheme.secondary = ft.Colors.RED_600
+    page.theme.color_scheme.on_primary = ft.Colors.WHITE
+    page.theme.color_scheme.on_secondary = ft.Colors.WHITE
+    
+    # Tema oscuro
+    page.dark_theme.color_scheme.primary = ft.Colors.RED_600
+    page.dark_theme.color_scheme.secondary = ft.Colors.RED_500
+    page.dark_theme.color_scheme.on_primary = ft.Colors.WHITE
+    page.dark_theme.color_scheme.on_secondary = ft.Colors.WHITE
+    
     # Inicializar la vista principal
     HomeView(page)
 

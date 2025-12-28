@@ -69,13 +69,16 @@ class SettingsView:
                     ft.Text(
                         "⚙️ Configuración",
                         size=24,
-                        weight=ft.FontWeight.BOLD
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
                     ),
                     ft.Divider(),
-                    ft.Text("Usuario", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Text("Usuario", size=16, weight=ft.FontWeight.BOLD,
+                           color=ft.Colors.RED_800 if not is_dark else ft.Colors.RED_400),
                     self.user_name_field,
                     ft.Divider(),
-                    ft.Text("Tema", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Text("Tema", size=16, weight=ft.FontWeight.BOLD,
+                           color=ft.Colors.RED_800 if not is_dark else ft.Colors.RED_400),
                     theme_switch,
                     ft.Divider(),
                     self._build_firebase_section(),
@@ -126,8 +129,10 @@ class SettingsView:
     def _build_firebase_section(self) -> ft.Column:
         """Construye la sección de sincronización con Firebase."""
         if self.firebase_sync_service is None:
+            is_dark = self.page.theme_mode == ft.ThemeMode.DARK
             return ft.Column([
-                ft.Text("Sincronización Firebase", size=16, weight=ft.FontWeight.BOLD),
+                ft.Text("Sincronización Firebase", size=16, weight=ft.FontWeight.BOLD,
+                       color=ft.Colors.RED_800 if not is_dark else ft.Colors.RED_400),
                 ft.Text(
                     "Firebase no está disponible. Instala pyrebase4.",
                     size=12,

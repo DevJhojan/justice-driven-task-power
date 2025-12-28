@@ -12,16 +12,18 @@ from app.ui.goals.form import GoalForm
 class GoalsView:
     """Vista para gestión de metas."""
     
-    def __init__(self, page: ft.Page, goal_service: GoalService):
+    def __init__(self, page: ft.Page, goal_service: GoalService, points_service=None):
         """
         Inicializa la vista de metas.
         
         Args:
             page: Página de Flet.
             goal_service: Servicio de metas.
+            points_service: Servicio de puntos (opcional).
         """
         self.page = page
         self.goal_service = goal_service
+        self.points_service = points_service
         self.goals_container = None
     
     def build_ui(self) -> ft.Container:
@@ -141,10 +143,14 @@ class GoalsView:
         )
         
         # Botones de acción
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        
         edit_button = ft.IconButton(
             icon=ft.Icons.EDIT,
             on_click=lambda e, g=goal: self._open_goal_form(g),
-            tooltip="Editar"
+            tooltip="Editar",
+            icon_color=btn_color
         )
         
         delete_button = ft.IconButton(
@@ -165,6 +171,7 @@ class GoalsView:
                                     goal.title,
                                     size=16,
                                     weight=ft.FontWeight.BOLD,
+                                    color=ft.Colors.RED_800 if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.Colors.RED_400,
                                     expand=True
                                 ),
                                 ft.Text(

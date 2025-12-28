@@ -19,6 +19,8 @@ from app.data.database import Database
 from app.services.task_service import TaskService
 from app.services.habit_service import HabitService
 from app.services.goal_service import GoalService
+from app.services.points_service import PointsService
+from app.services.user_settings_service import UserSettingsService
 from app.data.task_repository import TaskRepository
 from app.data.habit_repository import HabitRepository
 from app.data.goal_repository import GoalRepository
@@ -28,7 +30,8 @@ class FirebaseSyncService:
     """Servicio para sincronizar datos con Firebase."""
     
     def __init__(self, db: Database, task_service: TaskService,
-                 habit_service: HabitService, goal_service: GoalService):
+                 habit_service: HabitService, goal_service: GoalService,
+                 points_service: PointsService, user_settings_service: UserSettingsService):
         """
         Inicializa el servicio de sincronización.
         
@@ -37,6 +40,8 @@ class FirebaseSyncService:
             task_service: Servicio de tareas.
             habit_service: Servicio de hábitos.
             goal_service: Servicio de metas.
+            points_service: Servicio de puntos.
+            user_settings_service: Servicio de configuración del usuario.
         """
         if pyrebase is None:
             raise ImportError(
@@ -47,6 +52,8 @@ class FirebaseSyncService:
         self.task_service = task_service
         self.habit_service = habit_service
         self.goal_service = goal_service
+        self.points_service = points_service
+        self.user_settings_service = user_settings_service
         
         # Cargar configuración de Firebase desde google-services.json
         self.firebase_config = self._load_firebase_config()
@@ -182,15 +189,31 @@ class FirebaseSyncService:
                     "updated_at": goal.updated_at.isoformat() if goal.updated_at else None
                 }
             
+            # Obtener puntos y configuración del usuario
+            total_points = self.points_service.get_total_points()
+            user_name = self.user_settings_service.get_user_name()
+            
+            points_data = {
+                "total_points": total_points,
+                "last_updated": datetime.now().isoformat()
+            }
+            
+            user_settings_data = {
+                "user_name": user_name,
+                "last_updated": datetime.now().isoformat()
+            }
+            
             # Subir a Firebase
             user_ref = self.db_firebase.child(f"users/{self.user_id}")
             user_ref.child("tasks").set(tasks_data)
             user_ref.child("habits").set(habits_data)
             user_ref.child("goals").set(goals_data)
+            user_ref.child("points").set(points_data)
+            user_ref.child("user_settings").set(user_settings_data)
             
             return {
                 "success": True,
-                "message": f"Sincronizado: {len(tasks)} tareas, {len(habits)} hábitos, {len(goals)} metas"
+                "message": f"Sincronizado: {len(tasks)} tareas, {len(habits)} hábitos, {len(goals)} metas, puntos: {total_points:.2f}"
             }
         except Exception as e:
             return {"success": False, "message": f"Error al sincronizar: {str(e)}"}
@@ -212,13 +235,31 @@ class FirebaseSyncService:
             tasks_data = user_ref.child("tasks").get().val() or {}
             habits_data = user_ref.child("habits").get().val() or {}
             goals_data = user_ref.child("goals").get().val() or {}
+            points_data = user_ref.child("points").get().val() or {}
+            user_settings_data = user_ref.child("user_settings").get().val() or {}
             
-            # TODO: Implementar lógica de merge (actualmente solo muestra lo que hay)
+            # Sincronizar puntos si existen en Firebase
+            if points_data and "total_points" in points_data:
+                firebase_points = float(points_data.get("total_points", 0.0))
+                local_points = self.points_service.get_total_points()
+                # Usar el mayor valor entre Firebase y local (merge conservador)
+                if firebase_points > local_points:
+                    # Calcular la diferencia para agregar
+                    diff = firebase_points - local_points
+                    self.points_service.add_points(diff)
+            
+            # Sincronizar configuración del usuario
+            if user_settings_data and "user_name" in user_settings_data:
+                firebase_name = user_settings_data.get("user_name", "")
+                if firebase_name:
+                    self.user_settings_service.set_user_name(firebase_name)
+            
+            # TODO: Implementar lógica de merge completa para tareas, hábitos y metas
             # Por ahora, solo retornamos información de lo que se descargó
             
             return {
                 "success": True,
-                "message": f"Descargado: {len(tasks_data)} tareas, {len(habits_data)} hábitos, {len(goals_data)} metas"
+                "message": f"Descargado: {len(tasks_data)} tareas, {len(habits_data)} hábitos, {len(goals_data)} metas, puntos sincronizados"
             }
         except Exception as e:
             return {"success": False, "message": f"Error al descargar: {str(e)}"}
