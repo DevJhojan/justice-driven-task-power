@@ -468,11 +468,11 @@ class FirebaseSyncService:
                             # Si el reintento también falla, verificar si es otro error de permisos
                             retry_error_str = str(retry_error)
                             if "Permission denied" in retry_error_str or "401" in retry_error_str:
-                                # Si sigue fallando después del refresh, el usuario necesita iniciar sesión nuevamente
-                                self.logout()
+                                # NO borrar la sesión automáticamente - solo informar al usuario
+                                # El usuario debe cerrar sesión explícitamente si lo desea
                                 return {
                                     "success": False, 
-                                    "message": "Tu sesión de Firebase ha expirado. Por favor, cierra sesión y vuelve a iniciar sesión para continuar sincronizando."
+                                    "message": "Error de autenticación. Por favor, intenta la operación nuevamente. Si el problema persiste, cierra sesión y vuelve a iniciar sesión."
                                 }
                             # Si es otro tipo de error, devolverlo
                             return {"success": False, "message": f"Error al sincronizar: {retry_error_str}"}
@@ -483,11 +483,11 @@ class FirebaseSyncService:
                             "message": "Token refrescado. Por favor, intenta la operación nuevamente."
                         }
             
-            # Si no se pudo refrescar, el usuario necesita iniciar sesión nuevamente
-            self.logout()
+            # Si no se pudo refrescar, NO borrar la sesión automáticamente
+            # Solo informar al usuario que puede intentar nuevamente o cerrar sesión si lo desea
             return {
                 "success": False, 
-                "message": "Tu sesión de Firebase ha expirado. Por favor, cierra sesión y vuelve a iniciar sesión para continuar sincronizando."
+                "message": "No se pudo refrescar el token. Por favor, intenta la operación nuevamente. Si el problema persiste, cierra sesión y vuelve a iniciar sesión."
             }
         
         return {"success": False, "message": f"Error al sincronizar: {error_str}"}
