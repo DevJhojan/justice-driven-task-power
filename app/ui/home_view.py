@@ -47,10 +47,11 @@ class HomeView:
         self.user_settings_service = UserSettingsService(db)
         
         # Servicio de sincronización con Firebase
-        firebase_sync_service = None
+        # Guardar como atributo de HomeView para mantener la misma instancia
+        self.firebase_sync_service = None
         try:
             from app.services.firebase_sync_service import FirebaseSyncService
-            firebase_sync_service = FirebaseSyncService(
+            self.firebase_sync_service = FirebaseSyncService(
                 db, self.task_service, self.habit_service, self.goal_service,
                 self.points_service, self.user_settings_service
             )
@@ -66,7 +67,7 @@ class HomeView:
         self.settings_view = SettingsView(
             page,
             on_name_changed=self.refresh_header,
-            firebase_sync_service=firebase_sync_service
+            firebase_sync_service=self.firebase_sync_service
         )
         self.summary_view = SummaryView(page, self.task_service, self.habit_service, self.goal_service, self.points_service)
         

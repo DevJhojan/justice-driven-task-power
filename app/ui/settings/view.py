@@ -146,6 +146,12 @@ class SettingsView:
     
     def _build_firebase_section(self) -> ft.Column:
         """Construye la sección de sincronización con Firebase."""
+        # Asegurar que siempre usamos la instancia correcta del servicio
+        if hasattr(self.page, '_home_view_ref'):
+            home_view = self.page._home_view_ref
+            if hasattr(home_view, 'firebase_sync_service'):
+                self.firebase_sync_service = home_view.firebase_sync_service
+        
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         btn_bg_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_600
         btn_text_color = ft.Colors.WHITE
@@ -322,7 +328,19 @@ class SettingsView:
     
     def _firebase_login(self, e):
         """Inicia sesión en Firebase."""
-        if not self.firebase_sync_service or not self.firebase_email_field or not self.firebase_password_field:
+        # SIEMPRE usar el servicio de HomeView para el login
+        firebase_service = None
+        if hasattr(self.page, '_home_view_ref'):
+            home_view = self.page._home_view_ref
+            if hasattr(home_view, 'firebase_sync_service'):
+                firebase_service = home_view.firebase_sync_service
+                print(f"DEBUG _firebase_login - Usando servicio de HomeView")
+        
+        if not firebase_service:
+            firebase_service = self.firebase_sync_service
+            print(f"DEBUG _firebase_login - Usando servicio de SettingsView (fallback)")
+        
+        if not firebase_service or not self.firebase_email_field or not self.firebase_password_field:
             return
         
         email = self.firebase_email_field.value.strip()
@@ -333,17 +351,36 @@ class SettingsView:
             return
         
         try:
-            success = self.firebase_sync_service.login(email, password)
+            print(f"DEBUG _firebase_login - Antes del login, servicio user_id: {firebase_service.user_id if hasattr(firebase_service, 'user_id') else 'N/A'}")
+            success = firebase_service.login(email, password)
+            print(f"DEBUG _firebase_login - Después del login, servicio user_id: {firebase_service.user_id if hasattr(firebase_service, 'user_id') else 'N/A'}")
             if success:
-                # Sincronizar automáticamente después del login
-                try:
-                    sync_result = self.firebase_sync_service.sync_to_firebase()
-                    if sync_result.get("success"):
-                        self._show_snackbar("✅ Login exitoso. Sincronización activada", ft.Colors.GREEN)
-                    else:
-                        self._show_snackbar(f"⚠️ Login exitoso. Advertencia: {sync_result.get('message', '')}", ft.Colors.ORANGE)
-                except Exception as sync_ex:
-                    self._show_snackbar(f"⚠️ Login exitoso. Error en sincronización: {str(sync_ex)}", ft.Colors.ORANGE)
+                # Verificar que realmente se inició sesión
+                if not firebase_service.is_logged_in():
+                    self._show_snackbar("❌ Error: La sesión no se inició correctamente", ft.Colors.RED)
+                    return
+                
+                # Actualizar la referencia en SettingsView para usar el mismo servicio
+                self.firebase_sync_service = firebase_service
+                
+                # Asegurar que HomeView también tiene la referencia actualizada
+                if hasattr(self.page, '_home_view_ref'):
+                    home_view = self.page._home_view_ref
+                    if hasattr(home_view, 'firebase_sync_service'):
+                        # Verificar el estado antes y después
+                        print(f"DEBUG _firebase_login - Antes de actualizar HomeView:")
+                        print(f"  - firebase_service.user_id: {firebase_service.user_id if hasattr(firebase_service, 'user_id') else 'N/A'}")
+                        print(f"  - home_view.firebase_sync_service.user_id: {home_view.firebase_sync_service.user_id if hasattr(home_view.firebase_sync_service, 'user_id') else 'N/A'}")
+                        print(f"  - Misma instancia antes: {firebase_service is home_view.firebase_sync_service}")
+                        
+                        # Actualizar HomeView con el servicio que tiene el estado del login
+                        home_view.firebase_sync_service = firebase_service
+                        
+                        # Verificar el estado después
+                        print(f"DEBUG _firebase_login - Después de actualizar HomeView:")
+                        print(f"  - home_view.firebase_sync_service.user_id: {home_view.firebase_sync_service.user_id if hasattr(home_view.firebase_sync_service, 'user_id') else 'N/A'}")
+                        print(f"  - Misma instancia después: {firebase_service is home_view.firebase_sync_service}")
+                        print(f"  - self.firebase_sync_service.user_id: {self.firebase_sync_service.user_id if hasattr(self.firebase_sync_service, 'user_id') else 'N/A'}")
                 
                 # Ocultar formulario y limpiar campos
                 self._firebase_login_visible = False
@@ -352,12 +389,22 @@ class SettingsView:
                 if self.firebase_password_field:
                     self.firebase_password_field.value = ""
                 
-                # Reconstruir UI
+                # Reconstruir UI para mostrar el estado de sesión iniciada
                 if hasattr(self.page, '_home_view_ref'):
                     home_view = self.page._home_view_ref
                     home_view._build_ui()
                 else:
                     self.page.update()
+                
+                # Sincronizar automáticamente después del login (sin bloquear la UI)
+                try:
+                    sync_result = firebase_service.sync_to_firebase()
+                    if sync_result.get("success"):
+                        self._show_snackbar("✅ Login exitoso. Sincronización activada", ft.Colors.GREEN)
+                    else:
+                        self._show_snackbar(f"⚠️ Login exitoso. Advertencia: {sync_result.get('message', '')}", ft.Colors.ORANGE)
+                except Exception as sync_ex:
+                    self._show_snackbar(f"⚠️ Login exitoso. Error en sincronización: {str(sync_ex)}", ft.Colors.ORANGE)
             else:
                 self._show_snackbar("❌ Error al iniciar sesión. Verifica tus credenciales.", ft.Colors.RED)
         except Exception as ex:
@@ -405,9 +452,13 @@ class SettingsView:
                 if self.firebase_password_field:
                     self.firebase_password_field.value = ""
                 
-                # Reconstruir UI
+                # Reconstruir UI para mostrar el estado de sesión iniciada
+                # Asegurar que SettingsView use la misma instancia del servicio
                 if hasattr(self.page, '_home_view_ref'):
                     home_view = self.page._home_view_ref
+                    # Asegurar que SettingsView tenga la referencia correcta al servicio
+                    if hasattr(home_view, 'firebase_sync_service'):
+                        self.firebase_sync_service = home_view.firebase_sync_service
                     home_view._build_ui()
                 else:
                     self.page.update()
@@ -426,8 +477,23 @@ class SettingsView:
     
     def _export_to_firebase(self, e):
         """Exporta datos locales a Firebase."""
+        # Asegurar que siempre usamos la instancia correcta del servicio
+        if hasattr(self.page, '_home_view_ref'):
+            home_view = self.page._home_view_ref
+            if hasattr(home_view, 'firebase_sync_service'):
+                old_service = self.firebase_sync_service
+                self.firebase_sync_service = home_view.firebase_sync_service
+                print(f"DEBUG _export_to_firebase - Servicio actualizado. Misma instancia: {old_service is self.firebase_sync_service}")
+                print(f"DEBUG _export_to_firebase - home_view.firebase_sync_service.user_id: {home_view.firebase_sync_service.user_id if hasattr(home_view.firebase_sync_service, 'user_id') else 'N/A'}")
+        
         if not self.firebase_sync_service:
+            print("DEBUG _export_to_firebase - No hay firebase_sync_service")
             return
+        
+        print(f"DEBUG _export_to_firebase - firebase_sync_service presente: {self.firebase_sync_service is not None}")
+        print(f"DEBUG _export_to_firebase - is_logged_in(): {self.firebase_sync_service.is_logged_in()}")
+        print(f"DEBUG _export_to_firebase - user_id: {self.firebase_sync_service.user_id if hasattr(self.firebase_sync_service, 'user_id') else 'N/A'}")
+        print(f"DEBUG _export_to_firebase - auth_token presente: {self.firebase_sync_service.auth_token is not None if hasattr(self.firebase_sync_service, 'auth_token') else 'N/A'}")
         
         try:
             result = self.firebase_sync_service.sync_to_firebase()
@@ -461,6 +527,12 @@ class SettingsView:
     
     def _import_from_firebase(self, e):
         """Importa datos de Firebase a local."""
+        # Asegurar que siempre usamos la instancia correcta del servicio
+        if hasattr(self.page, '_home_view_ref'):
+            home_view = self.page._home_view_ref
+            if hasattr(home_view, 'firebase_sync_service'):
+                self.firebase_sync_service = home_view.firebase_sync_service
+        
         if not self.firebase_sync_service:
             return
         

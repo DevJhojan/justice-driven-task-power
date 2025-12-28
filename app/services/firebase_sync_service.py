@@ -212,14 +212,39 @@ class FirebaseSyncService:
         """
         try:
             user = self.auth.sign_in_with_email_and_password(email, password)
+            if not user or 'localId' not in user:
+                print("Error: Respuesta de Firebase inválida")
+                return False
+            
             self.user_id = user['localId']
             self.auth_token = user.get('idToken')
             self.refresh_token = user.get('refreshToken')
+            
+            # Debug: Verificar qué se guardó
+            print(f"DEBUG Login - user_id: {self.user_id}")
+            print(f"DEBUG Login - auth_token presente: {self.auth_token is not None}")
+            print(f"DEBUG Login - refresh_token presente: {self.refresh_token is not None}")
+            
+            # Verificar que se guardaron los datos correctamente
+            if not self.user_id:
+                print("Error: No se pudo obtener el user_id")
+                return False
+            
             # Guardar el email del usuario
             self.user_settings_service.set_firebase_email(email)
+            
+            # Verificar que la sesión está activa
+            if not self.is_logged_in():
+                print("Error: La sesión no se estableció correctamente")
+                print(f"DEBUG - user_id después de guardar: {self.user_id}")
+                return False
+            
+            print(f"DEBUG Login exitoso - is_logged_in(): {self.is_logged_in()}")
             return True
         except Exception as e:
             print(f"Error al iniciar sesión: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def register(self, email: str, password: str) -> bool:
@@ -280,8 +305,8 @@ class FirebaseSyncService:
             return False
         except Exception as e:
             print(f"Error al refrescar token: {e}")
-            # Si falla el refresh, limpiar la sesión
-            self.logout()
+            # NO borrar la sesión aquí - dejar que el método que llama decida
+            # porque el user_id todavía puede ser válido
             return False
     
     def _ensure_authenticated(self) -> bool:
@@ -291,18 +316,31 @@ class FirebaseSyncService:
         Returns:
             True si está autenticado, False en caso contrario.
         """
+        print(f"DEBUG _ensure_authenticated - user_id: {self.user_id}")
+        print(f"DEBUG _ensure_authenticated - auth_token presente: {self.auth_token is not None}")
+        print(f"DEBUG _ensure_authenticated - refresh_token presente: {self.refresh_token is not None}")
+        
         if not self.user_id:
+            print("DEBUG _ensure_authenticated - No hay user_id, retornando False")
             return False
         
-        # Pyrebase maneja los tokens automáticamente, pero si tenemos refresh_token
-        # podemos intentar refrescarlo antes de hacer peticiones
-        if self.refresh_token:
+        # Si tenemos user_id pero no tenemos token, intentar refrescar
+        # Solo si tenemos refresh_token disponible
+        if not self.auth_token and self.refresh_token:
             try:
-                self._refresh_auth_token()
-            except:
-                pass
+                # Intentar refrescar el token, pero no borrar la sesión si falla
+                # porque el user_id todavía es válido
+                if not self._refresh_auth_token():
+                    # Si el refresh falla pero tenemos user_id, aún podemos intentar
+                    # usar el token que Pyrebase maneja internamente
+                    print("Advertencia: No se pudo refrescar el token, pero la sesión sigue activa")
+            except Exception as e:
+                print(f"Advertencia al refrescar token: {e}")
+                # No borrar la sesión aquí, solo registrar el error
         
-        return self.user_id is not None
+        result = self.user_id is not None
+        print(f"DEBUG _ensure_authenticated - Resultado: {result}")
+        return result
     
     def _get_auth_token(self) -> Optional[str]:
         """
@@ -312,12 +350,17 @@ class FirebaseSyncService:
             El token de autenticación o None si no está disponible.
         """
         if not self.user_id:
+            print(f"DEBUG _get_auth_token - No hay user_id")
             return None
+        
+        print(f"DEBUG _get_auth_token - user_id: {self.user_id}, auth_token presente: {self.auth_token is not None}")
         
         # Si no tenemos token o el token podría estar expirado, intentar refrescar
         if not self.auth_token and self.refresh_token:
+            print(f"DEBUG _get_auth_token - Intentando refrescar token...")
             self._refresh_auth_token()
         
+        print(f"DEBUG _get_auth_token - Token final presente: {self.auth_token is not None}")
         return self.auth_token
     
     def _handle_firebase_error(self, error: Exception, retry_callback=None) -> Dict[str, Any]:
@@ -383,10 +426,18 @@ class FirebaseSyncService:
         
         def _perform_sync():
             """Función interna para realizar la sincronización."""
+            # Verificar que tenemos user_id
+            if not self.user_id:
+                return {"success": False, "message": "No hay sesión activa. Por favor, inicia sesión nuevamente."}
+            
             # Obtener token de autenticación
             token = self._get_auth_token()
             if not token:
-                return {"success": False, "message": "Token de autenticación no disponible. Por favor, inicia sesión nuevamente."}
+                # Si no tenemos token pero tenemos user_id, intentar usar None
+                # Pyrebase puede manejar la autenticación internamente si la sesión está activa
+                print(f"Advertencia: No hay token explícito, pero user_id existe: {self.user_id}")
+                print(f"Intentando continuar sin token explícito...")
+                token = None  # Intentar sin token, Pyrebase puede manejarlo
             
             user_ref = self.db_firebase.child(f"users/{self.user_id}")
             stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0}
@@ -924,6 +975,9 @@ class FirebaseSyncService:
                 message = f"Descargado: {', '.join(message_parts)}"
             
             return {"success": True, "message": message, "stats": stats}
+        
+        try:
+            return _perform_sync()
         except Exception as e:
             return self._handle_firebase_error(e, retry_callback=_perform_sync)
 
