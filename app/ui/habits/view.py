@@ -2,7 +2,7 @@
 Vista principal de hábitos.
 """
 import flet as ft
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from app.data.models import Habit
@@ -896,6 +896,13 @@ class HabitsView:
                 border_radius=8,
                 margin=ft.margin.all(16)
             )
+        
+        container = ft.Container(
+            content=metrics_content,
+            visible=False,  # Oculto por defecto
+        )
+        
+        return container
     
     def _toggle_sort_order(self, e):
         """Alterna entre ordenamiento más reciente primero y más antiguo primero."""
@@ -909,11 +916,4 @@ class HabitsView:
             home_view._build_ui()
         elif self.page:
             self.page.update()
-        
-        container = ft.Container(
-            content=metrics_content,
-            visible=False,  # Oculto por defecto
-        )
-        
-        return container
 
