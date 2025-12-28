@@ -5,11 +5,15 @@
         ".read": "auth != null && $userId === auth.uid",
         ".write": "auth != null && $userId === auth.uid",
         "tasks": {
+          ".read": "auth != null && $userId === auth.uid",
+          ".write": "auth != null && $userId === auth.uid",
           "$taskId": {
             ".read": "auth != null && $userId === auth.uid",
             ".write": "auth != null && $userId === auth.uid",
             ".validate": "(!data.exists() && newData.hasChildren(['id', 'title', 'status']) && newData.child('id').val() == $taskId && newData.child('title').isString() && newData.child('status').isString()) || (data.exists() && (!newData.hasChild('id') || newData.child('id').val() == $taskId) && (!newData.hasChild('title') || newData.child('title').isString()) && (!newData.hasChild('status') || newData.child('status').isString()) && (!newData.hasChild('description') || newData.child('description').isString() || newData.child('description').val() == null) && (!newData.hasChild('due_date') || newData.child('due_date').isString() || newData.child('due_date').val() == null) && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('updated_at') || newData.child('updated_at').isString() || newData.child('updated_at').val() == null))",
             "subtasks": {
+              ".read": "auth != null && $userId === auth.uid",
+              ".write": "auth != null && $userId === auth.uid",
               "$subtaskId": {
                 ".read": "auth != null && $userId === auth.uid",
                 ".write": "auth != null && $userId === auth.uid",
@@ -19,11 +23,15 @@
           }
         },
         "habits": {
+          ".read": "auth != null && $userId === auth.uid",
+          ".write": "auth != null && $userId === auth.uid",
           "$habitId": {
             ".read": "auth != null && $userId === auth.uid",
             ".write": "auth != null && $userId === auth.uid",
             ".validate": "(!data.exists() && newData.hasChildren(['id', 'title']) && newData.child('id').val() == $habitId && newData.child('title').isString()) || (data.exists() && (!newData.hasChild('id') || newData.child('id').val() == $habitId) && (!newData.hasChild('title') || newData.child('title').isString()) && (!newData.hasChild('description') || newData.child('description').isString() || newData.child('description').val() == null) && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('updated_at') || newData.child('updated_at').isString() || newData.child('updated_at').val() == null))",
             "completions": {
+              ".read": "auth != null && $userId === auth.uid",
+              ".write": "auth != null && $userId === auth.uid",
               "$date": {
                 ".read": "auth != null && $userId === auth.uid",
                 ".write": "auth != null && $userId === auth.uid",
@@ -33,6 +41,8 @@
           }
         },
         "goals": {
+          ".read": "auth != null && $userId === auth.uid",
+          ".write": "auth != null && $userId === auth.uid",
           "$goalId": {
             ".read": "auth != null && $userId === auth.uid",
             ".write": "auth != null && $userId === auth.uid",
@@ -40,6 +50,8 @@
           }
         },
         "rewards": {
+          ".read": "auth != null && $userId === auth.uid",
+          ".write": "auth != null && $userId === auth.uid",
           "$rewardId": {
             ".read": "auth != null && $userId === auth.uid",
             ".write": "auth != null && $userId === auth.uid",
