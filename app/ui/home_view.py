@@ -222,6 +222,10 @@ class HomeView:
         self.current_section = section
         self._build_ui()
     
+    def refresh_all(self):
+        """Refresca todas las vistas después de guardar."""
+        self._build_ui()
+    
     def refresh_header(self):
         """Refresca el encabezado (útil cuando se cambia el nombre del usuario)."""
         self._build_ui()

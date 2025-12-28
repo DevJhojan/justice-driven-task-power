@@ -46,8 +46,119 @@ def main(page: ft.Page):
     page.dark_theme.color_scheme.on_primary = ft.Colors.WHITE
     page.dark_theme.color_scheme.on_secondary = ft.Colors.WHITE
     
-    # Inicializar la vista principal
-    HomeView(page)
+    # Inicializar home_view
+    home_view = HomeView(page)
+    
+    # Configurar el manejador de rutas para formularios
+    def route_change(e):
+        """Maneja los cambios de ruta."""
+        # Si la ruta es la principal, HomeView ya la maneja
+        if page.route == "/" or not page.route or page.route == "":
+            # Asegurar que HomeView esté visible
+            if len(page.views) == 0:
+                home_view._build_ui()
+            return
+        
+        # Si hay parámetros en la ruta, manejar formularios
+        if page.route.startswith("/task-form"):
+            from app.ui.tasks.form import TaskForm
+            from app.services.task_service import TaskService
+            from app.data.task_repository import TaskRepository
+            from app.data.subtask_repository import SubtaskRepository
+            from app.data.database import get_db
+            
+            # Obtener ID de la ruta si existe
+            task_id = None
+            if "?id=" in page.route:
+                try:
+                    task_id = int(page.route.split("?id=")[1])
+                except:
+                    pass
+            
+            db = get_db()
+            task_service = TaskService(TaskRepository(db), SubtaskRepository(db))
+            task = task_service.get_task(task_id) if task_id else None
+            
+            def on_save():
+                # El callback se ejecutará antes de navegar
+                pass
+            
+            form = TaskForm(page, task_service, task, on_save)
+            form_view = form.build_view()
+            page.views.append(form_view)
+            page.update()
+        
+        elif page.route.startswith("/habit-form"):
+            from app.ui.habits.form import HabitForm
+            from app.services.habit_service import HabitService
+            from app.data.habit_repository import HabitRepository
+            from app.data.database import get_db
+            
+            # Obtener ID de la ruta si existe
+            habit_id = None
+            if "?id=" in page.route:
+                try:
+                    habit_id = int(page.route.split("?id=")[1])
+                except:
+                    pass
+            
+            db = get_db()
+            habit_service = HabitService(HabitRepository(db))
+            habit = habit_service.get_habit(habit_id) if habit_id else None
+            
+            def on_save():
+                # Regresar a la vista principal y recargar
+                page.go("/")
+                # Recargar todas las vistas
+                home_view._build_ui()
+            
+            form = HabitForm(page, habit_service, habit, on_save)
+            form_view = form.build_view()
+            page.views.append(form_view)
+            page.update()
+        
+        elif page.route.startswith("/goal-form"):
+            from app.ui.goals.form import GoalForm
+            from app.services.goal_service import GoalService
+            from app.services.points_service import PointsService
+            from app.data.goal_repository import GoalRepository
+            from app.data.database import get_db
+            
+            # Obtener ID de la ruta si existe
+            goal_id = None
+            if "?id=" in page.route:
+                try:
+                    goal_id = int(page.route.split("?id=")[1])
+                except:
+                    pass
+            
+            db = get_db()
+            goal_service = GoalService(GoalRepository(db))
+            points_service = PointsService(db)
+            goal = goal_service.get_goal(goal_id) if goal_id else None
+            
+            def on_save():
+                # Regresar a la vista principal y recargar
+                page.go("/")
+                # Recargar todas las vistas
+                home_view._build_ui()
+            
+            form = GoalForm(page, goal_service, goal, on_save, points_service)
+            form_view = form.build_view()
+            page.views.append(form_view)
+            page.update()
+    
+    def view_pop(e):
+        """Maneja cuando se hace pop de una vista."""
+        page.views.pop()
+        if len(page.views) > 0:
+            top_view = page.views[-1]
+            page.go(top_view.route)
+        else:
+            page.go("/")
+    
+    page.on_route_change = route_change
+    page.on_view_pop = view_pop
 
 
 if __name__ == "__main__":

@@ -175,10 +175,11 @@ class GoalForm:
                 # Crear nueva meta con valor inicial
                 self.goal_service.create_goal(title, description, target_value, unit, current_value, self.points_service)
             
-            # Navegar de vuelta
-            self.page.go("/")
+            # Ejecutar callback y navegar de vuelta
             if self.on_save:
                 self.on_save()
+            self.page.go("/")
+            # La vista principal se recargará automáticamente al navegar
         except Exception as ex:
             self._show_error(f"Error al guardar: {str(ex)}")
     

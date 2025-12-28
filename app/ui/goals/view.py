@@ -236,6 +236,7 @@ class GoalsView:
         self.page.update()
     
     def _open_goal_form(self, e=None, goal: Optional[Goal] = None):
-        """Abre el formulario de meta."""
-        GoalForm(self.page, self.goal_service, goal, self._load_goals, self.points_service)
+        """Abre el formulario de meta en una nueva vista."""
+        route = f"/goal-form?id={goal.id}" if goal and goal.id else "/goal-form"
+        self.page.go(route)
 

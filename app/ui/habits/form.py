@@ -132,10 +132,11 @@ class HabitForm:
                 # Crear nuevo hábito
                 self.habit_service.create_habit(title, description)
             
-            # Navegar de vuelta
-            self.page.go("/")
+            # Ejecutar callback y navegar de vuelta
             if self.on_save:
                 self.on_save()
+            self.page.go("/")
+            # La vista principal se recargará automáticamente al navegar
         except Exception as ex:
             self._show_error(f"Error al guardar: {str(ex)}")
     

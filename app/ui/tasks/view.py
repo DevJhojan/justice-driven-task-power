@@ -270,9 +270,6 @@ class TasksView:
     
     def _open_task_form(self, e=None, task: Optional[Task] = None):
         """Abre el formulario de tarea en una nueva vista."""
-        form = TaskForm(self.page, self.task_service, task, self._load_tasks)
-        form_view = form.build_view()
-        self.page.views.append(form_view)
-        self.page.go(form_view.route)
-        self.page.update()
+        route = f"/task-form?id={task.id}" if task and task.id else "/task-form"
+        self.page.go(route)
 
