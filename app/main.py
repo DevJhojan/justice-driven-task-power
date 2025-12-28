@@ -88,24 +88,20 @@ def main(page: ft.Page):
             page.go("/error")
             page.update()
         except Exception as ex2:
-            # Si no se puede mostrar la página de error, mostrar un diálogo
-            page.dialog = ft.AlertDialog(
-                title=ft.Text("Error crítico"),
-                content=ft.Text(f"Error al mostrar el error:\n{ex2}\n\nError original:\n{error}"),
-                actions=[
-                    ft.TextButton("Cerrar", on_click=lambda e: page.close_dialog())
-                ]
-            )
-            page.dialog.open = True
-            page.update()
+            # Si no se puede mostrar la página de error, imprimir en consola
+            print(f"Error crítico al mostrar página de error:")
+            print(f"Error original: {error}")
+            print(f"Error al mostrar: {ex2}")
+            import traceback
+            traceback.print_exc()
     
     # Configurar el manejador de rutas para formularios
     def route_change(e):
         """Maneja los cambios de ruta."""
         # Si la ruta es la principal, HomeView ya la maneja
         if page.route == "/" or not page.route or page.route == "":
-            # Asegurar que HomeView esté visible
-            if len(page.views) == 0:
+            # Si no hay vistas o la última vista no es la principal, reconstruir
+            if len(page.views) == 0 or (len(page.views) > 0 and page.views[-1].route != "/"):
                 home_view._build_ui()
             return
         

@@ -283,18 +283,28 @@ class TasksView:
             from app.ui.error_view import ErrorView
             error_view = ErrorView(self.page, error, context)
             error_view_obj = error_view.build_view()
-            self.page.views.append(error_view_obj)
+            
+            # Verificar si ya existe una vista de error
+            existing_error_view = None
+            for i, view in enumerate(self.page.views):
+                if view.route == "/error":
+                    existing_error_view = i
+                    break
+            
+            if existing_error_view is not None:
+                # Reemplazar la vista de error existente
+                self.page.views[existing_error_view] = error_view_obj
+            else:
+                # Agregar nueva vista de error
+                self.page.views.append(error_view_obj)
+            
             self.page.go("/error")
             self.page.update()
         except Exception as ex2:
-            # Si no se puede mostrar la página de error, mostrar un diálogo
-            self.page.dialog = ft.AlertDialog(
-                title=ft.Text("Error crítico"),
-                content=ft.Text(f"Error al mostrar el error:\n{ex2}\n\nError original:\n{error}"),
-                actions=[
-                    ft.TextButton("Cerrar", on_click=lambda e: self.page.close_dialog())
-                ]
-            )
-            self.page.dialog.open = True
-            self.page.update()
+            # Si no se puede mostrar la página de error, imprimir en consola
+            print(f"Error crítico al mostrar página de error:")
+            print(f"Error original: {error}")
+            print(f"Error al mostrar: {ex2}")
+            import traceback
+            traceback.print_exc()
 

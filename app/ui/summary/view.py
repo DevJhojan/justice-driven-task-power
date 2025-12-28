@@ -39,11 +39,11 @@ class SummaryView:
         Returns:
             Container con la vista de resumen.
         """
-        # Determinar tema
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        bg_color = ft.Colors.BLACK if is_dark else ft.Colors.WHITE
-        surface_color = ft.Colors.SURFACE if is_dark else ft.Colors.WHITE
-        title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        # Forzar tema oscuro (negro) para el resumen
+        is_dark = True  # Siempre tema oscuro
+        bg_color = ft.Colors.BLACK
+        surface_color = ft.Colors.SURFACE
+        title_color = ft.Colors.RED_500
         
         title_bar = ft.Container(
             content=ft.Row(
@@ -182,9 +182,10 @@ class SummaryView:
         Returns:
             Container con la tarjeta de estadísticas.
         """
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        bg_color = ft.Colors.SURFACE if is_dark else ft.Colors.WHITE
-        text_color = ft.Colors.GREY_400 if is_dark else ft.Colors.GREY_700
+        # Forzar tema oscuro para las tarjetas
+        is_dark = True  # Siempre tema oscuro
+        bg_color = ft.Colors.SURFACE
+        text_color = ft.Colors.GREY_400
         
         stat_items = []
         for label, value, color in stats:
@@ -220,7 +221,7 @@ class SummaryView:
                         title,
                         size=18,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+                        color=ft.Colors.RED_500
                     ),
                     ft.Row(
                         stat_items,
@@ -246,9 +247,10 @@ class SummaryView:
         Returns:
             Container con la tarjeta de resumen.
         """
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        bg_color = ft.Colors.SURFACE if is_dark else ft.Colors.WHITE
-        text_color = ft.Colors.GREY_400 if is_dark else ft.Colors.GREY_700
+        # Forzar tema oscuro para las tarjetas
+        is_dark = True  # Siempre tema oscuro
+        bg_color = ft.Colors.SURFACE
+        text_color = ft.Colors.GREY_400
         
         total_items = (
             stats['tasks']['total'] +
@@ -267,7 +269,7 @@ class SummaryView:
                         "📈 Resumen General",
                         size=18,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+                        color=ft.Colors.RED_500
                     ),
                     ft.Divider(),
                     ft.Row(
@@ -318,7 +320,7 @@ class SummaryView:
             padding=20,
             bgcolor=bg_color,
             border_radius=12,
-            border=ft.border.all(2, ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500)
+            border=ft.border.all(2, ft.Colors.RED_500)
         )
     
     def _build_level_card(self) -> ft.Container:
@@ -334,9 +336,10 @@ class SummaryView:
         progress = level_info["progress"]
         points_to_next = level_info["points_to_next"]
         
-        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
-        bg_color = ft.Colors.SURFACE if is_dark else ft.Colors.WHITE
-        text_color = ft.Colors.GREY_400 if is_dark else ft.Colors.GREY_700
+        # Forzar tema oscuro para la tarjeta de nivel
+        is_dark = True  # Siempre tema oscuro
+        bg_color = ft.Colors.SURFACE
+        text_color = ft.Colors.GREY_400
         
         # Color según el nivel (gradiente de colores)
         level_colors = {
@@ -361,7 +364,7 @@ class SummaryView:
                         "🏆 Tu Nivel",
                         size=18,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+                        color=ft.Colors.RED_500
                     ),
                     ft.Container(
                         content=ft.Column(
@@ -388,7 +391,7 @@ class SummaryView:
                     ft.ProgressBar(
                         value=progress / 100.0 if progress > 0 else 0,
                         color=level_color,
-                        bgcolor=ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700,
+                        bgcolor=ft.Colors.GREY_700,
                         height=20
                     ),
                     ft.Text(

@@ -101,9 +101,26 @@ class HomeView:
             bgcolor=ft.Colors.WHITE if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.Colors.BLACK
         )
         
-        # Limpiar vistas y agregar la principal
-        self.page.views.clear()
-        self.page.views.append(main_view)
+        # Si ya existe una vista principal, reemplazarla
+        # Si no, agregar nueva vista (solo si no hay vistas)
+        main_view_index = None
+        for i, view in enumerate(self.page.views):
+            if view.route == "/":
+                main_view_index = i
+                break
+        
+        if main_view_index is not None:
+            # Reemplazar la vista principal existente
+            self.page.views[main_view_index] = main_view
+        else:
+            # Si no hay vista principal, agregar
+            if len(self.page.views) == 0:
+                # No hay vistas, agregar la principal
+                self.page.views.append(main_view)
+            else:
+                # Hay otras vistas, agregar la principal al final
+                self.page.views.append(main_view)
+        
         self.page.go("/")
         self.page.update()
     
