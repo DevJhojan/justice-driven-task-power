@@ -473,26 +473,47 @@ class FirebaseSyncService:
             Diccionario con información del error.
         """
         error_str = str(error)
+        error_type = type(error).__name__
+        
+        # Log detallado del error
+        print(f"DEBUG _handle_firebase_error - Tipo de error: {error_type}")
+        print(f"DEBUG _handle_firebase_error - Mensaje de error: {error_str}")
+        import traceback
+        print(f"DEBUG _handle_firebase_error - Traceback completo:")
+        traceback.print_exc()
         
         # Si es un error de permisos (401 Unauthorized), el token probablemente expiró
         if "Permission denied" in error_str or "401" in error_str or "Unauthorized" in error_str:
+            print(f"DEBUG _handle_firebase_error - Error de permisos detectado, intentando refrescar token...")
             # Intentar refrescar el token automáticamente
             if self.refresh_token:
+                print(f"DEBUG _handle_firebase_error - refresh_token presente, intentando refrescar...")
                 if self._refresh_auth_token():
+                    print(f"DEBUG _handle_firebase_error - Token refrescado exitosamente, reintentando operación...")
                     # Si el refresh fue exitoso, intentar la operación nuevamente automáticamente
                     if retry_callback:
                         try:
+                            # Obtener el nuevo token antes de reintentar
+                            new_token = self._get_auth_token()
+                            print(f"DEBUG _handle_firebase_error - Nuevo token obtenido para reintento: {new_token is not None}")
                             # Reintentar la operación con el nuevo token
-                            return retry_callback()
+                            result = retry_callback()
+                            print(f"DEBUG _handle_firebase_error - Reintento exitoso")
+                            return result
                         except Exception as retry_error:
                             # Si el reintento también falla, verificar si es otro error de permisos
                             retry_error_str = str(retry_error)
+                            retry_error_type = type(retry_error).__name__
+                            print(f"DEBUG _handle_firebase_error - Reintento falló: {retry_error_type}: {retry_error_str}")
+                            import traceback
+                            traceback.print_exc()
+                            
                             if "Permission denied" in retry_error_str or "401" in retry_error_str:
                                 # NO borrar la sesión automáticamente - solo informar al usuario
                                 # El usuario debe cerrar sesión explícitamente si lo desea
                                 return {
                                     "success": False, 
-                                    "message": "Error de autenticación. Por favor, intenta la operación nuevamente. Si el problema persiste, cierra sesión y vuelve a iniciar sesión."
+                                    "message": f"Error de permisos en Firebase. Esto generalmente significa que las reglas de seguridad de Firebase no están actualizadas. Por favor:\n1. Ve a Firebase Console → Realtime Database → Rules\n2. Copia y publica las reglas del archivo firebase_database_rules.json\n3. Intenta exportar nuevamente\n\nSi el problema persiste, cierra sesión y vuelve a iniciar sesión."
                                 }
                             # Si es otro tipo de error, devolverlo
                             return {"success": False, "message": f"Error al sincronizar: {retry_error_str}"}
@@ -528,6 +549,8 @@ class FirebaseSyncService:
             if not self.user_id:
                 return {"success": False, "message": "No hay sesión activa. Por favor, inicia sesión nuevamente."}
             
+            print(f"DEBUG _perform_sync - user_id: {self.user_id}")
+            
             # Obtener token de autenticación
             token = self._get_auth_token()
             if not token:
@@ -542,6 +565,9 @@ class FirebaseSyncService:
                     error_msg = "No se pudo obtener un token de autenticación válido. Por favor, cierra sesión y vuelve a iniciar sesión."
                     print(f"ERROR: {error_msg}")
                     return {"success": False, "message": error_msg}
+            
+            print(f"DEBUG _perform_sync - Token obtenido (longitud: {len(token) if token else 0}), user_id: {self.user_id}")
+            print(f"DEBUG _perform_sync - Intentando acceder a: users/{self.user_id}")
             
             user_ref = self.db_firebase.child(f"users/{self.user_id}")
             stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0}
@@ -762,6 +788,9 @@ class FirebaseSyncService:
         try:
             return _perform_sync()
         except Exception as e:
+            print(f"DEBUG sync_to_firebase - Excepción capturada: {type(e).__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return self._handle_firebase_error(e, retry_callback=_perform_sync)
     
     def sync_from_firebase(self) -> Dict[str, Any]:
@@ -1093,5 +1122,8 @@ class FirebaseSyncService:
         try:
             return _perform_sync()
         except Exception as e:
+            print(f"DEBUG sync_to_firebase - Excepción capturada: {type(e).__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return self._handle_firebase_error(e, retry_callback=_perform_sync)
 
