@@ -64,8 +64,102 @@ class TaskForm:
         )
         
         self.subtasks_container = None
+    
+    def build_view(self) -> ft.View:
+        """Construye una vista completa para el formulario."""
+        is_editing = self.task is not None
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        bg_color = ft.Colors.WHITE if not is_dark else ft.Colors.BLACK
         
-        self._show_dialog()
+        # Construir lista de subtareas
+        self.subtasks_container = ft.Container(
+            content=self._build_subtasks_list()
+        )
+        
+        btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        
+        add_subtask_button = ft.ElevatedButton(
+            "Agregar subtarea",
+            icon=ft.Icons.ADD,
+            on_click=self._add_subtask,
+            bgcolor=btn_color,
+            color=ft.Colors.WHITE
+        )
+        
+        # Barra superior con título y botones
+        header = ft.Container(
+            content=ft.Row(
+                [
+                    ft.IconButton(
+                        icon=ft.Icons.ARROW_BACK,
+                        icon_color=title_color,
+                        on_click=self._cancel,
+                        tooltip="Volver"
+                    ),
+                    ft.Text(
+                        "Editar tarea" if is_editing else "Nueva tarea",
+                        size=20,
+                        weight=ft.FontWeight.BOLD,
+                        color=title_color,
+                        expand=True
+                    ),
+                    ft.ElevatedButton(
+                        "Guardar",
+                        icon=ft.Icons.SAVE,
+                        on_click=self._save,
+                        bgcolor=btn_color,
+                        color=ft.Colors.WHITE
+                    )
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+            ),
+            padding=16,
+            bgcolor=ft.Colors.SURFACE if is_dark else ft.Colors.WHITE,
+            border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE))
+        )
+        
+        # Contenido principal con scroll
+        content = ft.Container(
+            content=ft.Column(
+                [
+                    self.title_field,
+                    self.description_field,
+                    self.due_date_field,
+                    ft.Divider(),
+                    ft.Text(
+                        "Subtareas",
+                        size=16,
+                        weight=ft.FontWeight.BOLD,
+                        color=title_color
+                    ),
+                    self.subtasks_container,
+                    ft.Row(
+                        [self.new_subtask_field, add_subtask_button],
+                        spacing=8
+                    )
+                ],
+                spacing=16,
+                scroll=ft.ScrollMode.AUTO,
+                expand=True
+            ),
+            padding=16,
+            expand=True
+        )
+        
+        # Crear la vista
+        route = f"/task-form?id={self.task.id}" if self.task and self.task.id else "/task-form"
+        return ft.View(
+            route=route,
+            controls=[
+                ft.Column(
+                    [header, content],
+                    spacing=0,
+                    expand=True
+                )
+            ],
+            bgcolor=bg_color
+        )
     
     def _build_subtasks_list(self) -> ft.Column:
         """Construye la lista de subtareas."""

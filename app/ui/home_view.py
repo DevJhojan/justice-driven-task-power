@@ -178,7 +178,6 @@ class HomeView:
             ("settings", ft.Icons.SETTINGS, "Config")
         ]
         
-        icon_color = selected_color if not is_dark else ft.Colors.RED_500
         unselected_icon_color = ft.Colors.RED_800 if not is_dark else ft.Colors.RED_400
         
         buttons = []
@@ -187,7 +186,7 @@ class HomeView:
             button = ft.ElevatedButton(
                 content=ft.Column(
                     [
-                        ft.Icon(icon, size=24, color=ft.Colors.WHITE if is_selected else icon_color),
+                        ft.Icon(icon, size=24, color=ft.Colors.WHITE if is_selected else unselected_icon_color),
                         ft.Text(label, size=12, color=ft.Colors.WHITE if is_selected else unselected_icon_color)
                     ],
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,

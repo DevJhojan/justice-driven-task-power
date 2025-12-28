@@ -42,18 +42,24 @@ class GoalsView:
         )
         
         # Barra de título
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        btn_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_600
+        
         title_bar = ft.Container(
             content=ft.Row(
                 [
                     ft.Text(
                         "🎯 Mis Metas",
                         size=24,
-                        weight=ft.FontWeight.BOLD
+                        weight=ft.FontWeight.BOLD,
+                        color=title_color
                     ),
                     ft.IconButton(
                         icon=ft.Icons.ADD,
                         on_click=self._open_goal_form,
-                        tooltip="Agregar meta"
+                        tooltip="Agregar meta",
+                        icon_color=btn_color
                     )
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN
