@@ -573,9 +573,30 @@ class FirebaseSyncService:
             stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0}
             
             # Obtener datos remotos para comparar (pasar token explícitamente)
-            remote_tasks = user_ref.child("tasks").get(token=token).val() or {}
-            remote_habits = user_ref.child("habits").get(token=token).val() or {}
-            remote_goals = user_ref.child("goals").get(token=token).val() or {}
+            print(f"DEBUG _perform_sync - Obteniendo remote_tasks desde: users/{self.user_id}/tasks")
+            print(f"DEBUG _perform_sync - Token a usar (primeros 50 chars): {token[:50] if token else 'None'}...")
+            try:
+                remote_tasks = user_ref.child("tasks").get(token=token).val() or {}
+                print(f"DEBUG _perform_sync - remote_tasks obtenido exitosamente")
+            except Exception as e:
+                print(f"DEBUG _perform_sync - Error al obtener remote_tasks: {e}")
+                raise
+            
+            print(f"DEBUG _perform_sync - Obteniendo remote_habits desde: users/{self.user_id}/habits")
+            try:
+                remote_habits = user_ref.child("habits").get(token=token).val() or {}
+                print(f"DEBUG _perform_sync - remote_habits obtenido exitosamente")
+            except Exception as e:
+                print(f"DEBUG _perform_sync - Error al obtener remote_habits: {e}")
+                raise
+            
+            print(f"DEBUG _perform_sync - Obteniendo remote_goals desde: users/{self.user_id}/goals")
+            try:
+                remote_goals = user_ref.child("goals").get(token=token).val() or {}
+                print(f"DEBUG _perform_sync - remote_goals obtenido exitosamente")
+            except Exception as e:
+                print(f"DEBUG _perform_sync - Error al obtener remote_goals: {e}")
+                raise
             
             # Sincronizar tareas (solo campos modificados)
             tasks = self.task_service.get_all_tasks()
