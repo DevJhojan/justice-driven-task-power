@@ -36,14 +36,15 @@ class GoalRepository:
         
         now = datetime.now().isoformat()
         cursor.execute("""
-            INSERT INTO goals (title, description, target_value, current_value, unit, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO goals (title, description, target_value, current_value, unit, period, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             goal.title,
             goal.description,
             goal.target_value,
             goal.current_value,
             goal.unit,
+            goal.period,
             now,
             now
         ))
@@ -111,7 +112,7 @@ class GoalRepository:
         now = datetime.now().isoformat()
         cursor.execute("""
             UPDATE goals
-            SET title = ?, description = ?, target_value = ?, current_value = ?, unit = ?, updated_at = ?
+            SET title = ?, description = ?, target_value = ?, current_value = ?, unit = ?, period = ?, updated_at = ?
             WHERE id = ?
         """, (
             goal.title,
@@ -119,6 +120,7 @@ class GoalRepository:
             goal.target_value,
             goal.current_value,
             goal.unit,
+            goal.period,
             now,
             goal.id
         ))
@@ -168,6 +170,13 @@ class GoalRepository:
         if row['updated_at']:
             updated_at = datetime.fromisoformat(row['updated_at'])
         
+        # Manejar period con compatibilidad hacia atrás
+        period = 'mes'  # Valor por defecto
+        try:
+            period = row.get('period') or 'mes'
+        except (KeyError, AttributeError):
+            pass
+        
         return Goal(
             id=row['id'],
             title=row['title'],
@@ -175,6 +184,7 @@ class GoalRepository:
             target_value=row['target_value'],
             current_value=row['current_value'] or 0.0,
             unit=row['unit'],
+            period=period,
             created_at=created_at,
             updated_at=updated_at
         )

@@ -63,6 +63,13 @@ class Goal:
     target_value: Optional[float] = None
     current_value: float = 0.0
     unit: Optional[str] = None  # ej: "tareas", "días", "horas"
+    period: str = "mes"  # semana, mes, trimestre, semestre, anual
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    
+    def __post_init__(self):
+        """Validar período después de la inicialización."""
+        valid_periods = ["semana", "mes", "trimestre", "semestre", "anual"]
+        if self.period not in valid_periods:
+            raise ValueError(f"Período inválido: {self.period}. Debe ser uno de {valid_periods}")
 

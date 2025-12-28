@@ -89,7 +89,7 @@ class GoalsView:
         )
     
     def _load_goals(self):
-        """Carga las metas desde el servicio."""
+        """Carga las metas desde el servicio agrupadas por período."""
         if self.goals_container is None:
             return
         
@@ -109,10 +109,47 @@ class GoalsView:
                 )
             )
         else:
+            # Agrupar metas por período
+            period_order = ["semana", "mes", "trimestre", "semestre", "anual"]
+            period_names = {
+                "semana": "📅 Semanales",
+                "mes": "📆 Mensuales",
+                "trimestre": "📊 Trimestrales",
+                "semestre": "📈 Semestrales",
+                "anual": "🎯 Anuales"
+            }
+            
+            goals_by_period = {}
             for goal in goals:
-                self.goals_container.controls.append(
-                    self._build_goal_card(goal)
-                )
+                period = goal.period or "mes"
+                if period not in goals_by_period:
+                    goals_by_period[period] = []
+                goals_by_period[period].append(goal)
+            
+            # Mostrar metas agrupadas por período
+            is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+            title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+            
+            for period in period_order:
+                if period in goals_by_period:
+                    # Título del período
+                    self.goals_container.controls.append(
+                        ft.Container(
+                            content=ft.Text(
+                                period_names[period],
+                                size=18,
+                                weight=ft.FontWeight.BOLD,
+                                color=title_color
+                            ),
+                            padding=ft.padding.only(top=16, bottom=8, left=16, right=16)
+                        )
+                    )
+                    
+                    # Metas de este período
+                    for goal in goals_by_period[period]:
+                        self.goals_container.controls.append(
+                            self._build_goal_card(goal)
+                        )
         
         if self.page:
             self.page.update()
@@ -140,6 +177,16 @@ class GoalsView:
             progress_text = f"{goal.current_value:.1f}"
             if goal.unit:
                 progress_text += f" {goal.unit}"
+        
+        # Mostrar período en la tarjeta
+        period_names = {
+            "semana": "Semanal",
+            "mes": "Mensual",
+            "trimestre": "Trimestral",
+            "semestre": "Semestral",
+            "anual": "Anual"
+        }
+        period_display = period_names.get(goal.period or "mes", "Mensual")
         
         # Barra de progreso
         progress_bar = ft.ProgressBar(
@@ -173,12 +220,28 @@ class GoalsView:
                     [
                         ft.Column(
                             [
-                                ft.Text(
-                                    goal.title,
-                                    size=16,
-                                    weight=ft.FontWeight.BOLD,
-                                    color=ft.Colors.RED_800 if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.Colors.RED_400,
-                                    expand=True
+                                ft.Row(
+                                    [
+                                        ft.Text(
+                                            goal.title,
+                                            size=16,
+                                            weight=ft.FontWeight.BOLD,
+                                            color=ft.Colors.RED_800 if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.Colors.RED_400,
+                                            expand=True
+                                        ),
+                                        ft.Container(
+                                            content=ft.Text(
+                                                period_display,
+                                                size=11,
+                                                color=ft.Colors.RED_700 if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.Colors.RED_400,
+                                                weight=ft.FontWeight.W_500
+                                            ),
+                                            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                                            bgcolor=ft.Colors.SURFACE if self.page.theme_mode == ft.ThemeMode.DARK else ft.Colors.GREY_100,
+                                            border_radius=12
+                                        )
+                                    ],
+                                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                                 ),
                                 ft.Text(
                                     goal.description or "",

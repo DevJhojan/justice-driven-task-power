@@ -91,10 +91,24 @@ class Database:
                 target_value REAL,
                 current_value REAL NOT NULL DEFAULT 0.0,
                 unit TEXT,
+                period TEXT DEFAULT 'mes',
                 created_at TEXT,
                 updated_at TEXT
             )
         """)
+        
+        # Migración: agregar columna period si no existe
+        try:
+            # Verificar si la columna period existe
+            cursor.execute("PRAGMA table_info(goals)")
+            columns = [column[1] for column in cursor.fetchall()]
+            if 'period' not in columns:
+                cursor.execute("ALTER TABLE goals ADD COLUMN period TEXT DEFAULT 'mes'")
+                # Actualizar valores existentes
+                cursor.execute("UPDATE goals SET period = 'mes' WHERE period IS NULL")
+        except sqlite3.OperationalError:
+            # La columna ya existe o hubo un error, no hacer nada
+            pass
         
         # Tabla de configuración de usuario
         cursor.execute("""

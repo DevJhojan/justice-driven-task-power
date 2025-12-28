@@ -64,6 +64,22 @@ class GoalForm:
             hint_text="Unidad de medida (ej: días, tareas, horas) - opcional",
             value=goal.unit if goal else ""
         )
+        
+        # Selector de período
+        period_options = [
+            ft.dropdown.Option("semana", "Semana"),
+            ft.dropdown.Option("mes", "Mes"),
+            ft.dropdown.Option("trimestre", "Trimestre"),
+            ft.dropdown.Option("semestre", "Semestre"),
+            ft.dropdown.Option("anual", "Anual")
+        ]
+        
+        self.period_field = ft.Dropdown(
+            label="Período",
+            hint_text="Selecciona el período de la meta",
+            options=period_options,
+            value=goal.period if goal else "mes"
+        )
     
     def build_view(self) -> ft.View:
         """Construye una vista completa para el formulario."""
@@ -111,6 +127,7 @@ class GoalForm:
                 [
                     self.title_field,
                     self.description_field,
+                    self.period_field,
                     self.target_value_field,
                     self.current_value_field,
                     self.unit_field
@@ -155,6 +172,7 @@ class GoalForm:
             return
         
         unit = self.unit_field.value.strip() or None
+        period = self.period_field.value or "mes"
         
         try:
             if self.goal:
@@ -168,12 +186,13 @@ class GoalForm:
                 self.goal.target_value = target_value
                 self.goal.current_value = current_value
                 self.goal.unit = unit
+                self.goal.period = period
                 
                 # Usar update_progress para verificar si se completó la meta (para otorgar puntos)
                 self.goal_service.update_progress(self.goal.id, current_value, self.points_service)
             else:
                 # Crear nueva meta con valor inicial
-                self.goal_service.create_goal(title, description, target_value, unit, current_value, self.points_service)
+                self.goal_service.create_goal(title, description, target_value, unit, current_value, period, self.points_service)
             
             # Ejecutar callback y navegar de vuelta
             if self.on_save:

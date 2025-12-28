@@ -63,6 +63,84 @@ class FirebaseSyncService:
         
         self.user_id: Optional[str] = None
     
+    def _create_task_with_id(self, task):
+        """Crea una tarea con un ID específico para sincronización, evitando duplicados."""
+        from datetime import datetime
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now().isoformat()
+        created_at = task.created_at.isoformat() if task.created_at else now
+        updated_at = task.updated_at.isoformat() if task.updated_at else now
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO tasks (id, title, description, due_date, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            task.id,
+            task.title,
+            task.description,
+            task.due_date.isoformat() if task.due_date else None,
+            task.status,
+            created_at,
+            updated_at
+        ))
+        
+        conn.commit()
+        conn.close()
+    
+    def _create_habit_with_id(self, habit):
+        """Crea un hábito con un ID específico para sincronización, evitando duplicados."""
+        from datetime import datetime
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now().isoformat()
+        created_at = habit.created_at.isoformat() if habit.created_at else now
+        updated_at = habit.updated_at.isoformat() if habit.updated_at else now
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO habits (id, title, description, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            habit.id,
+            habit.title,
+            habit.description,
+            created_at,
+            updated_at
+        ))
+        
+        conn.commit()
+        conn.close()
+    
+    def _create_goal_with_id(self, goal):
+        """Crea una meta con un ID específico para sincronización, evitando duplicados."""
+        from datetime import datetime
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        
+        now = datetime.now().isoformat()
+        created_at = goal.created_at.isoformat() if goal.created_at else now
+        updated_at = goal.updated_at.isoformat() if goal.updated_at else now
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO goals (id, title, description, target_value, current_value, unit, period, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            goal.id,
+            goal.title,
+            goal.description,
+            goal.target_value,
+            goal.current_value,
+            goal.unit,
+            goal.period or "mes",
+            created_at,
+            updated_at
+        ))
+        
+        conn.commit()
+        conn.close()
+    
     def _load_firebase_config(self) -> Dict[str, Any]:
         """Carga la configuración de Firebase desde google-services.json."""
         # Buscar google-services.json en el directorio raíz del proyecto
@@ -137,7 +215,7 @@ class FirebaseSyncService:
     
     def sync_to_firebase(self) -> Dict[str, Any]:
         """
-        Sincroniza los datos locales a Firebase.
+        Sincroniza los datos locales a Firebase usando actualizaciones granulares por campo.
         
         Returns:
             Diccionario con el resultado de la sincronización.
@@ -146,81 +224,174 @@ class FirebaseSyncService:
             return {"success": False, "message": "No hay sesión activa"}
         
         try:
-            # Obtener datos locales
-            tasks = self.task_service.get_all_tasks()
-            habits = self.habit_service.get_all_habits()
-            goals = self.goal_service.get_all_goals()
-            
-            # Convertir a formato JSON
-            tasks_data = {}
-            for task in tasks:
-                tasks_data[str(task.id)] = {
-                    "id": task.id,
-                    "title": task.title,
-                    "description": task.description,
-                    "due_date": task.due_date.isoformat() if task.due_date else None,
-                    "status": task.status,
-                    "created_at": task.created_at.isoformat() if task.created_at else None,
-                    "updated_at": task.updated_at.isoformat() if task.updated_at else None
-                }
-            
-            habits_data = {}
-            for habit in habits:
-                completions = self.habit_service.get_completions(habit.id)
-                habits_data[str(habit.id)] = {
-                    "id": habit.id,
-                    "title": habit.title,
-                    "description": habit.description,
-                    "created_at": habit.created_at.isoformat() if habit.created_at else None,
-                    "updated_at": habit.updated_at.isoformat() if habit.updated_at else None,
-                    "completions": [d.isoformat() for d in completions]
-                }
-            
-            goals_data = {}
-            for goal in goals:
-                goals_data[str(goal.id)] = {
-                    "id": goal.id,
-                    "title": goal.title,
-                    "description": goal.description,
-                    "target_value": goal.target_value,
-                    "current_value": goal.current_value,
-                    "unit": goal.unit,
-                    "created_at": goal.created_at.isoformat() if goal.created_at else None,
-                    "updated_at": goal.updated_at.isoformat() if goal.updated_at else None
-                }
-            
-            # Obtener puntos y configuración del usuario
-            total_points = self.points_service.get_total_points()
-            user_name = self.user_settings_service.get_user_name()
-            
-            points_data = {
-                "total_points": total_points,
-                "last_updated": datetime.now().isoformat()
-            }
-            
-            user_settings_data = {
-                "user_name": user_name,
-                "last_updated": datetime.now().isoformat()
-            }
-            
-            # Subir a Firebase
             user_ref = self.db_firebase.child(f"users/{self.user_id}")
-            user_ref.child("tasks").set(tasks_data)
-            user_ref.child("habits").set(habits_data)
-            user_ref.child("goals").set(goals_data)
-            user_ref.child("points").set(points_data)
-            user_ref.child("user_settings").set(user_settings_data)
+            stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0}
             
-            return {
-                "success": True,
-                "message": f"Sincronizado: {len(tasks)} tareas, {len(habits)} hábitos, {len(goals)} metas, puntos: {total_points:.2f}"
-            }
+            # Obtener datos remotos para comparar
+            remote_tasks = user_ref.child("tasks").get().val() or {}
+            remote_habits = user_ref.child("habits").get().val() or {}
+            remote_goals = user_ref.child("goals").get().val() or {}
+            
+            # Sincronizar tareas (solo campos modificados)
+            tasks = self.task_service.get_all_tasks()
+            for task in tasks:
+                task_id_str = str(task.id)
+                remote_task = remote_tasks.get(task_id_str)
+                
+                if remote_task:
+                    # Actualizar solo campos que hayan cambiado
+                    updates = {}
+                    if task.title != remote_task.get("title"):
+                        updates["title"] = task.title
+                    if task.description != remote_task.get("description"):
+                        updates["description"] = task.description
+                    if (task.due_date.isoformat() if task.due_date else None) != remote_task.get("due_date"):
+                        updates["due_date"] = task.due_date.isoformat() if task.due_date else None
+                    if task.status != remote_task.get("status"):
+                        updates["status"] = task.status
+                    if (task.updated_at.isoformat() if task.updated_at else None) != remote_task.get("updated_at"):
+                        updates["updated_at"] = task.updated_at.isoformat() if task.updated_at else None
+                    
+                    if updates:
+                        user_ref.child(f"tasks/{task_id_str}").update(updates)
+                        stats["tasks_updated"] += 1
+                else:
+                    # Nueva tarea, crear completa
+                    user_ref.child(f"tasks/{task_id_str}").set({
+                        "id": task.id,
+                        "title": task.title,
+                        "description": task.description,
+                        "due_date": task.due_date.isoformat() if task.due_date else None,
+                        "status": task.status,
+                        "created_at": task.created_at.isoformat() if task.created_at else None,
+                        "updated_at": task.updated_at.isoformat() if task.updated_at else None
+                    })
+                    stats["tasks_created"] += 1
+            
+            # Sincronizar hábitos (solo campos modificados)
+            habits = self.habit_service.get_all_habits()
+            for habit in habits:
+                habit_id_str = str(habit.id)
+                remote_habit = remote_habits.get(habit_id_str)
+                completions = self.habit_service.get_completions(habit.id)
+                completions_iso = [d.isoformat() for d in completions]
+                
+                if remote_habit:
+                    # Actualizar solo campos que hayan cambiado
+                    updates = {}
+                    if habit.title != remote_habit.get("title"):
+                        updates["title"] = habit.title
+                    if habit.description != remote_habit.get("description"):
+                        updates["description"] = habit.description
+                    if (habit.updated_at.isoformat() if habit.updated_at else None) != remote_habit.get("updated_at"):
+                        updates["updated_at"] = habit.updated_at.isoformat() if habit.updated_at else None
+                    
+                    # Comparar completions (solo si hay cambios)
+                    remote_completions = set(remote_habit.get("completions", []))
+                    local_completions_set = set(completions_iso)
+                    if remote_completions != local_completions_set:
+                        updates["completions"] = completions_iso
+                    
+                    if updates:
+                        user_ref.child(f"habits/{habit_id_str}").update(updates)
+                        stats["habits_updated"] += 1
+                else:
+                    # Nuevo hábito, crear completo
+                    user_ref.child(f"habits/{habit_id_str}").set({
+                        "id": habit.id,
+                        "title": habit.title,
+                        "description": habit.description,
+                        "created_at": habit.created_at.isoformat() if habit.created_at else None,
+                        "updated_at": habit.updated_at.isoformat() if habit.updated_at else None,
+                        "completions": completions_iso
+                    })
+                    stats["habits_created"] += 1
+            
+            # Sincronizar metas (solo campos modificados)
+            goals = self.goal_service.get_all_goals()
+            for goal in goals:
+                goal_id_str = str(goal.id)
+                remote_goal = remote_goals.get(goal_id_str)
+                
+                if remote_goal:
+                    # Actualizar solo campos que hayan cambiado
+                    updates = {}
+                    if goal.title != remote_goal.get("title"):
+                        updates["title"] = goal.title
+                    if goal.description != remote_goal.get("description"):
+                        updates["description"] = goal.description
+                    if goal.target_value != remote_goal.get("target_value"):
+                        updates["target_value"] = goal.target_value
+                    if goal.current_value != remote_goal.get("current_value"):
+                        updates["current_value"] = goal.current_value
+                    if goal.unit != remote_goal.get("unit"):
+                        updates["unit"] = goal.unit
+                    if goal.period != remote_goal.get("period"):
+                        updates["period"] = goal.period
+                    if (goal.updated_at.isoformat() if goal.updated_at else None) != remote_goal.get("updated_at"):
+                        updates["updated_at"] = goal.updated_at.isoformat() if goal.updated_at else None
+                    
+                    if updates:
+                        user_ref.child(f"goals/{goal_id_str}").update(updates)
+                        stats["goals_updated"] += 1
+                else:
+                    # Nueva meta, crear completa
+                    user_ref.child(f"goals/{goal_id_str}").set({
+                        "id": goal.id,
+                        "title": goal.title,
+                        "description": goal.description,
+                        "target_value": goal.target_value,
+                        "current_value": goal.current_value,
+                        "unit": goal.unit,
+                        "period": goal.period or "mes",
+                        "created_at": goal.created_at.isoformat() if goal.created_at else None,
+                        "updated_at": goal.updated_at.isoformat() if goal.updated_at else None
+                    })
+                    stats["goals_created"] += 1
+            
+            # Sincronizar puntos (solo si cambió)
+            total_points = self.points_service.get_total_points()
+            remote_points = user_ref.child("points").get().val() or {}
+            remote_total_points = remote_points.get("total_points", 0.0)
+            
+            if abs(total_points - remote_total_points) > 0.001:  # Tolerancia para floats
+                user_ref.child("points").update({
+                    "total_points": total_points,
+                    "last_updated": datetime.now().isoformat()
+                })
+            
+            # Sincronizar configuración del usuario (solo si cambió)
+            user_name = self.user_settings_service.get_user_name()
+            remote_settings = user_ref.child("user_settings").get().val() or {}
+            remote_user_name = remote_settings.get("user_name", "")
+            
+            if user_name != remote_user_name:
+                user_ref.child("user_settings").update({
+                    "user_name": user_name,
+                    "last_updated": datetime.now().isoformat()
+                })
+            
+            message_parts = []
+            if stats["tasks_created"] > 0 or stats["tasks_updated"] > 0:
+                message_parts.append(f"{stats['tasks_created']} nuevas, {stats['tasks_updated']} actualizadas tareas")
+            if stats["habits_created"] > 0 or stats["habits_updated"] > 0:
+                message_parts.append(f"{stats['habits_created']} nuevos, {stats['habits_updated']} actualizados hábitos")
+            if stats["goals_created"] > 0 or stats["goals_updated"] > 0:
+                message_parts.append(f"{stats['goals_created']} nuevas, {stats['goals_updated']} actualizadas metas")
+            
+            if not message_parts:
+                message = "Sincronización completa. No hay cambios pendientes."
+            else:
+                message = f"Sincronizado: {', '.join(message_parts)}"
+            
+            return {"success": True, "message": message, "stats": stats}
         except Exception as e:
             return {"success": False, "message": f"Error al sincronizar: {str(e)}"}
     
     def sync_from_firebase(self) -> Dict[str, Any]:
         """
-        Sincroniza los datos de Firebase a local.
+        Sincroniza los datos de Firebase a local usando merge inteligente por campo.
+        Evita duplicados y solo actualiza campos que han cambiado.
         
         Returns:
             Diccionario con el resultado de la sincronización.
@@ -229,7 +400,10 @@ class FirebaseSyncService:
             return {"success": False, "message": "No hay sesión activa"}
         
         try:
+            from datetime import date
+            
             user_ref = self.db_firebase.child(f"users/{self.user_id}")
+            stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0}
             
             # Descargar datos
             tasks_data = user_ref.child("tasks").get().val() or {}
@@ -238,13 +412,210 @@ class FirebaseSyncService:
             points_data = user_ref.child("points").get().val() or {}
             user_settings_data = user_ref.child("user_settings").get().val() or {}
             
+            # Obtener datos locales para comparar
+            local_tasks = {str(t.id): t for t in self.task_service.get_all_tasks()}
+            local_habits = {str(h.id): h for h in self.habit_service.get_all_habits()}
+            local_goals = {str(g.id): g for g in self.goal_service.get_all_goals()}
+            
+            # Sincronizar tareas
+            for task_id_str, remote_task in tasks_data.items():
+                task_id = int(task_id_str)
+                local_task = local_tasks.get(task_id_str)
+                
+                if local_task:
+                    # Tarea existe localmente - actualizar solo campos que cambiaron (usar updated_at como referencia)
+                    remote_updated = datetime.fromisoformat(remote_task.get("updated_at")) if remote_task.get("updated_at") else None
+                    local_updated = local_task.updated_at if local_task.updated_at else None
+                    
+                    # Solo actualizar si la versión remota es más reciente
+                    if remote_updated and (not local_updated or remote_updated > local_updated):
+                        needs_update = False
+                        if remote_task.get("title") != local_task.title:
+                            local_task.title = remote_task.get("title")
+                            needs_update = True
+                        if remote_task.get("description") != local_task.description:
+                            local_task.description = remote_task.get("description")
+                            needs_update = True
+                        if remote_task.get("status") != local_task.status:
+                            local_task.status = remote_task.get("status")
+                            needs_update = True
+                        
+                        remote_due_date = None
+                        if remote_task.get("due_date"):
+                            try:
+                                remote_due_date = date.fromisoformat(remote_task.get("due_date"))
+                            except:
+                                pass
+                        
+                        if remote_due_date != local_task.due_date:
+                            local_task.due_date = remote_due_date
+                            needs_update = True
+                        
+                        if needs_update:
+                            self.task_service.update_task(local_task)
+                            stats["tasks_updated"] += 1
+                else:
+                    # Nueva tarea desde Firebase - crear localmente
+                    from app.data.models import Task
+                    due_date = None
+                    if remote_task.get("due_date"):
+                        try:
+                            due_date = date.fromisoformat(remote_task.get("due_date"))
+                        except:
+                            pass
+                    
+                    created_at = None
+                    if remote_task.get("created_at"):
+                        try:
+                            created_at = datetime.fromisoformat(remote_task.get("created_at"))
+                        except:
+                            pass
+                    
+                    new_task = Task(
+                        id=task_id,  # Usar el mismo ID para evitar duplicados
+                        title=remote_task.get("title", ""),
+                        description=remote_task.get("description"),
+                        due_date=due_date,
+                        status=remote_task.get("status", "pendiente"),
+                        created_at=created_at,
+                        updated_at=datetime.fromisoformat(remote_task.get("updated_at")) if remote_task.get("updated_at") else None
+                    )
+                    
+                    # Insertar directamente con ID específico para evitar duplicados
+                    self._create_task_with_id(new_task)
+                    stats["tasks_created"] += 1
+            
+            # Sincronizar hábitos
+            for habit_id_str, remote_habit in habits_data.items():
+                habit_id = int(habit_id_str)
+                local_habit = local_habits.get(habit_id_str)
+                
+                if local_habit:
+                    # Hábito existe localmente - actualizar solo campos que cambiaron
+                    remote_updated = datetime.fromisoformat(remote_habit.get("updated_at")) if remote_habit.get("updated_at") else None
+                    local_updated = local_habit.updated_at if local_habit.updated_at else None
+                    
+                    if remote_updated and (not local_updated or remote_updated > local_updated):
+                        needs_update = False
+                        if remote_habit.get("title") != local_habit.title:
+                            local_habit.title = remote_habit.get("title")
+                            needs_update = True
+                        if remote_habit.get("description") != local_habit.description:
+                            local_habit.description = remote_habit.get("description")
+                            needs_update = True
+                        
+                        # Sincronizar completions (solo agregar las que no existen localmente)
+                        remote_completions = set(remote_habit.get("completions", []))
+                        local_completions_dates = {c.completion_date.isoformat() for c in self.habit_service.get_completions(habit_id)}
+                        
+                        for completion_date_str in remote_completions:
+                            if completion_date_str not in local_completions_dates:
+                                try:
+                                    completion_date = date.fromisoformat(completion_date_str)
+                                    self.habit_service.add_completion(habit_id, completion_date)
+                                except:
+                                    pass
+                        
+                        if needs_update:
+                            self.habit_service.update_habit(local_habit)
+                            stats["habits_updated"] += 1
+                else:
+                    # Nuevo hábito desde Firebase - crear localmente
+                    from app.data.models import Habit
+                    created_at = None
+                    if remote_habit.get("created_at"):
+                        try:
+                            created_at = datetime.fromisoformat(remote_habit.get("created_at"))
+                        except:
+                            pass
+                    
+                    new_habit = Habit(
+                        id=habit_id,
+                        title=remote_habit.get("title", ""),
+                        description=remote_habit.get("description"),
+                        created_at=created_at,
+                        updated_at=datetime.fromisoformat(remote_habit.get("updated_at")) if remote_habit.get("updated_at") else None
+                    )
+                    
+                    # Insertar directamente con ID específico para evitar duplicados
+                    self._create_habit_with_id(new_habit)
+                    
+                    # Agregar completions
+                    for completion_date_str in remote_habit.get("completions", []):
+                        try:
+                            completion_date = date.fromisoformat(completion_date_str)
+                            self.habit_service.add_completion(habit_id, completion_date)
+                        except:
+                            pass
+                    
+                    stats["habits_created"] += 1
+            
+            # Sincronizar metas
+            for goal_id_str, remote_goal in goals_data.items():
+                goal_id = int(goal_id_str)
+                local_goal = local_goals.get(goal_id_str)
+                
+                if local_goal:
+                    # Meta existe localmente - actualizar solo campos que cambiaron
+                    remote_updated = datetime.fromisoformat(remote_goal.get("updated_at")) if remote_goal.get("updated_at") else None
+                    local_updated = local_goal.updated_at if local_goal.updated_at else None
+                    
+                    if remote_updated and (not local_updated or remote_updated > local_updated):
+                        needs_update = False
+                        if remote_goal.get("title") != local_goal.title:
+                            local_goal.title = remote_goal.get("title")
+                            needs_update = True
+                        if remote_goal.get("description") != local_goal.description:
+                            local_goal.description = remote_goal.get("description")
+                            needs_update = True
+                        if remote_goal.get("target_value") != local_goal.target_value:
+                            local_goal.target_value = remote_goal.get("target_value")
+                            needs_update = True
+                        if remote_goal.get("current_value") != local_goal.current_value:
+                            local_goal.current_value = remote_goal.get("current_value", 0.0)
+                            needs_update = True
+                        if remote_goal.get("unit") != local_goal.unit:
+                            local_goal.unit = remote_goal.get("unit")
+                            needs_update = True
+                        if remote_goal.get("period") != local_goal.period:
+                            local_goal.period = remote_goal.get("period", "mes")
+                            needs_update = True
+                        
+                        if needs_update:
+                            self.goal_service.update_goal(local_goal)
+                            stats["goals_updated"] += 1
+                else:
+                    # Nueva meta desde Firebase - crear localmente
+                    from app.data.models import Goal
+                    created_at = None
+                    if remote_goal.get("created_at"):
+                        try:
+                            created_at = datetime.fromisoformat(remote_goal.get("created_at"))
+                        except:
+                            pass
+                    
+                    new_goal = Goal(
+                        id=goal_id,
+                        title=remote_goal.get("title", ""),
+                        description=remote_goal.get("description"),
+                        target_value=remote_goal.get("target_value"),
+                        current_value=remote_goal.get("current_value", 0.0),
+                        unit=remote_goal.get("unit"),
+                        period=remote_goal.get("period", "mes"),
+                        created_at=created_at,
+                        updated_at=datetime.fromisoformat(remote_goal.get("updated_at")) if remote_goal.get("updated_at") else None
+                    )
+                    
+                    # Insertar directamente con ID específico para evitar duplicados
+                    self._create_goal_with_id(new_goal)
+                    stats["goals_created"] += 1
+            
             # Sincronizar puntos si existen en Firebase
             if points_data and "total_points" in points_data:
                 firebase_points = float(points_data.get("total_points", 0.0))
                 local_points = self.points_service.get_total_points()
                 # Usar el mayor valor entre Firebase y local (merge conservador)
                 if firebase_points > local_points:
-                    # Calcular la diferencia para agregar
                     diff = firebase_points - local_points
                     self.points_service.add_points(diff)
             
@@ -254,13 +625,20 @@ class FirebaseSyncService:
                 if firebase_name:
                     self.user_settings_service.set_user_name(firebase_name)
             
-            # TODO: Implementar lógica de merge completa para tareas, hábitos y metas
-            # Por ahora, solo retornamos información de lo que se descargó
+            message_parts = []
+            if stats["tasks_created"] > 0 or stats["tasks_updated"] > 0:
+                message_parts.append(f"{stats['tasks_created']} nuevas, {stats['tasks_updated']} actualizadas tareas")
+            if stats["habits_created"] > 0 or stats["habits_updated"] > 0:
+                message_parts.append(f"{stats['habits_created']} nuevos, {stats['habits_updated']} actualizados hábitos")
+            if stats["goals_created"] > 0 or stats["goals_updated"] > 0:
+                message_parts.append(f"{stats['goals_created']} nuevas, {stats['goals_updated']} actualizadas metas")
             
-            return {
-                "success": True,
-                "message": f"Descargado: {len(tasks_data)} tareas, {len(habits_data)} hábitos, {len(goals_data)} metas, puntos sincronizados"
-            }
+            if not message_parts:
+                message = "Sincronización completa. No hay cambios pendientes."
+            else:
+                message = f"Descargado: {', '.join(message_parts)}"
+            
+            return {"success": True, "message": message, "stats": stats}
         except Exception as e:
             return {"success": False, "message": f"Error al descargar: {str(e)}"}
 

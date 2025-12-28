@@ -21,7 +21,7 @@ class GoalService:
     
     def create_goal(self, title: str, description: Optional[str] = None,
                    target_value: Optional[float] = None, unit: Optional[str] = None,
-                   current_value: float = 0.0, points_service=None) -> Goal:
+                   current_value: float = 0.0, period: str = "mes", points_service=None) -> Goal:
         """
         Crea una nueva meta.
         
@@ -31,6 +31,7 @@ class GoalService:
             target_value: Valor objetivo.
             unit: Unidad de medida (ej: "tareas", "días", "horas").
             current_value: Valor inicial actual.
+            period: Período de la meta (semana, mes, trimestre, semestre, anual).
             points_service: Servicio de puntos para agregar puntos si se completa la meta.
         
         Returns:
@@ -42,7 +43,8 @@ class GoalService:
             description=description,
             target_value=target_value,
             current_value=current_value,
-            unit=unit
+            unit=unit,
+            period=period
         )
         
         created_goal = self.repository.create(goal)
