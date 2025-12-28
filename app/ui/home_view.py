@@ -119,7 +119,8 @@ class HomeView:
         level_text = ""
         if hasattr(self, 'points_service') and self.points_service:
             level_info = self.points_service.get_level_info()
-            level_text = f" | {level_info['level_display_name']}"
+            sublevel = level_info.get('sublevel', 0.0)
+            level_text = f" | Nivel {sublevel:.2f}"
         
         return ft.Container(
             content=ft.Row(
@@ -127,7 +128,7 @@ class HomeView:
                     ft.Column(
                         [
                             ft.Text(
-                                f"¡Hola, {user_name}!{level_text}",
+                                f"{user_name}{level_text}",
                                 size=20,
                                 weight=ft.FontWeight.BOLD,
                                 color=text_color
@@ -171,10 +172,10 @@ class HomeView:
         
         # Iconos y textos para cada sección
         nav_items = [
+            ("summary", ft.Icons.BAR_CHART, "Resumen"),
             ("tasks", ft.Icons.ASSIGNMENT, "Tareas"),
             ("habits", ft.Icons.REPEAT, "Hábitos"),
             ("goals", ft.Icons.FLAG, "Metas"),
-            ("summary", ft.Icons.BAR_CHART, "Resumen"),
             ("settings", ft.Icons.SETTINGS, "Config")
         ]
         

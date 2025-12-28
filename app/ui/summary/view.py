@@ -39,8 +39,10 @@ class SummaryView:
         Returns:
             Container con la vista de resumen.
         """
-        # Barra de título
+        # Determinar tema
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        bg_color = ft.Colors.BLACK if is_dark else ft.Colors.WHITE
+        surface_color = ft.Colors.SURFACE if is_dark else ft.Colors.WHITE
         title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
         
         title_bar = ft.Container(
@@ -56,7 +58,7 @@ class SummaryView:
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN
             ),
             padding=16,
-            bgcolor=ft.Colors.SURFACE
+            bgcolor=surface_color
         )
         
         # Obtener estadísticas
@@ -114,13 +116,15 @@ class SummaryView:
                     ft.Container(
                         content=content,
                         padding=16,
-                        expand=True
+                        expand=True,
+                        bgcolor=bg_color
                     )
                 ],
                 spacing=0,
                 expand=True
             ),
-            expand=True
+            expand=True,
+            bgcolor=bg_color
         )
     
     def _calculate_stats(self) -> dict:
@@ -180,6 +184,7 @@ class SummaryView:
         """
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         bg_color = ft.Colors.SURFACE if is_dark else ft.Colors.WHITE
+        text_color = ft.Colors.GREY_400 if is_dark else ft.Colors.GREY_700
         
         stat_items = []
         for label, value, color in stats:
@@ -196,7 +201,7 @@ class SummaryView:
                             ft.Text(
                                 label,
                                 size=12,
-                                color=ft.Colors.GREY
+                                color=text_color
                             )
                         ],
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -243,6 +248,7 @@ class SummaryView:
         """
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         bg_color = ft.Colors.SURFACE if is_dark else ft.Colors.WHITE
+        text_color = ft.Colors.GREY_400 if is_dark else ft.Colors.GREY_700
         
         total_items = (
             stats['tasks']['total'] +
@@ -277,7 +283,7 @@ class SummaryView:
                                     ft.Text(
                                         "Items totales",
                                         size=12,
-                                        color=ft.Colors.GREY
+                                        color=text_color
                                     )
                                 ],
                                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -295,7 +301,7 @@ class SummaryView:
                                     ft.Text(
                                         "Tareas completadas",
                                         size=12,
-                                        color=ft.Colors.GREY
+                                        color=text_color
                                     )
                                 ],
                                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -330,6 +336,7 @@ class SummaryView:
         
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         bg_color = ft.Colors.SURFACE if is_dark else ft.Colors.WHITE
+        text_color = ft.Colors.GREY_400 if is_dark else ft.Colors.GREY_700
         
         # Color según el nivel (gradiente de colores)
         level_colors = {
@@ -369,7 +376,7 @@ class SummaryView:
                                 ft.Text(
                                     f"{points:,.1f} puntos",
                                     size=16,
-                                    color=ft.Colors.GREY,
+                                    color=text_color,
                                     text_align=ft.TextAlign.CENTER
                                 )
                             ],
@@ -381,13 +388,13 @@ class SummaryView:
                     ft.ProgressBar(
                         value=progress / 100.0 if progress > 0 else 0,
                         color=level_color,
-                        bgcolor=ft.Colors.GREY_300,
+                        bgcolor=ft.Colors.GREY_300 if not is_dark else ft.Colors.GREY_700,
                         height=20
                     ),
                     ft.Text(
                         f"Próximo nivel: {next_level.display_name} ({points_to_next:,.1f} puntos)",
                         size=12,
-                        color=ft.Colors.GREY,
+                        color=text_color,
                         text_align=ft.TextAlign.CENTER
                     ) if current_level != next_level else ft.Text(
                         "¡Nivel máximo alcanzado!",

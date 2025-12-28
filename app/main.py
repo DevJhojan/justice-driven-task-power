@@ -170,6 +170,41 @@ def main(page: ft.Page):
             form_view = form.build_view()
             page.views.append(form_view)
             page.update()
+        
+        elif page.route == "/firebase-sync":
+            from app.ui.settings.sync_view import FirebaseSyncView
+            from app.services.firebase_sync_service import FirebaseSyncService
+            from app.data.database import get_db
+            from app.services.task_service import TaskService
+            from app.services.habit_service import HabitService
+            from app.services.goal_service import GoalService
+            from app.services.points_service import PointsService
+            from app.services.user_settings_service import UserSettingsService
+            from app.data.task_repository import TaskRepository
+            from app.data.habit_repository import HabitRepository
+            from app.data.goal_repository import GoalRepository
+            from app.data.subtask_repository import SubtaskRepository
+            
+            db = get_db()
+            task_service = TaskService(TaskRepository(db), SubtaskRepository(db))
+            habit_service = HabitService(HabitRepository(db))
+            goal_service = GoalService(GoalRepository(db))
+            points_service = PointsService(db)
+            user_settings_service = UserSettingsService(db)
+            
+            firebase_sync_service = None
+            try:
+                firebase_sync_service = FirebaseSyncService(
+                    db, task_service, habit_service, goal_service,
+                    points_service, user_settings_service
+                )
+            except Exception as ex:
+                print(f"Error al inicializar Firebase: {ex}")
+            
+            sync_view = FirebaseSyncView(page, firebase_sync_service)
+            sync_view_obj = sync_view.build_view()
+            page.views.append(sync_view_obj)
+            page.update()
     
     def view_pop(e):
         """Maneja cuando se hace pop de una vista."""
@@ -188,5 +223,13 @@ if __name__ == "__main__":
     # Ejecutar la aplicación
     # Para desarrollo: ventana nativa Flet
     # Para producción Android: se construye con build_android.sh
-    ft.app(target=main, view=ft.AppView.FLET_APP, assets_dir="assets")
+    # Configurar icono desde assets
+    from pathlib import Path
+    icon_path = Path("assets/app_icon.png")
+    ft.app(
+        target=main, 
+        view=ft.AppView.FLET_APP, 
+        assets_dir="assets",
+        icon=str(icon_path) if icon_path.exists() else None
+    )
 
