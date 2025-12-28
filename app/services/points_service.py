@@ -80,17 +80,23 @@ class SkillLevel(Enum):
             # Ya está en el nivel más alto
             return self, 0.0
     
-    def get_display_name_with_sublevel(self, sublevel: float) -> str:
+    def get_display_name_with_sublevel(self, sublevel: float, total_points: float = None) -> str:
         """
         Obtiene el nombre del nivel con el subnivel flotante.
         
         Args:
             sublevel: Subnivel flotante (ej: 1.5, 2.3)
+            total_points: Puntos totales (opcional, se usa para NOBODY para mostrar puntos reales)
         
         Returns:
-            Nombre completo del nivel (ej: "Beginner 1.50")
+            Nombre completo del nivel (ej: "Beginner 1.50" o "Nobody 0.18")
         """
-        # Formatear el subnivel con 2 decimales
+        # Para NOBODY, mostrar los puntos reales en lugar del subnivel
+        if self == SkillLevel.NOBODY and total_points is not None:
+            points_str = f"{total_points:.2f}"
+            return f"{self.display_name} {points_str}"
+        
+        # Para otros niveles, formatear el subnivel con 2 decimales
         sublevel_str = f"{sublevel:.2f}"
         return f"{self.display_name} {sublevel_str}"
 
@@ -228,7 +234,7 @@ class PointsService:
         return {
             "current_level": current_level,
             "sublevel": sublevel,
-            "level_display_name": current_level.get_display_name_with_sublevel(sublevel),
+            "level_display_name": current_level.get_display_name_with_sublevel(sublevel, points),
             "points": points,
             "next_level": next_level,
             "points_needed": points_needed,
