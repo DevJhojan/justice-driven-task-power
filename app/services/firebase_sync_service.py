@@ -698,11 +698,11 @@ class FirebaseSyncService:
                         updates["updated_at"] = task.updated_at.isoformat() if task.updated_at else None
                     
                     if updates:
-                        user_ref.child(f"tasks/{task_id_str}").update(updates, token=token)
+                        self.db_firebase.child(f"users/{self.user_id}/tasks/{task_id_str}").update(updates, token=token)
                         stats["tasks_updated"] += 1
                 else:
                     # Nueva tarea, crear completa
-                    user_ref.child(f"tasks/{task_id_str}").set({
+                    self.db_firebase.child(f"users/{self.user_id}/tasks/{task_id_str}").set({
                         "id": task.id,
                         "title": task.title,
                         "description": task.description,
@@ -742,10 +742,10 @@ class FirebaseSyncService:
                             updates["updated_at"] = subtask.updated_at.isoformat() if subtask.updated_at else None
                         
                         if updates:
-                            user_ref.child(f"tasks/{task_id_str}/subtasks/{subtask_id_str}").update(updates, token=token)
+                            self.db_firebase.child(f"users/{self.user_id}/tasks/{task_id_str}/subtasks/{subtask_id_str}").update(updates, token=token)
                     else:
                         # Nueva subtarea, crear individualmente
-                        user_ref.child(f"tasks/{task_id_str}/subtasks/{subtask_id_str}").set({
+                        self.db_firebase.child(f"users/{self.user_id}/tasks/{task_id_str}/subtasks/{subtask_id_str}").set({
                             "id": subtask.id,
                             "task_id": subtask.task_id,
                             "title": subtask.title,
@@ -757,7 +757,7 @@ class FirebaseSyncService:
                 # Eliminar subtareas remotas que ya no existen localmente
                 for remote_subtask_id in remote_subtasks:
                     if remote_subtask_id not in local_subtask_ids:
-                        user_ref.child(f"tasks/{task_id_str}/subtasks/{remote_subtask_id}").remove(token=token)
+                        self.db_firebase.child(f"users/{self.user_id}/tasks/{task_id_str}/subtasks/{remote_subtask_id}").remove(token=token)
             
             # Sincronizar hábitos (solo campos modificados)
             habits = self.habit_service.get_all_habits()
@@ -777,11 +777,11 @@ class FirebaseSyncService:
                         updates["updated_at"] = habit.updated_at.isoformat() if habit.updated_at else None
                     
                     if updates:
-                        user_ref.child(f"habits/{habit_id_str}").update(updates, token=token)
+                        self.db_firebase.child(f"users/{self.user_id}/habits/{habit_id_str}").update(updates, token=token)
                         stats["habits_updated"] += 1
                 else:
                     # Nuevo hábito, crear completo (sin completaciones, se sincronizan por separado)
-                    user_ref.child(f"habits/{habit_id_str}").set({
+                    self.db_firebase.child(f"users/{self.user_id}/habits/{habit_id_str}").set({
                         "id": habit.id,
                         "title": habit.title,
                         "description": habit.description,
@@ -791,7 +791,6 @@ class FirebaseSyncService:
                     stats["habits_created"] += 1
                 
                 # Sincronizar completaciones individualmente (sincronización estricta granular)
-                remote_completions_ref = user_ref.child(f"habits/{habit_id_str}/completions")
                 raw_completions = self.db_firebase.child(f"users/{self.user_id}/habits/{habit_id_str}/completions").get(token=token).val()
                 remote_completions = self._normalize_firebase_data(raw_completions)
                 local_completions_set = {d.isoformat() for d in local_completions}
@@ -801,12 +800,12 @@ class FirebaseSyncService:
                     date_str = completion_date.isoformat()
                     if date_str not in remote_completions:
                         # Nueva completación, agregar individualmente
-                        remote_completions_ref.child(date_str).set(True, token=token)
+                        self.db_firebase.child(f"users/{self.user_id}/habits/{habit_id_str}/completions/{date_str}").set(True, token=token)
                 
                 # Eliminar completaciones que ya no existen localmente
                 for remote_date_str in remote_completions:
                     if remote_date_str not in local_completions_set:
-                        remote_completions_ref.child(remote_date_str).remove(token=token)
+                        self.db_firebase.child(f"users/{self.user_id}/habits/{habit_id_str}/completions/{remote_date_str}").remove(token=token)
             
             # Sincronizar metas (solo campos modificados)
             goals = self.goal_service.get_all_goals()
@@ -833,11 +832,11 @@ class FirebaseSyncService:
                         updates["updated_at"] = goal.updated_at.isoformat() if goal.updated_at else None
                     
                     if updates:
-                        user_ref.child(f"goals/{goal_id_str}").update(updates, token=token)
+                        self.db_firebase.child(f"users/{self.user_id}/goals/{goal_id_str}").update(updates, token=token)
                         stats["goals_updated"] += 1
                 else:
                     # Nueva meta, crear completa
-                    user_ref.child(f"goals/{goal_id_str}").set({
+                    self.db_firebase.child(f"users/{self.user_id}/goals/{goal_id_str}").set({
                         "id": goal.id,
                         "title": goal.title,
                         "description": goal.description,
@@ -874,11 +873,11 @@ class FirebaseSyncService:
                             updates["claimed_at"] = reward.claimed_at.isoformat() if reward.claimed_at else None
                         
                         if updates:
-                            user_ref.child(f"rewards/{reward_id_str}").update(updates, token=token)
+                            self.db_firebase.child(f"users/{self.user_id}/rewards/{reward_id_str}").update(updates, token=token)
                             stats["rewards_updated"] += 1
                     else:
                         # Nueva recompensa, crear completa
-                        user_ref.child(f"rewards/{reward_id_str}").set({
+                        self.db_firebase.child(f"users/{self.user_id}/rewards/{reward_id_str}").set({
                             "id": reward.id,
                             "name": reward.name,
                             "description": reward.description,
@@ -896,7 +895,7 @@ class FirebaseSyncService:
             remote_total_points = remote_points.get("total_points", 0.0) if isinstance(remote_points, dict) else 0.0
             
             if abs(total_points - remote_total_points) > 0.001:  # Tolerancia para floats
-                user_ref.child("points").update({
+                self.db_firebase.child(f"users/{self.user_id}/points").update({
                     "total_points": total_points,
                     "last_updated": datetime.now().isoformat()
                 }, token=token)
@@ -908,7 +907,7 @@ class FirebaseSyncService:
             remote_user_name = remote_settings.get("user_name", "") if isinstance(remote_settings, dict) else ""
             
             if user_name != remote_user_name:
-                user_ref.child("user_settings").update({
+                self.db_firebase.child(f"users/{self.user_id}/user_settings").update({
                     "user_name": user_name,
                     "last_updated": datetime.now().isoformat()
                 }, token=token)
