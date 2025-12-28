@@ -162,16 +162,23 @@ class SettingsView:
             color=ft.Colors.GREEN if is_logged_in else ft.Colors.GREY
         )
         
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        btn_bg_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_600
+        btn_text_color = ft.Colors.WHITE
+        
         login_button = ft.ElevatedButton(
             "Iniciar sesión",
             on_click=self._firebase_login,
-            disabled=is_logged_in
+            disabled=is_logged_in,
+            bgcolor=btn_bg_color,
+            color=btn_text_color
         )
         
         register_button = ft.TextButton(
             "Registrar",
             on_click=self._firebase_register,
-            disabled=is_logged_in
+            disabled=is_logged_in,
+            style=ft.ButtonStyle(color=btn_bg_color)
         )
         
         logout_button = ft.ElevatedButton(
@@ -186,14 +193,18 @@ class SettingsView:
             "Subir a Firebase",
             on_click=self._sync_to_firebase,
             icon=ft.Icons.UPLOAD,
-            disabled=not is_logged_in
+            disabled=not is_logged_in,
+            bgcolor=btn_bg_color,
+            color=btn_text_color
         )
         
         sync_down_button = ft.ElevatedButton(
             "Descargar de Firebase",
             on_click=self._sync_from_firebase,
             icon=ft.Icons.DOWNLOAD,
-            disabled=not is_logged_in
+            disabled=not is_logged_in,
+            bgcolor=btn_bg_color,
+            color=btn_text_color
         )
         
         return ft.Column([

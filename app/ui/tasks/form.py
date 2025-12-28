@@ -55,9 +55,15 @@ class TaskForm:
     def _show_dialog(self):
         """Muestra el diálogo del formulario."""
         is_editing = self.task is not None
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
         
         self.page.dialog = ft.AlertDialog(
-            title=ft.Text("Editar tarea" if is_editing else "Nueva tarea"),
+            title=ft.Text(
+                "Editar tarea" if is_editing else "Nueva tarea",
+                color=title_color,
+                weight=ft.FontWeight.BOLD
+            ),
             content=ft.Container(
                 content=ft.Column(
                     [
@@ -73,7 +79,13 @@ class TaskForm:
             ),
             actions=[
                 ft.TextButton("Cancelar", on_click=self._cancel),
-                ft.TextButton("Guardar", on_click=self._save)
+                ft.TextButton(
+                    "Guardar",
+                    on_click=self._save,
+                    style=ft.ButtonStyle(
+                        color=ft.Colors.RED_700 if self.page.theme_mode == ft.ThemeMode.LIGHT else ft.Colors.RED_500
+                    )
+                )
             ],
             modal=True
         )

@@ -50,8 +50,15 @@ class HabitForm:
         """Muestra el diálogo del formulario."""
         is_editing = self.habit is not None
         
+        is_dark = self.page.theme_mode == ft.ThemeMode.DARK
+        title_color = ft.Colors.RED_700 if not is_dark else ft.Colors.RED_500
+        
         self.page.dialog = ft.AlertDialog(
-            title=ft.Text("Editar hábito" if is_editing else "Nuevo hábito"),
+            title=ft.Text(
+                "Editar hábito" if is_editing else "Nuevo hábito",
+                color=title_color,
+                weight=ft.FontWeight.BOLD
+            ),
             content=ft.Container(
                 content=ft.Column(
                     [
