@@ -2,7 +2,12 @@
 Punto de entrada principal de la aplicación.
 """
 import sys
+import warnings
 from pathlib import Path
+
+# Suprimir advertencias de pkg_resources (deprecation warning de gcloud/pyrebase4)
+warnings.filterwarnings('ignore', category=UserWarning, module='pkg_resources')
+warnings.filterwarnings('ignore', category=UserWarning, module='gcloud')
 
 # Agregar el directorio raíz al PYTHONPATH
 root_dir = Path(__file__).parent

@@ -1,6 +1,11 @@
 """
 Punto de entrada principal de la aplicación.
 """
+import warnings
+# Suprimir advertencias de pkg_resources (deprecation warning de gcloud/pyrebase4)
+warnings.filterwarnings('ignore', category=UserWarning, module='pkg_resources')
+warnings.filterwarnings('ignore', category=UserWarning, module='gcloud')
+
 import flet as ft
 from pathlib import Path
 from app.ui.home_view import HomeView

@@ -3,9 +3,14 @@ Servicio de sincronización con Firebase Realtime Database.
 """
 import json
 import os
+import warnings
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
+
+# Suprimir advertencias de pkg_resources (deprecation warning de gcloud/pyrebase4)
+warnings.filterwarnings('ignore', category=UserWarning, module='pkg_resources')
+warnings.filterwarnings('ignore', category=UserWarning, module='gcloud')
 
 try:
     import pyrebase4 as pyrebase
