@@ -144,7 +144,7 @@ class TasksView:
         
         edit_button = ft.IconButton(
             icon=ft.Icons.EDIT,
-            on_click=lambda e, t=task: self._open_task_form(t),
+            on_click=lambda e, t=task: self._open_task_form(e, t),
             tooltip="Editar",
             icon_color=btn_color
         )
@@ -268,7 +268,7 @@ class TasksView:
         self.page.dialog.open = True
         self.page.update()
     
-    def _open_task_form(self, e=None, task: Optional[Task] = None):
+    def _open_task_form(self, e, task: Optional[Task] = None):
         """Abre el formulario de tarea en una nueva vista."""
         route = f"/task-form?id={task.id}" if task and task.id else "/task-form"
         self.page.go(route)

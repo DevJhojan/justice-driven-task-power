@@ -29,7 +29,7 @@ class HabitsMetricsView:
         self.points_service = points_service
         self.metrics_container = None
         self.selected_habit = None  # Hábito seleccionado para el calendario
-        self.current_month = date.today().replace(day=1)  # Mes actual para el calendario
+        self.habit_months = {}  # Diccionario para almacenar el mes seleccionado por hábito
     
     def build_view(self) -> ft.View:
         """Construye la vista de métricas."""
@@ -424,8 +424,10 @@ class HabitsMetricsView:
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         completions = self.habit_service.get_completions(habit.id)
         
-        # Obtener el primer día del mes y el número de días
-        first_day = self.current_month
+        # Obtener el mes seleccionado para este hábito (o usar el mes actual)
+        if habit.id not in self.habit_months:
+            self.habit_months[habit.id] = date.today().replace(day=1)
+        first_day = self.habit_months[habit.id]
         days_in_month = calendar.monthrange(first_day.year, first_day.month)[1]
         first_weekday = first_day.weekday()  # 0 = Lunes, 6 = Domingo
         
@@ -685,19 +687,24 @@ class HabitsMetricsView:
         self._load_metrics()
     
     def _change_month(self, habit, direction: int):
-        """Cambia el mes mostrado en el calendario."""
+        """Cambia el mes mostrado en el calendario para un hábito específico."""
+        if habit.id not in self.habit_months:
+            self.habit_months[habit.id] = date.today().replace(day=1)
+        
+        current_month = self.habit_months[habit.id]
+        
         if direction > 0:
             # Siguiente mes
-            if self.current_month.month == 12:
-                self.current_month = self.current_month.replace(year=self.current_month.year + 1, month=1)
+            if current_month.month == 12:
+                self.habit_months[habit.id] = current_month.replace(year=current_month.year + 1, month=1)
             else:
-                self.current_month = self.current_month.replace(month=self.current_month.month + 1)
+                self.habit_months[habit.id] = current_month.replace(month=current_month.month + 1)
         else:
             # Mes anterior
-            if self.current_month.month == 1:
-                self.current_month = self.current_month.replace(year=self.current_month.year - 1, month=12)
+            if current_month.month == 1:
+                self.habit_months[habit.id] = current_month.replace(year=current_month.year - 1, month=12)
             else:
-                self.current_month = self.current_month.replace(month=self.current_month.month - 1)
+                self.habit_months[habit.id] = current_month.replace(month=current_month.month - 1)
         
         # Recargar las métricas para actualizar el calendario
         self._load_metrics()

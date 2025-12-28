@@ -157,7 +157,7 @@ class HabitsView:
         
         edit_button = ft.IconButton(
             icon=ft.Icons.EDIT,
-            on_click=lambda e, h=habit: self._open_habit_form(h),
+            on_click=lambda e, h=habit: self._open_habit_form(e, h),
             tooltip="Editar",
             icon_color=btn_color
         )
@@ -248,7 +248,7 @@ class HabitsView:
         self.page.dialog.open = True
         self.page.update()
     
-    def _open_habit_form(self, e=None, habit: Optional[Habit] = None):
+    def _open_habit_form(self, e, habit: Optional[Habit] = None):
         """Abre el formulario de hábito en una nueva vista."""
         route = f"/habit-form?id={habit.id}" if habit and habit.id else "/habit-form"
         self.page.go(route)

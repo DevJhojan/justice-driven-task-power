@@ -8,32 +8,32 @@
           "$taskId": {
             ".read": "$userId === auth.uid",
             ".write": "$userId === auth.uid",
-            ".validate": "newData.hasChildren(['id', 'title', 'status']) && newData.child('id').val() == $taskId"
+            ".validate": "(newData.hasChildren(['id', 'title', 'status']) || data.exists()) && (!newData.hasChild('id') || newData.child('id').val() == $taskId) && (!newData.hasChild('title') || newData.child('title').isString()) && (!newData.hasChild('status') || newData.child('status').isString()) && (!newData.hasChild('description') || newData.child('description').isString() || newData.child('description').val() == null) && (!newData.hasChild('due_date') || newData.child('due_date').isString() || newData.child('due_date').val() == null) && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('updated_at') || newData.child('updated_at').isString() || newData.child('updated_at').val() == null)"
           }
         },
         "habits": {
           "$habitId": {
             ".read": "$userId === auth.uid",
             ".write": "$userId === auth.uid",
-            ".validate": "newData.hasChildren(['id', 'title']) && newData.child('id').val() == $habitId"
+            ".validate": "(newData.hasChildren(['id', 'title']) || data.exists()) && (!newData.hasChild('id') || newData.child('id').val() == $habitId) && (!newData.hasChild('title') || newData.child('title').isString()) && (!newData.hasChild('description') || newData.child('description').isString() || newData.child('description').val() == null) && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('updated_at') || newData.child('updated_at').isString() || newData.child('updated_at').val() == null)"
           }
         },
         "goals": {
           "$goalId": {
             ".read": "$userId === auth.uid",
             ".write": "$userId === auth.uid",
-            ".validate": "newData.hasChildren(['id', 'title']) && newData.child('id').val() == $goalId"
+            ".validate": "(newData.hasChildren(['id', 'title']) || data.exists()) && (!newData.hasChild('id') || newData.child('id').val() == $goalId) && (!newData.hasChild('title') || newData.child('title').isString()) && (!newData.hasChild('description') || newData.child('description').isString() || newData.child('description').val() == null) && (!newData.hasChild('target_value') || newData.child('target_value').isNumber() || newData.child('target_value').val() == null) && (!newData.hasChild('current_value') || newData.child('current_value').isNumber() || newData.child('current_value').val() == null) && (!newData.hasChild('unit') || newData.child('unit').isString() || newData.child('unit').val() == null) && (!newData.hasChild('period') || newData.child('period').isString()) && (!newData.hasChild('created_at') || newData.child('created_at').isString() || newData.child('created_at').val() == null) && (!newData.hasChild('updated_at') || newData.child('updated_at').isString() || newData.child('updated_at').val() == null)"
           }
         },
         "points": {
           ".read": "$userId === auth.uid",
           ".write": "$userId === auth.uid",
-          ".validate": "newData.hasChildren(['total_points']) && newData.child('total_points').isNumber()"
+          ".validate": "(newData.hasChildren(['total_points']) || data.exists()) && (!newData.hasChild('total_points') || (newData.child('total_points').isNumber() && newData.child('total_points').val() >= 0)) && (!newData.hasChild('last_updated') || newData.child('last_updated').isString())"
         },
         "user_settings": {
           ".read": "$userId === auth.uid",
           ".write": "$userId === auth.uid",
-          ".validate": "newData.hasChildren(['user_name']) && newData.child('user_name').isString()"
+          ".validate": "(newData.hasChildren(['user_name']) || data.exists()) && (!newData.hasChild('user_name') || newData.child('user_name').isString()) && (!newData.hasChild('last_updated') || newData.child('last_updated').isString())"
         }
       }
     },
@@ -41,4 +41,3 @@
     ".write": false
   }
 }
-

@@ -506,7 +506,7 @@ class FirebaseSyncService:
                         
                         # Sincronizar completions (solo agregar las que no existen localmente)
                         remote_completions = set(remote_habit.get("completions", []))
-                        local_completions_dates = {c.completion_date.isoformat() for c in self.habit_service.get_completions(habit_id)}
+                        local_completions_dates = {d.isoformat() for d in self.habit_service.get_completions(habit_id)}
                         
                         for completion_date_str in remote_completions:
                             if completion_date_str not in local_completions_dates:

@@ -201,7 +201,7 @@ class GoalsView:
         
         edit_button = ft.IconButton(
             icon=ft.Icons.EDIT,
-            on_click=lambda e, g=goal: self._open_goal_form(g),
+            on_click=lambda e, g=goal: self._open_goal_form(e, g),
             tooltip="Editar",
             icon_color=btn_color
         )
@@ -298,7 +298,7 @@ class GoalsView:
         self.page.dialog.open = True
         self.page.update()
     
-    def _open_goal_form(self, e=None, goal: Optional[Goal] = None):
+    def _open_goal_form(self, e, goal: Optional[Goal] = None):
         """Abre el formulario de meta en una nueva vista."""
         route = f"/goal-form?id={goal.id}" if goal and goal.id else "/goal-form"
         self.page.go(route)

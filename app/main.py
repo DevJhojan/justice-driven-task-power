@@ -89,8 +89,10 @@ def main(page: ft.Page):
             task = task_service.get_task(task_id) if task_id else None
             
             def on_save():
-                # El callback se ejecutará antes de navegar
-                pass
+                # Regresar a la vista principal y recargar
+                page.go("/")
+                # Recargar todas las vistas
+                home_view._build_ui()
             
             form = TaskForm(page, task_service, task, on_save)
             form_view = form.build_view()
@@ -129,13 +131,15 @@ def main(page: ft.Page):
         elif page.route.startswith("/habits-metrics"):
             from app.ui.habits.metrics_view import HabitsMetricsView
             from app.services.habit_service import HabitService
+            from app.services.points_service import PointsService
             from app.data.habit_repository import HabitRepository
             from app.data.database import get_db
             
             db = get_db()
             habit_service = HabitService(HabitRepository(db))
+            points_service = PointsService(db)
             
-            metrics_view = HabitsMetricsView(page, habit_service)
+            metrics_view = HabitsMetricsView(page, habit_service, points_service)
             metrics_view_obj = metrics_view.build_view()
             page.views.append(metrics_view_obj)
             page.update()

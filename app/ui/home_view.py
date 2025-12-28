@@ -119,8 +119,8 @@ class HomeView:
         level_text = ""
         if hasattr(self, 'points_service') and self.points_service:
             level_info = self.points_service.get_level_info()
-            sublevel = level_info.get('sublevel', 0.0)
-            level_text = f" | Nivel {sublevel:.2f}"
+            level_display_name = level_info.get('level_display_name', 'Nadie')
+            level_text = f" | Nivel de progreso {level_display_name}"
         
         return ft.Container(
             content=ft.Row(
