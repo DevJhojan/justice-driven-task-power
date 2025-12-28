@@ -234,6 +234,28 @@ class SettingsView:
                 margin=ft.margin.only(top=8)
             )
         
+        # Botones de sincronización (solo si está logueado)
+        export_button = None
+        import_button = None
+        if is_logged_in:
+            export_button = ft.ElevatedButton(
+                "Exportar en la nube",
+                on_click=self._export_to_firebase,
+                icon=ft.Icons.UPLOAD,
+                bgcolor=btn_bg_color,
+                color=btn_text_color,
+                expand=True
+            )
+            
+            import_button = ft.ElevatedButton(
+                "Importar desde la nube",
+                on_click=self._import_from_firebase,
+                icon=ft.Icons.DOWNLOAD,
+                bgcolor=btn_bg_color,
+                color=btn_text_color,
+                expand=True
+            )
+        
         # Botón de cerrar sesión (solo si está logueado)
         logout_button = None
         if is_logged_in:
@@ -256,6 +278,12 @@ class SettingsView:
         
         if login_form:
             items.append(login_form)
+        
+        # Agregar botones de exportar e importar si está logueado
+        if export_button and import_button:
+            items.append(ft.Divider())
+            items.append(export_button)
+            items.append(import_button)
         
         if logout_button:
             items.append(logout_button)
@@ -383,6 +411,40 @@ class SettingsView:
                 self._show_snackbar("❌ La contraseña es muy débil", ft.Colors.RED)
             else:
                 self._show_snackbar(f"❌ Error: {error_msg}", ft.Colors.RED)
+    
+    def _export_to_firebase(self, e):
+        """Exporta datos locales a Firebase."""
+        if not self.firebase_sync_service:
+            return
+        
+        try:
+            result = self.firebase_sync_service.sync_to_firebase()
+            if result.get("success"):
+                self._show_snackbar(f"✅ {result.get('message', 'Exportación exitosa')}", ft.Colors.GREEN)
+            else:
+                self._show_snackbar(f"❌ {result.get('message', 'Error al exportar')}", ft.Colors.RED)
+        except Exception as ex:
+            self._show_snackbar(f"❌ Error al exportar: {str(ex)}", ft.Colors.RED)
+    
+    def _import_from_firebase(self, e):
+        """Importa datos de Firebase a local."""
+        if not self.firebase_sync_service:
+            return
+        
+        try:
+            result = self.firebase_sync_service.sync_from_firebase()
+            if result.get("success"):
+                self._show_snackbar(f"✅ {result.get('message', 'Importación exitosa')}", ft.Colors.GREEN)
+                # Reconstruir UI para reflejar cambios
+                if hasattr(self.page, '_home_view_ref'):
+                    home_view = self.page._home_view_ref
+                    home_view._build_ui()
+                else:
+                    self.page.update()
+            else:
+                self._show_snackbar(f"❌ {result.get('message', 'Error al importar')}", ft.Colors.RED)
+        except Exception as ex:
+            self._show_snackbar(f"❌ Error al importar: {str(ex)}", ft.Colors.RED)
     
     def _firebase_logout(self, e):
         """Cierra sesión en Firebase."""
