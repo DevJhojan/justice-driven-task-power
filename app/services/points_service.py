@@ -88,10 +88,10 @@ class SkillLevel(Enum):
             sublevel: Subnivel flotante (ej: 1.5, 2.3)
         
         Returns:
-            Nombre completo del nivel (ej: "Beginner 1.5")
+            Nombre completo del nivel (ej: "Beginner 1.50")
         """
-        # Formatear el subnivel con 1 decimal
-        sublevel_str = f"{sublevel:.1f}"
+        # Formatear el subnivel con 2 decimales
+        sublevel_str = f"{sublevel:.2f}"
         return f"{self.display_name} {sublevel_str}"
 
 
