@@ -269,11 +269,13 @@ class FirebaseSyncService:
         
         try:
             # Pyrebase4 maneja el refresh automáticamente, pero podemos intentar refrescar manualmente
-            # si tenemos el refresh_token
+            # si tenemos el refresh_token. El método refresh devuelve un nuevo token.
             user = self.auth.refresh(self.refresh_token)
-            if user:
+            if user and 'idToken' in user:
                 self.auth_token = user.get('idToken')
-                self.refresh_token = user.get('refreshToken')
+                # Actualizar el refresh_token si está disponible
+                if 'refreshToken' in user:
+                    self.refresh_token = user.get('refreshToken')
                 return True
             return False
         except Exception as e:
@@ -302,28 +304,70 @@ class FirebaseSyncService:
         
         return self.user_id is not None
     
-    def _handle_firebase_error(self, error: Exception) -> Dict[str, Any]:
+    def _get_auth_token(self) -> Optional[str]:
+        """
+        Obtiene el token de autenticación, refrescándolo si es necesario.
+        
+        Returns:
+            El token de autenticación o None si no está disponible.
+        """
+        if not self.user_id:
+            return None
+        
+        # Si no tenemos token o el token podría estar expirado, intentar refrescar
+        if not self.auth_token and self.refresh_token:
+            self._refresh_auth_token()
+        
+        return self.auth_token
+    
+    def _handle_firebase_error(self, error: Exception, retry_callback=None) -> Dict[str, Any]:
         """
         Maneja errores de Firebase, especialmente errores de autenticación.
         
         Args:
             error: La excepción capturada.
+            retry_callback: Función opcional para reintentar la operación después de refrescar el token.
         
         Returns:
             Diccionario con información del error.
         """
         error_str = str(error)
         
-        # Si es un error de permisos, podría ser que el token expiró
-        if "Permission denied" in error_str or "401" in error_str:
-            # Intentar refrescar el token
+        # Si es un error de permisos (401 Unauthorized), el token probablemente expiró
+        if "Permission denied" in error_str or "401" in error_str or "Unauthorized" in error_str:
+            # Intentar refrescar el token automáticamente
             if self.refresh_token:
                 if self._refresh_auth_token():
-                    return {"success": False, "message": "Token expirado. Por favor, intenta nuevamente después de refrescar la sesión."}
+                    # Si el refresh fue exitoso, intentar la operación nuevamente automáticamente
+                    if retry_callback:
+                        try:
+                            # Reintentar la operación con el nuevo token
+                            return retry_callback()
+                        except Exception as retry_error:
+                            # Si el reintento también falla, verificar si es otro error de permisos
+                            retry_error_str = str(retry_error)
+                            if "Permission denied" in retry_error_str or "401" in retry_error_str:
+                                # Si sigue fallando después del refresh, el usuario necesita iniciar sesión nuevamente
+                                self.logout()
+                                return {
+                                    "success": False, 
+                                    "message": "Tu sesión de Firebase ha expirado. Por favor, cierra sesión y vuelve a iniciar sesión para continuar sincronizando."
+                                }
+                            # Si es otro tipo de error, devolverlo
+                            return {"success": False, "message": f"Error al sincronizar: {retry_error_str}"}
+                    else:
+                        # Si no hay callback de reintento, informar al usuario
+                        return {
+                            "success": False, 
+                            "message": "Token refrescado. Por favor, intenta la operación nuevamente."
+                        }
             
             # Si no se pudo refrescar, el usuario necesita iniciar sesión nuevamente
             self.logout()
-            return {"success": False, "message": "Sesión expirada. Por favor, inicia sesión nuevamente."}
+            return {
+                "success": False, 
+                "message": "Tu sesión de Firebase ha expirado. Por favor, cierra sesión y vuelve a iniciar sesión para continuar sincronizando."
+            }
         
         return {"success": False, "message": f"Error al sincronizar: {error_str}"}
     
@@ -337,14 +381,20 @@ class FirebaseSyncService:
         if not self._ensure_authenticated():
             return {"success": False, "message": "No hay sesión activa. Por favor, inicia sesión nuevamente."}
         
-        try:
+        def _perform_sync():
+            """Función interna para realizar la sincronización."""
+            # Obtener token de autenticación
+            token = self._get_auth_token()
+            if not token:
+                return {"success": False, "message": "Token de autenticación no disponible. Por favor, inicia sesión nuevamente."}
+            
             user_ref = self.db_firebase.child(f"users/{self.user_id}")
             stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0}
             
-            # Obtener datos remotos para comparar
-            remote_tasks = user_ref.child("tasks").get().val() or {}
-            remote_habits = user_ref.child("habits").get().val() or {}
-            remote_goals = user_ref.child("goals").get().val() or {}
+            # Obtener datos remotos para comparar (pasar token explícitamente)
+            remote_tasks = user_ref.child("tasks").get(token=token).val() or {}
+            remote_habits = user_ref.child("habits").get(token=token).val() or {}
+            remote_goals = user_ref.child("goals").get(token=token).val() or {}
             
             # Sincronizar tareas (solo campos modificados)
             tasks = self.task_service.get_all_tasks()
@@ -367,7 +417,7 @@ class FirebaseSyncService:
                         updates["updated_at"] = task.updated_at.isoformat() if task.updated_at else None
                     
                     if updates:
-                        user_ref.child(f"tasks/{task_id_str}").update(updates)
+                        user_ref.child(f"tasks/{task_id_str}").update(updates, token=token)
                         stats["tasks_updated"] += 1
                 else:
                     # Nueva tarea, crear completa
@@ -379,7 +429,7 @@ class FirebaseSyncService:
                         "status": task.status,
                         "created_at": task.created_at.isoformat() if task.created_at else None,
                         "updated_at": task.updated_at.isoformat() if task.updated_at else None
-                    })
+                    }, token=token)
                     stats["tasks_created"] += 1
             
             # Sincronizar subtareas individualmente (sincronización estricta granular)
@@ -391,7 +441,7 @@ class FirebaseSyncService:
                 local_subtasks = self.task_service.get_subtasks(task.id)
                 
                 # Obtener subtareas remotas para esta tarea
-                remote_subtasks = user_ref.child(f"tasks/{task_id_str}/subtasks").get().val() or {}
+                remote_subtasks = user_ref.child(f"tasks/{task_id_str}/subtasks").get(token=token).val() or {}
                 local_subtask_ids = {str(s.id) for s in local_subtasks}
                 
                 # Sincronizar cada subtarea local
@@ -410,7 +460,7 @@ class FirebaseSyncService:
                             updates["updated_at"] = subtask.updated_at.isoformat() if subtask.updated_at else None
                         
                         if updates:
-                            user_ref.child(f"tasks/{task_id_str}/subtasks/{subtask_id_str}").update(updates)
+                            user_ref.child(f"tasks/{task_id_str}/subtasks/{subtask_id_str}").update(updates, token=token)
                     else:
                         # Nueva subtarea, crear individualmente
                         user_ref.child(f"tasks/{task_id_str}/subtasks/{subtask_id_str}").set({
@@ -420,12 +470,12 @@ class FirebaseSyncService:
                             "completed": subtask.completed,
                             "created_at": subtask.created_at.isoformat() if subtask.created_at else None,
                             "updated_at": subtask.updated_at.isoformat() if subtask.updated_at else None
-                        })
+                        }, token=token)
                 
                 # Eliminar subtareas remotas que ya no existen localmente
                 for remote_subtask_id in remote_subtasks:
                     if remote_subtask_id not in local_subtask_ids:
-                        user_ref.child(f"tasks/{task_id_str}/subtasks/{remote_subtask_id}").remove()
+                        user_ref.child(f"tasks/{task_id_str}/subtasks/{remote_subtask_id}").remove(token=token)
             
             # Sincronizar hábitos (solo campos modificados)
             habits = self.habit_service.get_all_habits()
@@ -445,7 +495,7 @@ class FirebaseSyncService:
                         updates["updated_at"] = habit.updated_at.isoformat() if habit.updated_at else None
                     
                     if updates:
-                        user_ref.child(f"habits/{habit_id_str}").update(updates)
+                        user_ref.child(f"habits/{habit_id_str}").update(updates, token=token)
                         stats["habits_updated"] += 1
                 else:
                     # Nuevo hábito, crear completo (sin completaciones, se sincronizan por separado)
@@ -455,12 +505,12 @@ class FirebaseSyncService:
                         "description": habit.description,
                         "created_at": habit.created_at.isoformat() if habit.created_at else None,
                         "updated_at": habit.updated_at.isoformat() if habit.updated_at else None
-                    })
+                    }, token=token)
                     stats["habits_created"] += 1
                 
                 # Sincronizar completaciones individualmente (sincronización estricta granular)
                 remote_completions_ref = user_ref.child(f"habits/{habit_id_str}/completions")
-                remote_completions = remote_completions_ref.get().val() or {}
+                remote_completions = remote_completions_ref.get(token=token).val() or {}
                 local_completions_set = {d.isoformat() for d in local_completions}
                 
                 # Agregar/actualizar completaciones locales
@@ -468,12 +518,12 @@ class FirebaseSyncService:
                     date_str = completion_date.isoformat()
                     if date_str not in remote_completions:
                         # Nueva completación, agregar individualmente
-                        remote_completions_ref.child(date_str).set(True)
+                        remote_completions_ref.child(date_str).set(True, token=token)
                 
                 # Eliminar completaciones que ya no existen localmente
                 for remote_date_str in remote_completions:
                     if remote_date_str not in local_completions_set:
-                        remote_completions_ref.child(remote_date_str).remove()
+                        remote_completions_ref.child(remote_date_str).remove(token=token)
             
             # Sincronizar metas (solo campos modificados)
             goals = self.goal_service.get_all_goals()
@@ -500,7 +550,7 @@ class FirebaseSyncService:
                         updates["updated_at"] = goal.updated_at.isoformat() if goal.updated_at else None
                     
                     if updates:
-                        user_ref.child(f"goals/{goal_id_str}").update(updates)
+                        user_ref.child(f"goals/{goal_id_str}").update(updates, token=token)
                         stats["goals_updated"] += 1
                 else:
                     # Nueva meta, crear completa
@@ -514,30 +564,30 @@ class FirebaseSyncService:
                         "period": goal.period or "mes",
                         "created_at": goal.created_at.isoformat() if goal.created_at else None,
                         "updated_at": goal.updated_at.isoformat() if goal.updated_at else None
-                    })
+                    }, token=token)
                     stats["goals_created"] += 1
             
             # Sincronizar puntos (solo si cambió)
             total_points = self.points_service.get_total_points()
-            remote_points = user_ref.child("points").get().val() or {}
+            remote_points = user_ref.child("points").get(token=token).val() or {}
             remote_total_points = remote_points.get("total_points", 0.0)
             
             if abs(total_points - remote_total_points) > 0.001:  # Tolerancia para floats
                 user_ref.child("points").update({
                     "total_points": total_points,
                     "last_updated": datetime.now().isoformat()
-                })
+                }, token=token)
             
             # Sincronizar configuración del usuario (solo si cambió)
             user_name = self.user_settings_service.get_user_name()
-            remote_settings = user_ref.child("user_settings").get().val() or {}
+            remote_settings = user_ref.child("user_settings").get(token=token).val() or {}
             remote_user_name = remote_settings.get("user_name", "")
             
             if user_name != remote_user_name:
                 user_ref.child("user_settings").update({
                     "user_name": user_name,
                     "last_updated": datetime.now().isoformat()
-                })
+                }, token=token)
             
             message_parts = []
             if stats["tasks_created"] > 0 or stats["tasks_updated"] > 0:
@@ -553,8 +603,11 @@ class FirebaseSyncService:
                 message = f"Sincronizado: {', '.join(message_parts)}"
             
             return {"success": True, "message": message, "stats": stats}
+        
+        try:
+            return _perform_sync()
         except Exception as e:
-            return self._handle_firebase_error(e)
+            return self._handle_firebase_error(e, retry_callback=_perform_sync)
     
     def sync_from_firebase(self) -> Dict[str, Any]:
         """
@@ -567,18 +620,24 @@ class FirebaseSyncService:
         if not self._ensure_authenticated():
             return {"success": False, "message": "No hay sesión activa. Por favor, inicia sesión nuevamente."}
         
-        try:
+        def _perform_sync():
+            """Función interna para realizar la sincronización."""
             from datetime import date
+            
+            # Obtener token de autenticación
+            token = self._get_auth_token()
+            if not token:
+                return {"success": False, "message": "Token de autenticación no disponible. Por favor, inicia sesión nuevamente."}
             
             user_ref = self.db_firebase.child(f"users/{self.user_id}")
             stats = {"tasks_updated": 0, "habits_updated": 0, "goals_updated": 0, "tasks_created": 0, "habits_created": 0, "goals_created": 0}
             
-            # Descargar datos
-            tasks_data = user_ref.child("tasks").get().val() or {}
-            habits_data = user_ref.child("habits").get().val() or {}
-            goals_data = user_ref.child("goals").get().val() or {}
-            points_data = user_ref.child("points").get().val() or {}
-            user_settings_data = user_ref.child("user_settings").get().val() or {}
+            # Descargar datos (pasar token explícitamente)
+            tasks_data = user_ref.child("tasks").get(token=token).val() or {}
+            habits_data = user_ref.child("habits").get(token=token).val() or {}
+            goals_data = user_ref.child("goals").get(token=token).val() or {}
+            points_data = user_ref.child("points").get(token=token).val() or {}
+            user_settings_data = user_ref.child("user_settings").get(token=token).val() or {}
             
             # Obtener datos locales para comparar
             local_tasks = {str(t.id): t for t in self.task_service.get_all_tasks()}
@@ -654,7 +713,7 @@ class FirebaseSyncService:
                     stats["tasks_created"] += 1
                 
                 # Sincronizar subtareas individualmente (sincronización estricta granular)
-                remote_subtasks_data = user_ref.child(f"tasks/{task_id_str}/subtasks").get().val() or {}
+                remote_subtasks_data = user_ref.child(f"tasks/{task_id_str}/subtasks").get(token=token).val() or {}
                 local_subtasks = self.task_service.get_subtasks(task_id) if task_id else []
                 local_subtasks_dict = {str(s.id): s for s in local_subtasks}
                 
@@ -751,7 +810,7 @@ class FirebaseSyncService:
                     stats["habits_created"] += 1
                 
                 # Sincronizar completaciones individualmente (sincronización estricta granular)
-                remote_completions_data = user_ref.child(f"habits/{habit_id_str}/completions").get().val() or {}
+                remote_completions_data = user_ref.child(f"habits/{habit_id_str}/completions").get(token=token).val() or {}
                 local_completions = self.habit_service.get_completions(habit_id)
                 local_completions_set = {d.isoformat() for d in local_completions}
                 
@@ -866,5 +925,5 @@ class FirebaseSyncService:
             
             return {"success": True, "message": message, "stats": stats}
         except Exception as e:
-            return self._handle_firebase_error(e)
+            return self._handle_firebase_error(e, retry_callback=_perform_sync)
 
