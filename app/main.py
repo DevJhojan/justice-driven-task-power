@@ -2,6 +2,7 @@
 Punto de entrada principal de la aplicación.
 """
 import flet as ft
+from pathlib import Path
 from app.ui.home_view import HomeView
 
 
@@ -16,6 +17,14 @@ def main(page: ft.Page):
     page.title = "Productividad Personal"
     page.padding = 0
     page.spacing = 0
+    
+    # Configurar icono de la ventana para escritorio
+    try:
+        icon_path = Path("assets/app_icon.png")
+        if icon_path.exists():
+            page.window.icon = str(icon_path)
+    except Exception as e:
+        print(f"No se pudo cargar el icono: {e}")
     
     # Configuración para móvil y escritorio
     page.horizontal_alignment = ft.CrossAxisAlignment.STRETCH
@@ -115,6 +124,20 @@ def main(page: ft.Page):
             form = HabitForm(page, habit_service, habit, on_save)
             form_view = form.build_view()
             page.views.append(form_view)
+            page.update()
+        
+        elif page.route.startswith("/habits-metrics"):
+            from app.ui.habits.metrics_view import HabitsMetricsView
+            from app.services.habit_service import HabitService
+            from app.data.habit_repository import HabitRepository
+            from app.data.database import get_db
+            
+            db = get_db()
+            habit_service = HabitService(HabitRepository(db))
+            
+            metrics_view = HabitsMetricsView(page, habit_service)
+            metrics_view_obj = metrics_view.build_view()
+            page.views.append(metrics_view_obj)
             page.update()
         
         elif page.route.startswith("/goal-form"):

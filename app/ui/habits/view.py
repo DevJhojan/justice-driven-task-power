@@ -56,11 +56,22 @@ class HabitsView:
                         weight=ft.FontWeight.BOLD,
                         color=title_color
                     ),
-                    ft.IconButton(
-                        icon=ft.Icons.ADD,
-                        on_click=self._open_habit_form,
-                        tooltip="Agregar hábito",
-                        icon_color=btn_color
+                    ft.Row(
+                        [
+                            ft.IconButton(
+                                icon=ft.Icons.BAR_CHART,
+                                on_click=self._open_metrics,
+                                tooltip="Ver métricas",
+                                icon_color=btn_color
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.ADD,
+                                on_click=self._open_habit_form,
+                                tooltip="Agregar hábito",
+                                icon_color=btn_color
+                            )
+                        ],
+                        spacing=4
                     )
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN
@@ -241,4 +252,8 @@ class HabitsView:
         """Abre el formulario de hábito en una nueva vista."""
         route = f"/habit-form?id={habit.id}" if habit and habit.id else "/habit-form"
         self.page.go(route)
+    
+    def _open_metrics(self, e):
+        """Abre la vista de métricas de hábitos."""
+        self.page.go("/habits-metrics")
 
