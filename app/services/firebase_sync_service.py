@@ -65,26 +65,48 @@ class FirebaseSyncService:
         self.reward_service = reward_service
         
         # Cargar configuración de Firebase desde google-services.json
-        self.firebase_config = self._load_firebase_config()
-        self.firebase = pyrebase.initialize_app(self.firebase_config)
-        self.auth = self.firebase.auth()
-        self.db_firebase = self.firebase.database()
+        try:
+            self.firebase_config = self._load_firebase_config()
+            if not self.firebase_config:
+                raise ValueError("No se pudo cargar la configuración de Firebase")
+            
+            self.firebase = pyrebase.initialize_app(self.firebase_config)
+            self.auth = self.firebase.auth()
+            self.db_firebase = self.firebase.database()
+        except Exception as e:
+            print(f"Error al inicializar Firebase: {e}")
+            import traceback
+            traceback.print_exc()
+            # Marcar como no disponible pero no lanzar excepción
+            self.firebase = None
+            self.auth = None
+            self.db_firebase = None
+            self.user_id = None
+            self.refresh_token = None
+            self.auth_token = None
+            return  # Salir temprano si Firebase no se puede inicializar
         
         # Restaurar estado de sesión guardado (persistencia estricta)
-        self.user_id: Optional[str] = self.user_settings_service.get_firebase_user_id()
-        self.refresh_token: Optional[str] = self.user_settings_service.get_firebase_refresh_token()
-        self.auth_token: Optional[str] = None  # No guardamos el auth_token, se refresca cuando se necesita
-        
-        # Si tenemos user_id y refresh_token guardados, intentar refrescar el token
-        if self.user_id and self.refresh_token:
-            try:
-                if self._refresh_auth_token():
-                    print(f"DEBUG __init__ - Sesión restaurada: user_id={self.user_id}")
-                else:
-                    print(f"DEBUG __init__ - No se pudo refrescar token, pero user_id existe: {self.user_id}")
-            except Exception as e:
-                print(f"DEBUG __init__ - Error al refrescar token al inicializar: {e}")
-                # No borrar el estado guardado, solo registrar el error
+        try:
+            self.user_id: Optional[str] = self.user_settings_service.get_firebase_user_id()
+            self.refresh_token: Optional[str] = self.user_settings_service.get_firebase_refresh_token()
+            self.auth_token: Optional[str] = None  # No guardamos el auth_token, se refresca cuando se necesita
+            
+            # Si tenemos user_id y refresh_token guardados, intentar refrescar el token
+            if self.user_id and self.refresh_token:
+                try:
+                    if self._refresh_auth_token():
+                        print(f"DEBUG __init__ - Sesión restaurada: user_id={self.user_id}")
+                    else:
+                        print(f"DEBUG __init__ - No se pudo refrescar token, pero user_id existe: {self.user_id}")
+                except Exception as e:
+                    print(f"DEBUG __init__ - Error al refrescar token al inicializar: {e}")
+                    # No borrar el estado guardado, solo registrar el error
+        except Exception as e:
+            print(f"Error al restaurar sesión de Firebase: {e}")
+            self.user_id = None
+            self.refresh_token = None
+            self.auth_token = None
     
     def _normalize_firebase_data(self, data):
         """
@@ -248,31 +270,58 @@ class FirebaseSyncService:
         conn.commit()
         conn.close()
     
-    def _load_firebase_config(self) -> Dict[str, Any]:
+    def _load_firebase_config(self) -> Optional[Dict[str, Any]]:
         """Carga la configuración de Firebase desde google-services.json."""
-        # Buscar google-services.json en el directorio raíz del proyecto
-        root_dir = Path(__file__).parent.parent.parent
-        google_services_path = root_dir / "google-services.json"
-        
-        if not google_services_path.exists():
-            raise FileNotFoundError(
-                f"google-services.json no encontrado en {google_services_path}"
-            )
-        
-        with open(google_services_path, 'r') as f:
-            config = json.load(f)
-        
-        project_info = config['project_info']
-        client_info = config['client'][0]
-        api_key = client_info['api_key'][0]['current_key']
-        
-        return {
-            "apiKey": api_key,
-            "authDomain": f"{project_info['project_id']}.firebaseapp.com",
-            "databaseURL": project_info['firebase_url'],
-            "storageBucket": project_info['storage_bucket'],
-            "projectId": project_info['project_id']
-        }
+        try:
+            # Buscar google-services.json en el directorio raíz del proyecto
+            root_dir = Path(__file__).parent.parent.parent
+            google_services_path = root_dir / "google-services.json"
+            
+            if not google_services_path.exists():
+                print(f"Warning: google-services.json no encontrado en {google_services_path}")
+                return None
+            
+            with open(google_services_path, 'r') as f:
+                config = json.load(f)
+            
+            project_info = config.get('project_info', {})
+            if not project_info:
+                print("Warning: project_info no encontrado en google-services.json")
+                return None
+            
+            client_info_list = config.get('client', [])
+            if not client_info_list or len(client_info_list) == 0:
+                print("Warning: client no encontrado en google-services.json")
+                return None
+            
+            client_info = client_info_list[0]
+            api_key_list = client_info.get('api_key', [])
+            if not api_key_list or len(api_key_list) == 0:
+                print("Warning: api_key no encontrado en google-services.json")
+                return None
+            
+            api_key = api_key_list[0].get('current_key')
+            if not api_key:
+                print("Warning: current_key no encontrado en api_key")
+                return None
+            
+            firebase_url = project_info.get('firebase_url')
+            if not firebase_url:
+                print("Warning: firebase_url no encontrado en project_info")
+                return None
+            
+            return {
+                "apiKey": api_key,
+                "authDomain": f"{project_info['project_id']}.firebaseapp.com",
+                "databaseURL": firebase_url,
+                "storageBucket": project_info.get('storage_bucket', ''),
+                "projectId": project_info['project_id']
+            }
+        except Exception as e:
+            print(f"Error al cargar configuración de Firebase: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     def login(self, email: str, password: str) -> bool:
         """

@@ -62,9 +62,13 @@ class HomeView:
                 self.points_service, self.user_settings_service, self.reward_service
             )
         except ImportError as e:
-            print(f"Firebase no disponible: {e}")
+            print(f"Firebase no disponible (import error): {e}")
+            # Continuar sin Firebase
         except Exception as e:
             print(f"Error al inicializar Firebase: {e}")
+            import traceback
+            traceback.print_exc()
+            # Continuar sin Firebase - la app debe funcionar sin él
         
         # Inicializar vistas
         self.tasks_view = TasksView(page, self.task_service, self.points_service)
