@@ -356,13 +356,16 @@ EOF
         # Actualizar icono en [app]
         if grep -q "^\[app\]" "$FLET_CONFIG_FILE"; then
             if grep -q "^icon\s*=" "$FLET_CONFIG_FILE"; then
-                sed -i "s|^icon\s*=.*|icon = \"$icon_path\"|" "$FLET_CONFIG_FILE"
+                # Escapar caracteres especiales en la ruta del icono para sed
+                local icon_path_escaped=$(echo "$icon_path" | sed 's/[[\.*^$()+?{|]/\\&/g')
+                sed -i "s|^icon\s*=.*|icon = \"$icon_path_escaped\"|" "$FLET_CONFIG_FILE"
             else
-                # Agregar icon después de [app] o después de package
+                # Agregar icon después de [app] o después de package usando un método más seguro
                 if grep -q "^package\s*=" "$FLET_CONFIG_FILE"; then
-                    sed -i "/^package/a icon = \"$icon_path\"" "$FLET_CONFIG_FILE"
+                    # Usar awk o perl para insertar de forma segura
+                    awk -v icon_line="icon = \"$icon_path\"" '/^package\s*=/ {print; print icon_line; next} {print}' "$FLET_CONFIG_FILE" > "${FLET_CONFIG_FILE}.tmp" && mv "${FLET_CONFIG_FILE}.tmp" "$FLET_CONFIG_FILE"
                 else
-                    sed -i "/^\[app\]/a icon = \"$icon_path\"" "$FLET_CONFIG_FILE"
+                    awk -v icon_line="icon = \"$icon_path\"" '/^\[app\]/ {print; print icon_line; next} {print}' "$FLET_CONFIG_FILE" > "${FLET_CONFIG_FILE}.tmp" && mv "${FLET_CONFIG_FILE}.tmp" "$FLET_CONFIG_FILE"
                 fi
             fi
             
@@ -442,6 +445,19 @@ EOF
         
         print_success "Archivo $FLET_CONFIG_FILE actualizado"
     fi
+    
+    # Verificación final: asegurar que icono y keystore estén configurados
+    if ! grep -q "^icon\s*=" "$FLET_CONFIG_FILE"; then
+        print_error "Error: El icono no se configuró correctamente en $FLET_CONFIG_FILE"
+        exit 1
+    fi
+    
+    if ! grep -q "^keystore_path\s*=" "$FLET_CONFIG_FILE"; then
+        print_error "Error: El keystore no se configuró correctamente en $FLET_CONFIG_FILE"
+        exit 1
+    fi
+    
+    print_success "Configuración verificada: icono y keystore presentes en $FLET_CONFIG_FILE"
 }
 
 # Función para validar versionCode
@@ -777,13 +793,18 @@ build_apk() {
     
     # Asegurar que el icono esté actualizado en flet.toml
     if [ -f "$FLET_CONFIG_FILE" ]; then
-        if ! grep -q "^icon\s*=\s*\"$icon_path\"" "$FLET_CONFIG_FILE"; then
+        # Escapar la ruta del icono para grep
+        local icon_path_escaped_grep=$(echo "$icon_path" | sed 's/[[\.*^$()+?{|]/\\&/g')
+        if ! grep -q "^icon\s*=\s*\"$icon_path_escaped_grep\"" "$FLET_CONFIG_FILE"; then
             print_warning "Actualizando icono en flet.toml..."
             if grep -q "^\[app\]" "$FLET_CONFIG_FILE"; then
                 if grep -q "^icon\s*=" "$FLET_CONFIG_FILE"; then
-                    sed -i "s|^icon\s*=.*|icon = \"$icon_path\"|" "$FLET_CONFIG_FILE"
+                    # Escapar caracteres especiales en la ruta del icono para sed
+                    local icon_path_escaped=$(echo "$icon_path" | sed 's/[[\.*^$()+?{|]/\\&/g')
+                    sed -i "s|^icon\s*=.*|icon = \"$icon_path_escaped\"|" "$FLET_CONFIG_FILE"
                 else
-                    sed -i "/^\[app\]/a icon = \"$icon_path\"" "$FLET_CONFIG_FILE"
+                    # Usar awk para insertar de forma segura
+                    awk -v icon_line="icon = \"$icon_path\"" '/^\[app\]/ {print; print icon_line; next} {print}' "$FLET_CONFIG_FILE" > "${FLET_CONFIG_FILE}.tmp" && mv "${FLET_CONFIG_FILE}.tmp" "$FLET_CONFIG_FILE"
                 fi
             fi
         fi
@@ -863,13 +884,18 @@ build_aab() {
     
     # Asegurar que el icono esté actualizado en flet.toml
     if [ -f "$FLET_CONFIG_FILE" ]; then
-        if ! grep -q "^icon\s*=\s*\"$icon_path\"" "$FLET_CONFIG_FILE"; then
+        # Escapar la ruta del icono para grep
+        local icon_path_escaped_grep=$(echo "$icon_path" | sed 's/[[\.*^$()+?{|]/\\&/g')
+        if ! grep -q "^icon\s*=\s*\"$icon_path_escaped_grep\"" "$FLET_CONFIG_FILE"; then
             print_warning "Actualizando icono en flet.toml..."
             if grep -q "^\[app\]" "$FLET_CONFIG_FILE"; then
                 if grep -q "^icon\s*=" "$FLET_CONFIG_FILE"; then
-                    sed -i "s|^icon\s*=.*|icon = \"$icon_path\"|" "$FLET_CONFIG_FILE"
+                    # Escapar caracteres especiales en la ruta del icono para sed
+                    local icon_path_escaped=$(echo "$icon_path" | sed 's/[[\.*^$()+?{|]/\\&/g')
+                    sed -i "s|^icon\s*=.*|icon = \"$icon_path_escaped\"|" "$FLET_CONFIG_FILE"
                 else
-                    sed -i "/^\[app\]/a icon = \"$icon_path\"" "$FLET_CONFIG_FILE"
+                    # Usar awk para insertar de forma segura
+                    awk -v icon_line="icon = \"$icon_path\"" '/^\[app\]/ {print; print icon_line; next} {print}' "$FLET_CONFIG_FILE" > "${FLET_CONFIG_FILE}.tmp" && mv "${FLET_CONFIG_FILE}.tmp" "$FLET_CONFIG_FILE"
                 fi
             fi
         fi
