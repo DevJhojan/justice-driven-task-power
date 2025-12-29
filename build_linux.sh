@@ -168,54 +168,116 @@ build_linux_app() {
     
     activate_venv
     
-    # Limpiar caché de Flet si existe
-    if [ -d ".flet" ]; then
-        print_info "Limpiando caché de Flet..." >&2
-        rm -rf .flet/build
-    fi
+    # Limpiar caché de Flet y templates si existen
+    print_info "Limpiando cachés de Flet y templates..." >&2
+    rm -rf .flet/build 2>/dev/null || true
+    rm -rf ~/.cookiecutters/flet-build-template 2>/dev/null || true
+    rm -rf build/flutter 2>/dev/null || true
     
     # Construir con Flet (redirigir stderr para capturar errores pero mostrar progreso)
-    if flet build linux 2>&1 | tee /tmp/flet_build_linux.log; then
-        print_success "Aplicación Linux construida exitosamente" >&2
-    else
-        print_error "Error al construir aplicación Linux" >&2
+    local build_exit_code=0
+    flet build linux 2>&1 | tee /tmp/flet_build_linux.log || build_exit_code=$?
+    
+    # Verificar si hubo errores en el log
+    if grep -qi "ERROR.*pyrebase4\|No matching distribution\|satisfies the requirement" /tmp/flet_build_linux.log 2>/dev/null; then
+        print_error "Error en las dependencias. Verificando pyproject.toml..." >&2
+        if grep -q "pyrebase4>=4.9.0" pyproject.toml 2>/dev/null; then
+            print_error "pyproject.toml aún tiene pyrebase4>=4.9.0. Debe ser >=4.8.0" >&2
+            exit 1
+        fi
+        print_warning "El error puede ser de caché. Limpiando completamente y reintentando..." >&2
+        rm -rf .flet/build build/flutter ~/.cookiecutters/flet-build-template 2>/dev/null || true
+        sleep 1  # Dar tiempo para que se liberen los archivos
+        if ! flet build linux 2>&1 | tee -a /tmp/flet_build_linux.log; then
+            print_error "Error al construir aplicación Linux después de limpiar caché" >&2
+            print_info "Revisa el log: /tmp/flet_build_linux.log" >&2
+            exit 1
+        fi
+    elif [ $build_exit_code -ne 0 ]; then
+        print_error "Error al construir aplicación Linux (código: $build_exit_code)" >&2
         print_info "Revisa el log: /tmp/flet_build_linux.log" >&2
         exit 1
     fi
     
+    print_success "Aplicación Linux construida exitosamente" >&2
+    
     # Buscar el ejecutable generado
+    # Flet para Linux genera el ejecutable en diferentes ubicaciones según la versión
     local linux_executable=""
+    
+    # Esperar un momento para que el build termine completamente
+    sleep 2
+    
+    # Buscar en ubicaciones comunes de Flet para Linux
     local search_paths=(
-        "${BUILD_DIR}/linux/${APP_NAME}"
-        "${BUILD_DIR}/linux"
+        # Ubicaciones estándar de Flutter Linux
         "${BUILD_DIR}/flutter/build/linux/x64/release/bundle/${APP_NAME}"
+        "${BUILD_DIR}/flutter/build/linux/x64/release/bundle/my_application"
         "${BUILD_DIR}/flutter/build/linux/x64/release/bundle"
-        "${BUILD_DIR}"
+        # Ubicaciones alternativas
+        "${BUILD_DIR}/linux/${APP_NAME}"
+        "${BUILD_DIR}/linux/my_application"
+        "${BUILD_DIR}/linux"
+        # Directorio raíz de build
+        "${BUILD_DIR}/${APP_NAME}"
+        "${BUILD_DIR}/my_application"
     )
     
+    print_info "Buscando ejecutable en ubicaciones estándar..." >&2
     for search_path in "${search_paths[@]}"; do
         if [ -f "$search_path" ] && [ -x "$search_path" ]; then
-            linux_executable="$search_path"
-            break
+            # Verificar que sea un ejecutable ELF (no un script)
+            if file "$search_path" 2>/dev/null | grep -q "ELF\|executable"; then
+                linux_executable="$search_path"
+                print_success "Ejecutable encontrado: $linux_executable" >&2
+                break
+            fi
         elif [ -d "$search_path" ]; then
-            # Buscar el ejecutable principal en el directorio
-            local found=$(find "$search_path" -type f -executable \( -name "${APP_NAME}" -o -name "${APP_NAME}.bin" -o -name "app" -o -name "*.AppImage" \) 2>/dev/null | head -n 1)
+            # Buscar ejecutables ELF en el directorio
+            local found=$(find "$search_path" -type f -executable 2>/dev/null | while read f; do
+                if file "$f" 2>/dev/null | grep -q "ELF\|executable"; then
+                    echo "$f"
+                    break
+                fi
+            done | head -n 1)
             if [ -n "$found" ] && [ -f "$found" ]; then
                 linux_executable="$found"
+                print_success "Ejecutable encontrado en directorio: $linux_executable" >&2
                 break
             fi
         fi
     done
     
+    # Si aún no se encontró, búsqueda más amplia pero solo ejecutables ELF
     if [ -z "$linux_executable" ]; then
-        # Búsqueda más amplia
-        linux_executable=$(find "$BUILD_DIR" -type f -executable \( -name "${APP_NAME}" -o -name "${APP_NAME}.bin" -o -name "app" -o -name "*.AppImage" \) 2>/dev/null | head -n 1)
+        print_warning "Búsqueda amplia de ejecutables ELF..." >&2
+        linux_executable=$(find "$BUILD_DIR/flutter/build/linux" -type f -executable 2>/dev/null | while read f; do
+            if file "$f" 2>/dev/null | grep -qE "ELF.*executable|executable.*ELF"; then
+                # Excluir librerías .so
+                if [[ ! "$f" =~ \.so$ ]] && [[ ! "$f" =~ \.so\.[0-9] ]]; then
+                    echo "$f"
+                    break
+                fi
+            fi
+        done | head -n 1)
     fi
     
     if [ -z "$linux_executable" ] || [ ! -f "$linux_executable" ]; then
-        print_error "No se encontró el ejecutable de Linux" >&2
-        print_info "Buscando en: $BUILD_DIR" >&2
-        find "$BUILD_DIR" -type f -executable 2>/dev/null | head -10 >&2
+        print_error "No se encontró el ejecutable de Linux después del build" >&2
+        
+        # Verificar si el build realmente se completó
+        if grep -qi "ERROR.*pyrebase4\|No matching distribution" /tmp/flet_build_linux.log 2>/dev/null; then
+            print_error "El build falló debido a problemas con las dependencias" >&2
+            print_info "Últimas líneas del log:" >&2
+            tail -20 /tmp/flet_build_linux.log >&2
+            print_info "" >&2
+            print_info "Solución: Verifica que pyproject.toml tenga pyrebase4>=4.8.0 (no 4.9.0)" >&2
+            exit 1
+        fi
+        
+        # Si no hay errores de dependencias, el ejecutable puede estar en otra ubicación
+        print_info "Buscando todos los archivos en build/flutter/build/linux:" >&2
+        find "$BUILD_DIR/flutter/build/linux" -type f 2>/dev/null | grep -v ".so" | grep -v "demo" | head -20 >&2
         exit 1
     fi
     
