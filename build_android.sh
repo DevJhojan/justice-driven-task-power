@@ -696,17 +696,25 @@ count_cert_chains() {
         return
     fi
     
-    # Contar las cadenas de certificados
-    # Usar grep con -c para contar, redirigir stderr a /dev/null para evitar mensajes
-    local cert_count=$(jarsigner -verify -certs "$aab_file" 2>/dev/null | grep -c "Certificate chain" 2>/dev/null)
+    # Intentar verificar con jarsigner y capturar la salida completa
+    local verify_output=$(jarsigner -verify -certs "$aab_file" 2>&1)
+    local verify_exit_code=$?
     
-    # Si grep -c falla o no encuentra nada, devolver 0
-    if [ -z "$cert_count" ] || [ "$cert_count" = "" ]; then
-        cert_count=0
+    # Si la verificación falla completamente, no hay firmas
+    if [ $verify_exit_code -ne 0 ]; then
+        # Verificar si es porque no está firmado o porque hay un error
+        if echo "$verify_output" | grep -q "jar is unsigned"; then
+            echo "0"
+            return
+        fi
+        # Si hay otro error, intentar contar de todas formas
     fi
     
+    # Contar las cadenas de certificados en la salida
+    local cert_count=$(echo "$verify_output" | grep -c "Certificate chain" 2>/dev/null || echo "0")
+    
     # Limpiar el resultado: eliminar espacios, saltos de línea y caracteres no numéricos
-    cert_count=$(echo "$cert_count" | tr -d '[:space:][:alpha:]' | sed 's/[^0-9]//g')
+    cert_count=$(echo "$cert_count" | tr -d '[:space:][:alpha:]' | sed 's/[^0-9]//g' | head -n 1)
     
     # Si después de limpiar está vacío o no es numérico, devolver 0
     if [ -z "$cert_count" ] || ! [[ "$cert_count" =~ ^[0-9]+$ ]]; then
@@ -714,26 +722,36 @@ count_cert_chains() {
     fi
     
     # Convertir a número entero (eliminar ceros a la izquierda si es necesario, pero mantener 0)
-    if [ "$cert_count" = "00" ] || [ "$cert_count" = "000" ]; then
-        cert_count=0
-    fi
+    cert_count=$((10#$cert_count))  # Forzar interpretación como base 10
     
     echo "$cert_count"
 }
 
-# Función para verificar si un AAB ya está firmado
+# Función para verificar si un AAB ya está firmado (múltiples métodos)
 is_aab_signed() {
     local aab_file="$1"
     
-    # Verificar si el AAB tiene firmas usando jarsigner
+    # Método 1: Verificar con jarsigner -verify
     if jarsigner -verify -certs "$aab_file" &> /dev/null; then
+        # Si la verificación pasa, probablemente está firmado
         # Contar el número de firmas (cadenas de certificados)
         local cert_count=$(count_cert_chains "$aab_file")
         if [ "$cert_count" -gt 0 ]; then
             return 0  # Está firmado
         fi
+        # Si la verificación pasa pero no encontramos cadenas, puede estar firmado de otra forma
+        # Verificar si hay archivos de firma en el AAB
+        if unzip -l "$aab_file" 2>/dev/null | grep -q "META-INF/.*\.SF\|META-INF/.*\.RSA\|META-INF/.*\.DSA"; then
+            return 0  # Tiene archivos de firma, está firmado
+        fi
     fi
-    return 1  # No está firmado o hay error
+    
+    # Método 2: Verificar si hay archivos de firma en el AAB directamente
+    if unzip -l "$aab_file" 2>/dev/null | grep -qE "META-INF/.*\.(SF|RSA|DSA|EC)"; then
+        return 0  # Tiene archivos de firma, está firmado
+    fi
+    
+    return 1  # No está firmado
 }
 
 # Función para firmar AAB (solo si no está ya firmado)
@@ -745,31 +763,58 @@ sign_aab() {
         exit 1
     fi
     
-    # Verificar si el AAB ya está firmado
-    print_info "Verificando si el AAB ya está firmado..."
+    # Verificar si el AAB ya está firmado ANTES de intentar firmarlo
+    print_info "Verificando estado de firma del AAB..."
+    
+    # Primero verificar si está firmado usando múltiples métodos
     if is_aab_signed "$aab_file"; then
-        print_warning "El AAB ya está firmado (probablemente por Flet)"
-        print_info "Verificando la firma existente..."
+        # Está firmado, verificar cuántas cadenas tiene
+        local cert_count=$(count_cert_chains "$aab_file")
         
-        # Verificar que la firma sea válida
-        if jarsigner -verify -certs "$aab_file" &> /dev/null; then
-            local cert_count=$(count_cert_chains "$aab_file")
-            if [ "$cert_count" -eq 1 ]; then
-                print_success "✅ AAB ya está correctamente firmado con 1 cadena de certificados"
-                print_info "No es necesario firmar de nuevo. El AAB está listo para Google Play."
+        if [ "$cert_count" -eq 1 ]; then
+            print_success "✅ AAB ya está correctamente firmado con 1 cadena de certificados"
+            print_info "El AAB fue firmado por Flet automáticamente. No es necesario firmar de nuevo."
+            print_success "El AAB está listo para Google Play."
+            return 0
+        elif [ "$cert_count" -gt 1 ]; then
+            print_error "❌ El AAB tiene $cert_count cadenas de certificados (debe tener solo 1)"
+            print_error "Esto indica que el AAB fue firmado múltiples veces."
+            print_error "Posibles causas:"
+            echo "  1. El AAB fue firmado por Flet Y luego firmado manualmente"
+            echo "  2. El AAB fue reconstruido sobre un AAB previamente firmado"
+            print_info "Solución:"
+            echo "  1. Elimina el AAB actual: rm -f $aab_file"
+            echo "  2. Limpia el build: rm -rf $BUILD_DIR"
+            echo "  3. Reconstruye desde cero: ./build_android.sh --aab"
+            exit 1
+        else
+            # Está firmado pero no podemos contar las cadenas (puede ser un problema de detección)
+            print_warning "El AAB parece estar firmado pero no pudimos contar las cadenas de certificados"
+            print_warning "Para evitar múltiples firmas, NO intentaremos firmarlo de nuevo"
+            print_info "Verificando manualmente con jarsigner..."
+            if jarsigner -verify "$aab_file" &>/dev/null; then
+                print_success "✅ La verificación de jarsigner pasó. El AAB está firmado correctamente."
+                print_info "El AAB está listo para Google Play."
                 return 0
             else
-                print_error "❌ El AAB tiene $cert_count cadenas de certificados (debe tener solo 1)"
-                print_error "Esto puede ocurrir si se firmó múltiples veces."
-                print_info "Solución: Elimina el AAB y reconstruye con: ./build_android.sh --aab"
+                print_error "❌ La verificación de jarsigner falló"
+                print_info "El AAB puede estar corrupto o tener una firma inválida"
                 exit 1
             fi
-        else
-            print_warning "El AAB parece estar firmado pero la verificación falló"
-            print_info "Intentando firmar de nuevo..."
         fi
     else
-        print_info "El AAB no está firmado. Firmando ahora..."
+        # No está firmado
+        print_info "El AAB no está firmado. Flet debería haberlo firmado automáticamente."
+        print_warning "Esto puede indicar que el keystore no está configurado correctamente en flet.toml"
+        print_info "Verificando configuración del keystore en flet.toml..."
+        if grep -q "keystore_path" "$FLET_CONFIG_FILE" 2>/dev/null; then
+            print_warning "El keystore está configurado pero Flet no firmó el AAB"
+            print_info "Intentando firmar manualmente..."
+        else
+            print_error "El keystore NO está configurado en flet.toml"
+            print_error "El script debería haberlo configurado automáticamente"
+            exit 1
+        fi
     fi
     
     # Firmar el AAB con jarsigner
