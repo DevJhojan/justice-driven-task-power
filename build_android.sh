@@ -306,7 +306,7 @@ get_version_code() {
     echo "$version_code"
 }
 
-# Función para actualizar configuración de Flet con versiones
+# Función para actualizar configuración de Flet con versiones, keystore e icono
 update_flet_version_config() {
     local version_name="$1"
     local version_code="$2"
@@ -315,7 +315,18 @@ update_flet_version_config() {
     print_info "  versionName: $version_name"
     print_info "  versionCode: $version_code"
     
-    # Crear o actualizar flet.toml con la configuración de versión
+    # Obtener el icono
+    local icon_path=$(find_icon)
+    print_info "  Icono: $icon_path"
+    
+    # Convertir ruta del keystore a relativa si es absoluta (para flet.toml)
+    local keystore_path_rel="$KEYSTORE_PATH"
+    if [[ "$KEYSTORE_PATH" =~ ^/ ]]; then
+        # Es absoluta, convertir a relativa desde el directorio del proyecto
+        keystore_path_rel=$(realpath --relative-to="$(pwd)" "$KEYSTORE_PATH" 2>/dev/null || echo "$KEYSTORE_PATH")
+    fi
+    
+    # Crear o actualizar flet.toml con la configuración de versión, keystore e icono
     if [ ! -f "$FLET_CONFIG_FILE" ]; then
         # Crear flet.toml básico
         cat > "$FLET_CONFIG_FILE" << EOF
@@ -327,6 +338,7 @@ update_flet_version_config() {
 name = "$APP_NAME"
 version = "$version_name"
 package = "com.flet.${APP_NAME//-/_}"
+icon = "$icon_path"
 
 [android]
 min_sdk = 21
@@ -334,14 +346,47 @@ target_sdk = 34
 compile_sdk = 34
 version_code = $version_code
 version_name = "$version_name"
+keystore_path = "$keystore_path_rel"
+keystore_password = "$KEYSTORE_PASSWORD"
+key_alias = "$KEY_ALIAS"
+key_password = "$KEY_PASSWORD"
 EOF
         print_success "Archivo $FLET_CONFIG_FILE creado"
     else
+        # Actualizar icono en [app]
+        if grep -q "^\[app\]" "$FLET_CONFIG_FILE"; then
+            if grep -q "^icon\s*=" "$FLET_CONFIG_FILE"; then
+                sed -i "s|^icon\s*=.*|icon = \"$icon_path\"|" "$FLET_CONFIG_FILE"
+            else
+                # Agregar icon después de [app] o después de package
+                if grep -q "^package\s*=" "$FLET_CONFIG_FILE"; then
+                    sed -i "/^package/a icon = \"$icon_path\"" "$FLET_CONFIG_FILE"
+                else
+                    sed -i "/^\[app\]/a icon = \"$icon_path\"" "$FLET_CONFIG_FILE"
+                fi
+            fi
+            
+            # Actualizar version en [app]
+            if grep -q "^version\s*=" "$FLET_CONFIG_FILE"; then
+                sed -i "s|^version\s*=.*|version = \"$version_name\"|" "$FLET_CONFIG_FILE"
+            else
+                sed -i "/^\[app\]/a version = \"$version_name\"" "$FLET_CONFIG_FILE"
+            fi
+        else
+            # Agregar sección [app] completa
+            echo "" >> "$FLET_CONFIG_FILE"
+            echo "[app]" >> "$FLET_CONFIG_FILE"
+            echo "name = \"$APP_NAME\"" >> "$FLET_CONFIG_FILE"
+            echo "version = \"$version_name\"" >> "$FLET_CONFIG_FILE"
+            echo "package = \"com.flet.${APP_NAME//-/_}\"" >> "$FLET_CONFIG_FILE"
+            echo "icon = \"$icon_path\"" >> "$FLET_CONFIG_FILE"
+        fi
+        
         # Actualizar version_code en [android]
         if grep -q "^\[android\]" "$FLET_CONFIG_FILE"; then
             # Actualizar o agregar version_code
             if grep -q "^version_code\s*=" "$FLET_CONFIG_FILE"; then
-                sed -i "s/^version_code\s*=.*/version_code = $version_code/" "$FLET_CONFIG_FILE"
+                sed -i "s|^version_code\s*=.*|version_code = $version_code|" "$FLET_CONFIG_FILE"
             else
                 # Agregar después de [android]
                 sed -i "/^\[android\]/a version_code = $version_code" "$FLET_CONFIG_FILE"
@@ -349,7 +394,7 @@ EOF
             
             # Actualizar o agregar version_name
             if grep -q "^version_name\s*=" "$FLET_CONFIG_FILE"; then
-                sed -i "s/^version_name\s*=.*/version_name = \"$version_name\"/" "$FLET_CONFIG_FILE"
+                sed -i "s|^version_name\s*=.*|version_name = \"$version_name\"|" "$FLET_CONFIG_FILE"
             else
                 # Agregar después de version_code o [android]
                 if grep -q "^version_code" "$FLET_CONFIG_FILE"; then
@@ -358,21 +403,41 @@ EOF
                     sed -i "/^\[android\]/a version_name = \"$version_name\"" "$FLET_CONFIG_FILE"
                 fi
             fi
+            
+            # Actualizar o agregar configuración del keystore
+            if grep -q "^keystore_path\s*=" "$FLET_CONFIG_FILE"; then
+                sed -i "s|^keystore_path\s*=.*|keystore_path = \"$keystore_path_rel\"|" "$FLET_CONFIG_FILE"
+            else
+                sed -i "/^\[android\]/a keystore_path = \"$keystore_path_rel\"" "$FLET_CONFIG_FILE"
+            fi
+            
+            if grep -q "^keystore_password\s*=" "$FLET_CONFIG_FILE"; then
+                sed -i "s|^keystore_password\s*=.*|keystore_password = \"$KEYSTORE_PASSWORD\"|" "$FLET_CONFIG_FILE"
+            else
+                sed -i "/^keystore_path/a keystore_password = \"$KEYSTORE_PASSWORD\"" "$FLET_CONFIG_FILE"
+            fi
+            
+            if grep -q "^key_alias\s*=" "$FLET_CONFIG_FILE"; then
+                sed -i "s|^key_alias\s*=.*|key_alias = \"$KEY_ALIAS\"|" "$FLET_CONFIG_FILE"
+            else
+                sed -i "/^keystore_password/a key_alias = \"$KEY_ALIAS\"" "$FLET_CONFIG_FILE"
+            fi
+            
+            if grep -q "^key_password\s*=" "$FLET_CONFIG_FILE"; then
+                sed -i "s|^key_password\s*=.*|key_password = \"$KEY_PASSWORD\"|" "$FLET_CONFIG_FILE"
+            else
+                sed -i "/^key_alias/a key_password = \"$KEY_PASSWORD\"" "$FLET_CONFIG_FILE"
+            fi
         else
             # Agregar sección [android] completa
             echo "" >> "$FLET_CONFIG_FILE"
             echo "[android]" >> "$FLET_CONFIG_FILE"
             echo "version_code = $version_code" >> "$FLET_CONFIG_FILE"
             echo "version_name = \"$version_name\"" >> "$FLET_CONFIG_FILE"
-        fi
-        
-        # Actualizar version en [app] si existe
-        if grep -q "^\[app\]" "$FLET_CONFIG_FILE"; then
-            if grep -q "^version\s*=" "$FLET_CONFIG_FILE"; then
-                sed -i "s/^version\s*=.*/version = \"$version_name\"/" "$FLET_CONFIG_FILE"
-            else
-                sed -i "/^\[app\]/a version = \"$version_name\"" "$FLET_CONFIG_FILE"
-            fi
+            echo "keystore_path = \"$keystore_path_rel\"" >> "$FLET_CONFIG_FILE"
+            echo "keystore_password = \"$KEYSTORE_PASSWORD\"" >> "$FLET_CONFIG_FILE"
+            echo "key_alias = \"$KEY_ALIAS\"" >> "$FLET_CONFIG_FILE"
+            echo "key_password = \"$KEY_PASSWORD\"" >> "$FLET_CONFIG_FILE"
         fi
         
         print_success "Archivo $FLET_CONFIG_FILE actualizado"
@@ -606,7 +671,22 @@ sign_apk() {
     print_success "APK firmado guardado: $apk_file"
 }
 
-# Función para firmar AAB
+# Función para verificar si un AAB ya está firmado
+is_aab_signed() {
+    local aab_file="$1"
+    
+    # Verificar si el AAB tiene firmas usando jarsigner
+    if jarsigner -verify -certs "$aab_file" &> /dev/null; then
+        # Contar el número de firmas (cadenas de certificados)
+        local cert_count=$(jarsigner -verify -certs "$aab_file" 2>&1 | grep -c "Certificate chain" || echo "0")
+        if [ "$cert_count" -gt 0 ]; then
+            return 0  # Está firmado
+        fi
+    fi
+    return 1  # No está firmado o hay error
+}
+
+# Función para firmar AAB (solo si no está ya firmado)
 sign_aab() {
     local aab_file="$1"
     
@@ -615,9 +695,35 @@ sign_aab() {
         exit 1
     fi
     
-    print_info "Firmando AAB: $aab_file"
+    # Verificar si el AAB ya está firmado
+    print_info "Verificando si el AAB ya está firmado..."
+    if is_aab_signed "$aab_file"; then
+        print_warning "El AAB ya está firmado (probablemente por Flet)"
+        print_info "Verificando la firma existente..."
+        
+        # Verificar que la firma sea válida
+        if jarsigner -verify -certs "$aab_file" &> /dev/null; then
+            local cert_count=$(jarsigner -verify -certs "$aab_file" 2>&1 | grep -c "Certificate chain" || echo "0")
+            if [ "$cert_count" -eq 1 ]; then
+                print_success "✅ AAB ya está correctamente firmado con 1 cadena de certificados"
+                print_info "No es necesario firmar de nuevo. El AAB está listo para Google Play."
+                return 0
+            else
+                print_error "❌ El AAB tiene $cert_count cadenas de certificados (debe tener solo 1)"
+                print_error "Esto puede ocurrir si se firmó múltiples veces."
+                print_info "Solución: Elimina el AAB y reconstruye con: ./build_android.sh --aab"
+                exit 1
+            fi
+        else
+            print_warning "El AAB parece estar firmado pero la verificación falló"
+            print_info "Intentando firmar de nuevo..."
+        fi
+    else
+        print_info "El AAB no está firmado. Firmando ahora..."
+    fi
     
     # Firmar el AAB con jarsigner
+    print_info "Firmando AAB: $aab_file"
     if jarsigner -sigalg SHA256withRSA -digestalg SHA-256 \
         -keystore "$KEYSTORE_PATH" \
         -storepass "$KEYSTORE_PASSWORD" \
@@ -639,7 +745,13 @@ sign_aab() {
     # Verificar el firmado
     print_info "Verificando firmado del AAB..."
     if jarsigner -verify -certs "$aab_file" &> /dev/null; then
-        print_success "✅ AAB firmado correctamente"
+        local cert_count=$(jarsigner -verify -certs "$aab_file" 2>&1 | grep -c "Certificate chain" || echo "0")
+        if [ "$cert_count" -eq 1 ]; then
+            print_success "✅ AAB firmado correctamente con 1 cadena de certificados"
+        else
+            print_error "❌ Error: El AAB tiene $cert_count cadenas de certificados (debe tener solo 1)"
+            exit 1
+        fi
     else
         print_error "❌ Error en el firmado: verificación falló"
         print_error "El AAB puede estar corrupto o el firmado es inválido"
@@ -661,7 +773,21 @@ build_apk() {
     local output_file="${APK_DIR}/${APP_NAME}.apk"
     
     print_info "Usando icono: $icon_path"
-    print_info "Flet leerá el icono desde pyproject.toml"
+    print_info "Flet leerá el icono desde flet.toml y pyproject.toml"
+    
+    # Asegurar que el icono esté actualizado en flet.toml
+    if [ -f "$FLET_CONFIG_FILE" ]; then
+        if ! grep -q "^icon\s*=\s*\"$icon_path\"" "$FLET_CONFIG_FILE"; then
+            print_warning "Actualizando icono en flet.toml..."
+            if grep -q "^\[app\]" "$FLET_CONFIG_FILE"; then
+                if grep -q "^icon\s*=" "$FLET_CONFIG_FILE"; then
+                    sed -i "s|^icon\s*=.*|icon = \"$icon_path\"|" "$FLET_CONFIG_FILE"
+                else
+                    sed -i "/^\[app\]/a icon = \"$icon_path\"" "$FLET_CONFIG_FILE"
+                fi
+            fi
+        fi
+    fi
     
     # Construir APK con Flet (el icono y versión se leen desde flet.toml)
     if flet build apk; then
@@ -733,7 +859,21 @@ build_aab() {
     local output_file="${AAB_DIR}/${APP_NAME}.aab"
     
     print_info "Usando icono: $icon_path"
-    print_info "Flet leerá el icono desde pyproject.toml"
+    print_info "Flet leerá el icono desde flet.toml y pyproject.toml"
+    
+    # Asegurar que el icono esté actualizado en flet.toml
+    if [ -f "$FLET_CONFIG_FILE" ]; then
+        if ! grep -q "^icon\s*=\s*\"$icon_path\"" "$FLET_CONFIG_FILE"; then
+            print_warning "Actualizando icono en flet.toml..."
+            if grep -q "^\[app\]" "$FLET_CONFIG_FILE"; then
+                if grep -q "^icon\s*=" "$FLET_CONFIG_FILE"; then
+                    sed -i "s|^icon\s*=.*|icon = \"$icon_path\"|" "$FLET_CONFIG_FILE"
+                else
+                    sed -i "/^\[app\]/a icon = \"$icon_path\"" "$FLET_CONFIG_FILE"
+                fi
+            fi
+        fi
+    fi
     
     # Construir AAB con Flet (el icono y versión se leen desde flet.toml)
     if flet build aab; then
