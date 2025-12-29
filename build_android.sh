@@ -644,16 +644,33 @@ has_debug_signature() {
     return 1  # No tiene firma de debug
 }
 
-# Función para contar firmas en un APK
+# Función para contar firmas únicas en un APK
 count_apk_signatures() {
     local apk_file="$1"
-    # Contar el número de firmantes (signers)
-    local signer_count=$(jarsigner -verify -certs "$apk_file" 2>&1 | grep -c ">>> Signer" || echo "0")
-    # Limpiar el resultado
-    signer_count=$(echo "$signer_count" | tr -d '[:space:]' | head -n 1)
-    if ! [[ "$signer_count" =~ ^[0-9]+$ ]]; then
+    
+    # Verificar que el archivo existe
+    if [ ! -f "$apk_file" ]; then
+        echo "0"
+        return
+    fi
+    
+    # Obtener la salida de verificación
+    local verify_output=$(jarsigner -verify -verbose -certs "$apk_file" 2>&1)
+    
+    # Extraer los CN (Common Name) únicos de los certificados
+    # Cada firma tiene un CN único, así que contamos CNs únicos
+    local unique_cns=$(echo "$verify_output" | grep -A 1 ">>> Signer" | grep "X\.509" | sed 's/.*CN=\([^,]*\).*/\1/' | sort -u)
+    local signer_count=$(echo "$unique_cns" | grep -v '^$' | wc -l)
+    
+    # Limpiar el resultado: solo números
+    signer_count=$(echo "$signer_count" | tr -d '[:space:]' | sed 's/[^0-9]//g')
+    
+    # Si no es un número válido o está vacío, devolver 0
+    if ! [[ "$signer_count" =~ ^[0-9]+$ ]] || [ -z "$signer_count" ]; then
         signer_count=0
     fi
+    
+    # Devolver solo el número
     echo "$signer_count"
 }
 
@@ -677,8 +694,18 @@ sign_apk() {
             # Eliminar la firma de debug antes de firmar con producción
             # Esto requiere descomprimir, eliminar META-INF, y volver a comprimir
             print_info "Eliminando firma de debug..."
-            # Usar zip para eliminar META-INF
-            zip -d "$apk_file" "META-INF/*" 2>/dev/null || true
+            # Eliminar META-INF completamente usando unzip y zip
+            # Crear un directorio temporal para descomprimir
+            local temp_dir=$(mktemp -d)
+            unzip -q "$apk_file" -d "$temp_dir" 2>/dev/null || true
+            # Eliminar META-INF
+            rm -rf "${temp_dir}/META-INF" 2>/dev/null || true
+            # Recrear el APK sin META-INF
+            cd "$temp_dir"
+            zip -q -r "$apk_file" . -x "*.apk" 2>/dev/null || true
+            cd - > /dev/null
+            rm -rf "$temp_dir"
+            print_success "Firma de debug eliminada"
         else
             print_success "✅ APK ya está firmado con certificado de producción"
             print_info "Verificando la firma..."
@@ -692,8 +719,17 @@ sign_apk() {
     elif [ "$signer_count" -gt 1 ]; then
         print_error "❌ El APK tiene $signer_count firmas (debe tener solo 1)"
         print_error "Esto impide la instalación. Eliminando todas las firmas y re-firmando..."
-        # Eliminar todas las firmas
-        zip -d "$apk_file" "META-INF/*" 2>/dev/null || true
+        # Eliminar todas las firmas usando unzip y zip
+        local temp_dir=$(mktemp -d)
+        unzip -q "$apk_file" -d "$temp_dir" 2>/dev/null || true
+        # Eliminar META-INF
+        rm -rf "${temp_dir}/META-INF" 2>/dev/null || true
+        # Recrear el APK sin META-INF
+        cd "$temp_dir"
+        zip -q -r "$apk_file" . -x "*.apk" 2>/dev/null || true
+        cd - > /dev/null
+        rm -rf "$temp_dir"
+        print_success "Todas las firmas eliminadas"
     else
         print_info "El APK no está firmado. Firmando ahora..."
     fi
@@ -722,12 +758,48 @@ sign_apk() {
     
     # Verificar el firmado
     print_info "Verificando firmado del APK..."
-    local final_signer_count=$(count_apk_signatures "$apk_file")
-    if [ "$final_signer_count" -eq 1 ] && ! has_debug_signature "$apk_file"; then
-        print_success "✅ APK firmado correctamente con certificado de producción (1 firma)"
-    else
-        print_error "❌ Error: El APK tiene $final_signer_count firmas o aún tiene firma de debug"
+    
+    # Primero verificar que jarsigner puede verificar el APK
+    if ! jarsigner -verify "$apk_file" &> /dev/null; then
+        print_error "❌ Error: jarsigner no puede verificar el APK"
+        print_error "El APK puede estar corrupto o no estar firmado correctamente"
         exit 1
+    fi
+    
+    local final_signer_count=$(count_apk_signatures "$apk_file")
+    # Validar que final_signer_count sea un número válido
+    if ! [[ "$final_signer_count" =~ ^[0-9]+$ ]]; then
+        print_error "❌ Error al contar firmas: resultado inválido '$final_signer_count'"
+        exit 1
+    fi
+    
+    # Verificar si tiene firma de debug
+    local has_debug=$(has_debug_signature "$apk_file" && echo "1" || echo "0")
+    
+    if [ "$final_signer_count" -eq 1 ] && [ "$has_debug" -eq 0 ]; then
+        print_success "✅ APK firmado correctamente con certificado de producción (1 firma)"
+    elif [ "$final_signer_count" -eq 0 ]; then
+        print_error "❌ Error: El APK no tiene firmas después del proceso de firma"
+        print_error "Esto puede indicar un problema con el keystore o el proceso de firma"
+        print_info "Intentando verificar manualmente..."
+        jarsigner -verify -verbose -certs "$apk_file" 2>&1 | head -20
+        exit 1
+    elif [ "$final_signer_count" -gt 1 ]; then
+        print_error "❌ Error: El APK tiene $final_signer_count firmas (debe tener solo 1)"
+        exit 1
+    elif [ "$has_debug" -eq 1 ]; then
+        print_error "❌ Error: El APK aún tiene firma de debug"
+        exit 1
+    else
+        print_warning "⚠️  Advertencia: Estado de firma inesperado (count: $final_signer_count, debug: $has_debug)"
+        print_info "El APK puede estar firmado, pero la verificación no es concluyente"
+        print_info "Verificando con jarsigner..."
+        if jarsigner -verify "$apk_file" &> /dev/null; then
+            print_success "✅ jarsigner verifica el APK como válido"
+        else
+            print_error "❌ jarsigner no puede verificar el APK"
+            exit 1
+        fi
     fi
     
     # Intentar verificación adicional con apksigner si está disponible
