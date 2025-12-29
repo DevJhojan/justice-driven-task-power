@@ -20,13 +20,52 @@ class Database:
             db_path: Ruta al archivo de base de datos. Si es None, usa la ruta por defecto.
         """
         if db_path is None:
-            # Usar directorio de datos de la aplicación
-            app_data_dir = Path.home() / ".productivity_app"
-            app_data_dir.mkdir(exist_ok=True)
+            # Detectar si estamos en Android usando la variable de entorno de Flet
+            android_data_dir = os.getenv("FLET_APP_STORAGE_DATA")
+            
+            if android_data_dir:
+                # En Android, usar el directorio de datos persistente de Flet
+                app_data_dir = Path(android_data_dir)
+                try:
+                    app_data_dir.mkdir(parents=True, exist_ok=True)
+                except Exception as e:
+                    print(f"Warning: No se pudo crear directorio en Android: {e}")
+                    # Fallback a directorio temporal
+                    import tempfile
+                    app_data_dir = Path(tempfile.gettempdir()) / "productivity_app"
+                    app_data_dir.mkdir(parents=True, exist_ok=True)
+            else:
+                # En escritorio, usar directorio home
+                try:
+                    app_data_dir = Path.home() / ".productivity_app"
+                    app_data_dir.mkdir(exist_ok=True)
+                except Exception as e:
+                    print(f"Warning: No se pudo usar Path.home(): {e}")
+                    # Fallback a directorio temporal
+                    import tempfile
+                    app_data_dir = Path(tempfile.gettempdir()) / "productivity_app"
+                    app_data_dir.mkdir(parents=True, exist_ok=True)
+            
             db_path = str(app_data_dir / "app.db")
+            print(f"Database path: {db_path}")
         
         self.db_path = db_path
-        self._init_database()
+        try:
+            self._init_database()
+        except Exception as e:
+            print(f"Error crítico al inicializar base de datos: {e}")
+            import traceback
+            traceback.print_exc()
+            # Intentar crear una base de datos en ubicación temporal como último recurso
+            import tempfile
+            temp_db = Path(tempfile.gettempdir()) / "app_fallback.db"
+            self.db_path = str(temp_db)
+            print(f"Usando base de datos de respaldo: {self.db_path}")
+            try:
+                self._init_database()
+            except Exception as e2:
+                print(f"Error fatal: No se pudo inicializar base de datos ni siquiera en ubicación temporal: {e2}")
+                raise
     
     def _init_database(self):
         """Inicializa la base de datos y crea las tablas si no existen."""

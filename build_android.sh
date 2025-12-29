@@ -1020,7 +1020,10 @@ build_apk() {
     fi
     
     # Construir APK con Flet (el icono y versión se leen desde flet.toml)
-    if flet build apk; then
+    # Especificar el archivo principal explícitamente
+    print_info "Construyendo APK con Flet..."
+    print_info "Archivo principal: main.py"
+    if flet build apk --verbose; then
         print_success "APK construido exitosamente"
         
         # Buscar el APK generado por Flet (puede estar en diferentes ubicaciones)
@@ -1110,7 +1113,10 @@ build_aab() {
     fi
     
     # Construir AAB con Flet (el icono y versión se leen desde flet.toml)
-    if flet build aab; then
+    # Especificar el archivo principal explícitamente
+    print_info "Construyendo AAB con Flet..."
+    print_info "Archivo principal: main.py"
+    if flet build aab --verbose; then
         print_success "AAB construido exitosamente"
         
         # Buscar el AAB generado por Flet (puede estar en diferentes ubicaciones)

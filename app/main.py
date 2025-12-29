@@ -23,6 +23,26 @@ def main(page: ft.Page):
         page.title = "Productividad Personal"
         page.padding = 0
         page.spacing = 0
+        
+        # Mostrar indicador de carga inmediatamente para evitar pantalla negra
+        page.clean()
+        loading_indicator = ft.Container(
+            content=ft.Column(
+                [
+                    ft.ProgressRing(width=50, height=50, color=ft.Colors.RED_700),
+                    ft.Text("Cargando...", size=16, color=ft.Colors.WHITE70),
+                ],
+                spacing=20,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
+            alignment=ft.Alignment.center,
+            bgcolor=ft.Colors.BLACK87,
+            expand=True,
+        )
+        page.add(loading_indicator)
+        page.update()
+        print("Indicador de carga mostrado")
 
         # Configurar icono de la ventana para escritorio
         try:
@@ -67,23 +87,35 @@ def main(page: ft.Page):
             page.theme_mode = ft.ThemeMode.SYSTEM
         
         # Establecer tema inicial desde configuración del usuario ANTES de cualquier otra cosa
+        # Usar tema por defecto primero para evitar pantalla negra
+        page.theme_mode = ft.ThemeMode.DARK  # Tema oscuro por defecto
+        page.update()  # Actualizar inmediatamente para mostrar algo
+        
         try:
             from app.data.database import get_db
             from app.services.user_settings_service import UserSettingsService
+            print("Inicializando base de datos...")
             db = get_db()
+            print("Base de datos inicializada")
             user_settings_service = UserSettingsService(db)
             saved_theme = user_settings_service.get_theme()
             # Establecer el tema ANTES de construir cualquier vista
             page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
+            page.update()
         except Exception as e:
             print(f"Error al cargar configuración de tema: {e}")
+            import traceback
+            traceback.print_exc()
             # Usar tema por defecto si falla
-            page.theme_mode = ft.ThemeMode.SYSTEM
+            page.theme_mode = ft.ThemeMode.DARK
+            page.update()
         
         # Inicializar home_view después de establecer el tema
         # Esto asegura que todas las vistas se construyan con el tema correcto
+        print("Inicializando HomeView...")
         try:
             home_view = HomeView(page)
+            print("HomeView inicializado correctamente")
             # Guardar referencia a home_view en la página para que las vistas puedan acceder
             page._home_view_ref = home_view
         except Exception as e:
@@ -91,23 +123,28 @@ def main(page: ft.Page):
             import traceback
             traceback.print_exc()
             # Mostrar error en la UI
-            page.clean()
-            page.add(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text("Error al iniciar la aplicación", size=20, weight=ft.FontWeight.BOLD),
-                            ft.Text(f"Error: {str(e)}", size=14),
-                            ft.Text("Por favor, reinicia la aplicación.", size=12),
-                        ],
-                        spacing=10,
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    padding=20,
-                    alignment=ft.Alignment.center,
+            try:
+                page.clean()
+                page.add(
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text("Error al iniciar la aplicación", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                                ft.Text(f"Error: {str(e)}", size=14, color=ft.Colors.WHITE70),
+                                ft.Text("Por favor, reinicia la aplicación.", size=12, color=ft.Colors.WHITE54),
+                            ],
+                            spacing=10,
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        padding=20,
+                        alignment=ft.Alignment.center,
+                        bgcolor=ft.Colors.BLACK87,
+                        expand=True,
+                    )
                 )
-            )
-            page.update()
+                page.update()
+            except Exception as e2:
+                print(f"Error al mostrar mensaje de error: {e2}")
             return
         
         def _show_error_page(page: ft.Page, error: Exception, context: str = ""):
@@ -332,30 +369,40 @@ def main(page: ft.Page):
         
         # Construir la UI inicial después de que todo esté configurado
         # Esto asegura que el tema se haya aplicado correctamente antes de construir las vistas
+        print("Construyendo UI inicial...")
         try:
+            # Limpiar el indicador de carga antes de construir la UI
+            page.clean()
             home_view._build_ui()
+            print("UI construida correctamente")
+            page.update()
         except Exception as e:
             print(f"Error crítico al construir UI: {e}")
             import traceback
             traceback.print_exc()
             # Mostrar error en la UI
-            page.clean()
-            page.add(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text("Error al construir la interfaz", size=20, weight=ft.FontWeight.BOLD),
-                            ft.Text(f"Error: {str(e)}", size=14),
-                            ft.Text("Por favor, reinicia la aplicación.", size=12),
-                        ],
-                        spacing=10,
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    padding=20,
-                    alignment=ft.Alignment.center,
+            try:
+                page.clean()
+                page.add(
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                ft.Text("Error al construir la interfaz", size=20, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
+                                ft.Text(f"Error: {str(e)}", size=14, color=ft.Colors.WHITE70),
+                                ft.Text("Por favor, reinicia la aplicación.", size=12, color=ft.Colors.WHITE54),
+                            ],
+                            spacing=10,
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        padding=20,
+                        alignment=ft.Alignment.center,
+                        bgcolor=ft.Colors.BLACK87,
+                        expand=True,
+                    )
                 )
-            )
-            page.update()
+                page.update()
+            except Exception as e2:
+                print(f"Error al mostrar mensaje de error: {e2}")
             return
     except Exception as e:
         # Error crítico en la inicialización
