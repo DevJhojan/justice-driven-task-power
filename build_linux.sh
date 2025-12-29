@@ -157,36 +157,51 @@ clean_build() {
     print_info "Limpiando builds anteriores..."
     rm -rf "$BUILD_DIR/linux"
     rm -rf "$DEB_DIR"
+    rm -rf "$BUILD_DIR/flutter"
+    rm -rf ".flet/build"
     print_success "Builds anteriores limpiados"
 }
 
 # Función para construir la aplicación Linux
 build_linux_app() {
-    print_info "Construyendo aplicación Linux con Flet..."
+    print_info "Construyendo aplicación Linux con Flet..." >&2
     
     activate_venv
     
-    # Construir con Flet
-    if flet build linux; then
-        print_success "Aplicación Linux construida exitosamente"
+    # Limpiar caché de Flet si existe
+    if [ -d ".flet" ]; then
+        print_info "Limpiando caché de Flet..." >&2
+        rm -rf .flet/build
+    fi
+    
+    # Construir con Flet (redirigir stderr para capturar errores pero mostrar progreso)
+    if flet build linux 2>&1 | tee /tmp/flet_build_linux.log; then
+        print_success "Aplicación Linux construida exitosamente" >&2
     else
-        print_error "Error al construir aplicación Linux"
+        print_error "Error al construir aplicación Linux" >&2
+        print_info "Revisa el log: /tmp/flet_build_linux.log" >&2
         exit 1
     fi
     
     # Buscar el ejecutable generado
     local linux_executable=""
     local search_paths=(
+        "${BUILD_DIR}/linux/${APP_NAME}"
         "${BUILD_DIR}/linux"
+        "${BUILD_DIR}/flutter/build/linux/x64/release/bundle/${APP_NAME}"
         "${BUILD_DIR}/flutter/build/linux/x64/release/bundle"
         "${BUILD_DIR}"
     )
     
     for search_path in "${search_paths[@]}"; do
-        if [ -d "$search_path" ]; then
-            # Buscar el ejecutable principal
-            linux_executable=$(find "$search_path" -type f -executable -name "${APP_NAME}" -o -name "${APP_NAME}.bin" -o -name "app" | head -n 1)
-            if [ -n "$linux_executable" ] && [ -f "$linux_executable" ]; then
+        if [ -f "$search_path" ] && [ -x "$search_path" ]; then
+            linux_executable="$search_path"
+            break
+        elif [ -d "$search_path" ]; then
+            # Buscar el ejecutable principal en el directorio
+            local found=$(find "$search_path" -type f -executable \( -name "${APP_NAME}" -o -name "${APP_NAME}.bin" -o -name "app" -o -name "*.AppImage" \) 2>/dev/null | head -n 1)
+            if [ -n "$found" ] && [ -f "$found" ]; then
+                linux_executable="$found"
                 break
             fi
         fi
@@ -194,17 +209,18 @@ build_linux_app() {
     
     if [ -z "$linux_executable" ]; then
         # Búsqueda más amplia
-        linux_executable=$(find "$BUILD_DIR" -type f -executable \( -name "${APP_NAME}" -o -name "${APP_NAME}.bin" -o -name "app" \) | head -n 1)
+        linux_executable=$(find "$BUILD_DIR" -type f -executable \( -name "${APP_NAME}" -o -name "${APP_NAME}.bin" -o -name "app" -o -name "*.AppImage" \) 2>/dev/null | head -n 1)
     fi
     
     if [ -z "$linux_executable" ] || [ ! -f "$linux_executable" ]; then
-        print_error "No se encontró el ejecutable de Linux"
-        print_info "Buscando en: $BUILD_DIR"
-        find "$BUILD_DIR" -type f -executable 2>/dev/null | head -10
+        print_error "No se encontró el ejecutable de Linux" >&2
+        print_info "Buscando en: $BUILD_DIR" >&2
+        find "$BUILD_DIR" -type f -executable 2>/dev/null | head -10 >&2
         exit 1
     fi
     
-    print_success "Ejecutable encontrado: $linux_executable"
+    print_success "Ejecutable encontrado: $linux_executable" >&2
+    # Solo imprimir la ruta a stdout (sin mensajes)
     echo "$linux_executable"
 }
 
@@ -419,6 +435,10 @@ main() {
     # Limpiar si se solicita
     if [ "$clean_build_flag" = true ]; then
         clean_build
+    else
+        # Limpiar caché de Flet siempre para evitar problemas con dependencias
+        print_info "Limpiando caché de Flet..."
+        rm -rf ".flet/build" 2>/dev/null || true
     fi
     
     # Validar icono
@@ -434,7 +454,25 @@ main() {
     print_info "Arquitectura: $architecture"
     
     # Construir aplicación Linux
-    local linux_executable=$(build_linux_app)
+    # Ejecutar build_linux_app y capturar solo la ruta del ejecutable (última línea)
+    print_info "Iniciando build de aplicación Linux..."
+    local build_output=$(build_linux_app 2>&1)
+    local linux_executable=$(echo "$build_output" | grep -E "^/|^\./" | tail -n 1)
+    
+    # Si no se encontró en el output, buscar manualmente
+    if [ -z "$linux_executable" ] || [ ! -f "$linux_executable" ]; then
+        print_warning "No se pudo capturar la ruta del ejecutable desde el output, buscando manualmente..."
+        linux_executable=$(find "$BUILD_DIR" -type f -executable \( -name "${APP_NAME}" -o -name "${APP_NAME}.bin" -o -name "app" -o -name "*.AppImage" \) 2>/dev/null | head -n 1)
+    fi
+    
+    if [ -z "$linux_executable" ] || [ ! -f "$linux_executable" ]; then
+        print_error "No se pudo encontrar el ejecutable de Linux después del build"
+        print_info "Buscando todos los ejecutables en $BUILD_DIR:"
+        find "$BUILD_DIR" -type f -executable 2>/dev/null | head -10
+        exit 1
+    fi
+    
+    print_success "Ejecutable encontrado: $linux_executable"
     
     # Crear estructura del paquete .deb
     create_deb_structure
