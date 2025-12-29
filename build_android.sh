@@ -356,9 +356,8 @@ EOF
         # Actualizar icono en [app]
         if grep -q "^\[app\]" "$FLET_CONFIG_FILE"; then
             if grep -q "^icon\s*=" "$FLET_CONFIG_FILE"; then
-                # Escapar caracteres especiales en la ruta del icono para sed
-                local icon_path_escaped=$(echo "$icon_path" | sed 's/[[\.*^$()+?{|]/\\&/g')
-                sed -i "s|^icon\s*=.*|icon = \"$icon_path_escaped\"|" "$FLET_CONFIG_FILE"
+                # Usar awk para reemplazar de forma segura (más seguro que sed con caracteres especiales)
+                awk -v icon_line="icon = \"$icon_path\"" '/^icon\s*=/ {print icon_line; next} {print}' "$FLET_CONFIG_FILE" > "${FLET_CONFIG_FILE}.tmp" && mv "${FLET_CONFIG_FILE}.tmp" "$FLET_CONFIG_FILE"
             else
                 # Agregar icon después de [app] o después de package usando un método más seguro
                 if grep -q "^package\s*=" "$FLET_CONFIG_FILE"; then
@@ -799,9 +798,8 @@ build_apk() {
             print_warning "Actualizando icono en flet.toml..."
             if grep -q "^\[app\]" "$FLET_CONFIG_FILE"; then
                 if grep -q "^icon\s*=" "$FLET_CONFIG_FILE"; then
-                    # Escapar caracteres especiales en la ruta del icono para sed
-                    local icon_path_escaped=$(echo "$icon_path" | sed 's/[[\.*^$()+?{|]/\\&/g')
-                    sed -i "s|^icon\s*=.*|icon = \"$icon_path_escaped\"|" "$FLET_CONFIG_FILE"
+                    # Usar awk para reemplazar de forma segura (más seguro que sed con caracteres especiales)
+                    awk -v icon_line="icon = \"$icon_path\"" '/^icon\s*=/ {print icon_line; next} {print}' "$FLET_CONFIG_FILE" > "${FLET_CONFIG_FILE}.tmp" && mv "${FLET_CONFIG_FILE}.tmp" "$FLET_CONFIG_FILE"
                 else
                     # Usar awk para insertar de forma segura
                     awk -v icon_line="icon = \"$icon_path\"" '/^\[app\]/ {print; print icon_line; next} {print}' "$FLET_CONFIG_FILE" > "${FLET_CONFIG_FILE}.tmp" && mv "${FLET_CONFIG_FILE}.tmp" "$FLET_CONFIG_FILE"
@@ -890,9 +888,8 @@ build_aab() {
             print_warning "Actualizando icono en flet.toml..."
             if grep -q "^\[app\]" "$FLET_CONFIG_FILE"; then
                 if grep -q "^icon\s*=" "$FLET_CONFIG_FILE"; then
-                    # Escapar caracteres especiales en la ruta del icono para sed
-                    local icon_path_escaped=$(echo "$icon_path" | sed 's/[[\.*^$()+?{|]/\\&/g')
-                    sed -i "s|^icon\s*=.*|icon = \"$icon_path_escaped\"|" "$FLET_CONFIG_FILE"
+                    # Usar awk para reemplazar de forma segura (más seguro que sed con caracteres especiales)
+                    awk -v icon_line="icon = \"$icon_path\"" '/^icon\s*=/ {print icon_line; next} {print}' "$FLET_CONFIG_FILE" > "${FLET_CONFIG_FILE}.tmp" && mv "${FLET_CONFIG_FILE}.tmp" "$FLET_CONFIG_FILE"
                 else
                     # Usar awk para insertar de forma segura
                     awk -v icon_line="icon = \"$icon_path\"" '/^\[app\]/ {print; print icon_line; next} {print}' "$FLET_CONFIG_FILE" > "${FLET_CONFIG_FILE}.tmp" && mv "${FLET_CONFIG_FILE}.tmp" "$FLET_CONFIG_FILE"
