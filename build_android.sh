@@ -15,7 +15,8 @@
 #   ./build_android.sh           # Genera APK y AAB (ambos firmados)
 #   ./build_android.sh --apk     # Genera solo APK (firmado)
 #   ./build_android.sh --aab     # Genera solo AAB (firmado)
-#   ./build_android.sh --help     # Muestra esta ayuda
+#   ./build_android.sh --clean   # Limpia builds anteriores antes de construir
+#   ./build_android.sh --help    # Muestra esta ayuda
 # 
 # Configuración:
 #   - Crea el keystore: ./create_keystore.sh
@@ -92,6 +93,7 @@ Uso: $0 [OPCIÓN]
 Opciones:
     --apk        Genera únicamente el archivo APK
     --aab        Genera únicamente el archivo AAB
+    --clean      Limpia builds anteriores antes de construir
     --help       Muestra esta ayuda
 
 Si no se especifica ninguna opción, se generan ambos archivos (APK y AAB).
@@ -100,6 +102,8 @@ Ejemplos:
     $0              # Genera APK y AAB
     $0 --apk        # Genera solo APK
     $0 --aab        # Genera solo AAB
+    $0 --apk --clean # Limpia y genera solo APK
+    $0 --clean      # Limpia y genera APK y AAB
 EOF
 }
 
@@ -192,11 +196,11 @@ find_icon() {
 
 # Función para limpiar builds anteriores
 clean_builds() {
-    if [ -d "$BUILD_DIR" ]; then
-        print_info "Limpiando builds anteriores..."
-        rm -rf "$BUILD_DIR"
-        print_success "Builds anteriores eliminados"
-    fi
+    print_info "Limpiando builds anteriores..."
+    rm -rf "$BUILD_DIR" 2>/dev/null || true
+    rm -rf ".flet/build" 2>/dev/null || true
+    rm -rf ~/.cookiecutters/flet-build-template 2>/dev/null || true
+    print_success "Builds anteriores limpiados"
 }
 
 # Función para crear directorios necesarios
@@ -1190,6 +1194,7 @@ build_aab() {
 validate_args() {
     local build_apk=false
     local build_aab=false
+    local clean_build_flag=false
     
     for arg in "$@"; do
         case "$arg" in
@@ -1198,6 +1203,9 @@ validate_args() {
                 ;;
             --aab)
                 build_aab=true
+                ;;
+            --clean)
+                clean_build_flag=true
                 ;;
             --help|-h)
                 show_help
@@ -1220,6 +1228,7 @@ validate_args() {
     # Exportar variables para uso en el script principal
     export BUILD_APK=$build_apk
     export BUILD_AAB=$build_aab
+    export CLEAN_BUILD=$clean_build_flag
 }
 
 # ============================================================================
@@ -1246,6 +1255,20 @@ main() {
     
     # Verificar Flet
     check_flet
+    
+    # Limpiar builds si se solicita
+    if [ "$CLEAN_BUILD" = "true" ]; then
+        clean_builds
+        # También limpiar cachés de Flet
+        print_info "Limpiando cachés de Flet y templates..."
+        rm -rf ".flet/build" 2>/dev/null || true
+        rm -rf ~/.cookiecutters/flet-build-template 2>/dev/null || true
+    else
+        # Limpiar caché de Flet siempre para evitar problemas con dependencias
+        print_info "Limpiando caché de Flet..."
+        rm -rf ".flet/build" 2>/dev/null || true
+        rm -rf ~/.cookiecutters/flet-build-template 2>/dev/null || true
+    fi
     
     # Validar icono
     find_icon > /dev/null
