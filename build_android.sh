@@ -686,6 +686,41 @@ sign_apk() {
     print_success "APK firmado guardado: $apk_file"
 }
 
+# Función para contar cadenas de certificados en un AAB
+count_cert_chains() {
+    local aab_file="$1"
+    
+    # Verificar que el archivo existe
+    if [ ! -f "$aab_file" ]; then
+        echo "0"
+        return
+    fi
+    
+    # Contar las cadenas de certificados
+    # Usar grep con -c para contar, redirigir stderr a /dev/null para evitar mensajes
+    local cert_count=$(jarsigner -verify -certs "$aab_file" 2>/dev/null | grep -c "Certificate chain" 2>/dev/null)
+    
+    # Si grep -c falla o no encuentra nada, devolver 0
+    if [ -z "$cert_count" ] || [ "$cert_count" = "" ]; then
+        cert_count=0
+    fi
+    
+    # Limpiar el resultado: eliminar espacios, saltos de línea y caracteres no numéricos
+    cert_count=$(echo "$cert_count" | tr -d '[:space:][:alpha:]' | sed 's/[^0-9]//g')
+    
+    # Si después de limpiar está vacío o no es numérico, devolver 0
+    if [ -z "$cert_count" ] || ! [[ "$cert_count" =~ ^[0-9]+$ ]]; then
+        cert_count=0
+    fi
+    
+    # Convertir a número entero (eliminar ceros a la izquierda si es necesario, pero mantener 0)
+    if [ "$cert_count" = "00" ] || [ "$cert_count" = "000" ]; then
+        cert_count=0
+    fi
+    
+    echo "$cert_count"
+}
+
 # Función para verificar si un AAB ya está firmado
 is_aab_signed() {
     local aab_file="$1"
@@ -693,7 +728,7 @@ is_aab_signed() {
     # Verificar si el AAB tiene firmas usando jarsigner
     if jarsigner -verify -certs "$aab_file" &> /dev/null; then
         # Contar el número de firmas (cadenas de certificados)
-        local cert_count=$(jarsigner -verify -certs "$aab_file" 2>&1 | grep -c "Certificate chain" || echo "0")
+        local cert_count=$(count_cert_chains "$aab_file")
         if [ "$cert_count" -gt 0 ]; then
             return 0  # Está firmado
         fi
@@ -718,7 +753,7 @@ sign_aab() {
         
         # Verificar que la firma sea válida
         if jarsigner -verify -certs "$aab_file" &> /dev/null; then
-            local cert_count=$(jarsigner -verify -certs "$aab_file" 2>&1 | grep -c "Certificate chain" || echo "0")
+            local cert_count=$(count_cert_chains "$aab_file")
             if [ "$cert_count" -eq 1 ]; then
                 print_success "✅ AAB ya está correctamente firmado con 1 cadena de certificados"
                 print_info "No es necesario firmar de nuevo. El AAB está listo para Google Play."
@@ -760,7 +795,7 @@ sign_aab() {
     # Verificar el firmado
     print_info "Verificando firmado del AAB..."
     if jarsigner -verify -certs "$aab_file" &> /dev/null; then
-        local cert_count=$(jarsigner -verify -certs "$aab_file" 2>&1 | grep -c "Certificate chain" || echo "0")
+        local cert_count=$(count_cert_chains "$aab_file")
         if [ "$cert_count" -eq 1 ]; then
             print_success "✅ AAB firmado correctamente con 1 cadena de certificados"
         else
