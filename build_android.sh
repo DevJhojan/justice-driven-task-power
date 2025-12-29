@@ -138,7 +138,7 @@ find_icon() {
     for path in "${ICON_PATHS[@]}"; do
         if [ -f "$path" ]; then
             icon_path="$path"
-            print_success "Icono encontrado: $icon_path"
+            print_success "Icono encontrado: $icon_path" >&2
             break
         fi
     done
@@ -315,8 +315,10 @@ update_flet_version_config() {
     print_info "  versionName: $version_name"
     print_info "  versionCode: $version_code"
     
-    # Obtener el icono
-    local icon_path=$(find_icon)
+    # Obtener el icono (redirigir stderr para evitar mensajes en la salida)
+    local icon_path=$(find_icon 2>/dev/null | tail -n 1)
+    # Limpiar cualquier código de color ANSI que pueda haber quedado
+    icon_path=$(echo "$icon_path" | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\n\r' | sed 's/^[^a-zA-Z]*//' | sed 's/[^a-zA-Z0-9._/-]*$//')
     print_info "  Icono: $icon_path"
     
     # Convertir ruta del keystore a relativa si es absoluta (para flet.toml)
@@ -632,6 +634,29 @@ check_apksigner() {
     return 1
 }
 
+# Función para verificar si un APK tiene firma de debug
+has_debug_signature() {
+    local apk_file="$1"
+    # Verificar si tiene firma de debug de Android
+    if jarsigner -verify -certs "$apk_file" 2>&1 | grep -q "CN=Android Debug"; then
+        return 0  # Tiene firma de debug
+    fi
+    return 1  # No tiene firma de debug
+}
+
+# Función para contar firmas en un APK
+count_apk_signatures() {
+    local apk_file="$1"
+    # Contar el número de firmantes (signers)
+    local signer_count=$(jarsigner -verify -certs "$apk_file" 2>&1 | grep -c ">>> Signer" || echo "0")
+    # Limpiar el resultado
+    signer_count=$(echo "$signer_count" | tr -d '[:space:]' | head -n 1)
+    if ! [[ "$signer_count" =~ ^[0-9]+$ ]]; then
+        signer_count=0
+    fi
+    echo "$signer_count"
+}
+
 # Función para firmar APK
 sign_apk() {
     local apk_file="$1"
@@ -639,6 +664,38 @@ sign_apk() {
     if [ ! -f "$apk_file" ]; then
         print_error "APK no encontrado: $apk_file"
         exit 1
+    fi
+    
+    # Verificar si el APK ya está firmado
+    print_info "Verificando estado de firma del APK..."
+    local signer_count=$(count_apk_signatures "$apk_file")
+    
+    if [ "$signer_count" -eq 1 ]; then
+        # Verificar si es firma de debug o de producción
+        if has_debug_signature "$apk_file"; then
+            print_warning "El APK tiene una firma de debug. Reemplazando con firma de producción..."
+            # Eliminar la firma de debug antes de firmar con producción
+            # Esto requiere descomprimir, eliminar META-INF, y volver a comprimir
+            print_info "Eliminando firma de debug..."
+            # Usar zip para eliminar META-INF
+            zip -d "$apk_file" "META-INF/*" 2>/dev/null || true
+        else
+            print_success "✅ APK ya está firmado con certificado de producción"
+            print_info "Verificando la firma..."
+            if jarsigner -verify -certs "$apk_file" &> /dev/null; then
+                print_success "La firma es válida. El APK está listo para instalar."
+                return 0
+            else
+                print_warning "La firma existe pero la verificación falló. Re-firmando..."
+            fi
+        fi
+    elif [ "$signer_count" -gt 1 ]; then
+        print_error "❌ El APK tiene $signer_count firmas (debe tener solo 1)"
+        print_error "Esto impide la instalación. Eliminando todas las firmas y re-firmando..."
+        # Eliminar todas las firmas
+        zip -d "$apk_file" "META-INF/*" 2>/dev/null || true
+    else
+        print_info "El APK no está firmado. Firmando ahora..."
     fi
     
     print_info "Firmando APK: $apk_file"
@@ -665,11 +722,11 @@ sign_apk() {
     
     # Verificar el firmado
     print_info "Verificando firmado del APK..."
-    if jarsigner -verify -certs "$apk_file" &> /dev/null; then
-        print_success "✅ APK firmado correctamente"
+    local final_signer_count=$(count_apk_signatures "$apk_file")
+    if [ "$final_signer_count" -eq 1 ] && ! has_debug_signature "$apk_file"; then
+        print_success "✅ APK firmado correctamente con certificado de producción (1 firma)"
     else
-        print_error "❌ Error en el firmado: verificación falló"
-        print_error "El APK puede estar corrupto o el firmado es inválido"
+        print_error "❌ Error: El APK tiene $final_signer_count firmas o aún tiene firma de debug"
         exit 1
     fi
     
@@ -864,7 +921,9 @@ build_apk() {
     print_info "Iniciando build de APK..."
     print_info "Building version $version_name (code $version_code)"
     
-    local icon_path=$(find_icon)
+    local icon_path=$(find_icon 2>/dev/null | tail -n 1)
+    # Limpiar cualquier código de color ANSI o mensajes que puedan haber quedado
+    icon_path=$(echo "$icon_path" | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\n\r' | sed 's/^[^a-zA-Z]*//' | sed 's/[^a-zA-Z0-9._/-]*$//' | grep -o 'assets/[^"]*' | head -n 1 || echo "$icon_path" | grep -o 'assets/[^"]*' | head -n 1)
     local output_file="${APK_DIR}/${APP_NAME}.apk"
     
     print_info "Usando icono: $icon_path"
