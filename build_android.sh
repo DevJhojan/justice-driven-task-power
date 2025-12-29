@@ -107,13 +107,22 @@ EOF
 activate_venv() {
     # Buscar venv en ubicaciones comunes
     if [ -d "venv" ]; then
-        print_info "Activando entorno virtual: venv"
-        source venv/bin/activate
+        if [ -z "$VIRTUAL_ENV" ]; then
+            print_info "Activando entorno virtual: venv"
+            source venv/bin/activate
+        fi
     elif [ -d ".venv" ]; then
-        print_info "Activando entorno virtual: .venv"
-        source .venv/bin/activate
+        if [ -z "$VIRTUAL_ENV" ]; then
+            print_info "Activando entorno virtual: .venv"
+            source .venv/bin/activate
+        fi
     else
         print_warning "No se encontró entorno virtual. Usando Flet del sistema."
+    fi
+    
+    # Asegurar que el PATH incluya el venv
+    if [ -n "$VIRTUAL_ENV" ]; then
+        export PATH="$VIRTUAL_ENV/bin:$PATH"
     fi
 }
 
@@ -1021,6 +1030,8 @@ build_apk() {
     
     # Construir APK con Flet (el icono y versión se leen desde flet.toml)
     # Especificar el archivo principal explícitamente
+    # Asegurar que el entorno virtual esté activado
+    activate_venv
     print_info "Construyendo APK con Flet..."
     print_info "Archivo principal: main.py"
     if flet build apk --verbose; then
@@ -1114,6 +1125,8 @@ build_aab() {
     
     # Construir AAB con Flet (el icono y versión se leen desde flet.toml)
     # Especificar el archivo principal explícitamente
+    # Asegurar que el entorno virtual esté activado
+    activate_venv
     print_info "Construyendo AAB con Flet..."
     print_info "Archivo principal: main.py"
     if flet build aab --verbose; then
