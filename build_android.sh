@@ -284,24 +284,25 @@ get_version_code() {
             local next_stored=$((stored_code + 1))
             if [ $next_stored -gt $calculated_code ]; then
                 version_code=$next_stored
-                print_info "Incrementando versionCode desde archivo: $stored_code -> $version_code"
+                print_info "Incrementando versionCode desde archivo: $stored_code -> $version_code" >&2
             else
                 version_code=$calculated_code
-                print_info "Usando versionCode calculado desde versión: $version_code"
+                print_info "Usando versionCode calculado desde versión: $version_code" >&2
             fi
         else
-            print_warning "Archivo de versionCode corrupto. Usando versión calculada."
+            print_warning "Archivo de versionCode corrupto. Usando versión calculada." >&2
             version_code=$calculated_code
         fi
     else
         # Primera vez: usar el calculado desde la versión
         version_code=$calculated_code
-        print_info "Inicializando versionCode: $version_code (desde versión $base_version)"
+        print_info "Inicializando versionCode: $version_code (desde versión $base_version)" >&2
     fi
     
     # Guardar el nuevo versionCode para el próximo build
     echo "$version_code" > "$VERSION_CODE_FILE"
     
+    # Devolver solo el valor numérico (sin mensajes)
     echo "$version_code"
 }
 
@@ -881,7 +882,7 @@ main() {
     BASE_VERSION=$(read_base_version)
     print_success "Versión base: $BASE_VERSION"
     
-    # Calcular versionCode
+    # Calcular versionCode (los mensajes informativos se imprimen a stderr)
     VERSION_CODE=$(get_version_code "$BASE_VERSION")
     print_success "versionCode: $VERSION_CODE"
     
