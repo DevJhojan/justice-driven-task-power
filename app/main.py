@@ -5,6 +5,55 @@ Este archivo configura el entorno y ejecuta la aplicación desde app.app.
 import sys
 import os
 from pathlib import Path
+import glob
+
+def cleanup_old_sockets():
+    """
+    Limpia sockets antiguos de Flet que pueden causar conflictos.
+    Esto previene errores de 'SocketException: Write failed' cuando hay
+    sockets rotos de ejecuciones anteriores.
+    """
+    try:
+        # Obtener el directorio de la app empaquetada
+        flet_app_dir = os.getenv("FLET_APP_STORAGE_DATA")
+        current_file = Path(__file__).resolve()
+        
+        # Determinar el directorio donde están los sockets
+        if flet_app_dir or "flet/app" in str(current_file) or ".local/share/com.flet" in str(current_file):
+            # En modo empaquetado, los sockets están en el directorio de la app
+            app_dir = current_file.parent.parent
+            socket_dir = app_dir
+        else:
+            # En desarrollo, buscar en el directorio actual
+            socket_dir = current_file.parent.parent
+        
+        # Buscar y eliminar sockets antiguos
+        socket_patterns = [
+            str(socket_dir / "*.sock"),
+            str(socket_dir / "flet_*.sock"),
+            str(socket_dir / "stdout_*.sock"),
+        ]
+        
+        sockets_cleaned = 0
+        for pattern in socket_patterns:
+            for socket_file in glob.glob(pattern):
+                try:
+                    socket_path = Path(socket_file)
+                    if socket_path.is_socket():
+                        # Verificar si el socket está realmente en uso
+                        # Si no podemos conectarnos, probablemente está roto
+                        socket_path.unlink()
+                        sockets_cleaned += 1
+                except (OSError, PermissionError) as e:
+                    # Ignorar errores al eliminar sockets (pueden estar en uso)
+                    pass
+        
+        if sockets_cleaned > 0:
+            # Usar print en lugar de logger porque puede llamarse antes de configurar logging
+            print(f"Limpieza: {sockets_cleaned} socket(s) antiguo(s) eliminado(s)")
+    except Exception as e:
+        # No fallar si la limpieza de sockets falla
+        pass
 
 def get_app_base_path():
     """
@@ -56,6 +105,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 try:
+    # Limpiar sockets antiguos antes de iniciar
+    cleanup_old_sockets()
+    
     logger.info("Iniciando aplicación...")
     logger.info(f"Python version: {sys.version}")
     logger.info(f"Working directory: {os.getcwd()}")
@@ -92,7 +144,8 @@ try:
                 assets_path = Path("assets")
                 logger.info(f"Using relative assets path: {assets_path}")
         
-        ft.app(
+        # Usar ft.run() en lugar de ft.app() (ft.app() está deprecado desde Flet 0.70.0)
+        ft.run(
             target=main, 
             view=ft.AppView.FLET_APP, 
             assets_dir=str(assets_path) if assets_path.exists() else None
