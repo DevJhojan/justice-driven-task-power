@@ -118,8 +118,9 @@ try:
     
     logger.info("Iniciando ft.run...")
     # Usar ft.run() en lugar de ft.app() (ft.app() está deprecado desde Flet 0.70.0)
+    # ft.run() requiere main como primer argumento posicional
     ft.run(
-        target=main, 
+        main, 
         view=ft.AppView.FLET_APP, 
         assets_dir=str(assets_path) if assets_path.exists() else None
     )
