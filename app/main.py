@@ -35,9 +35,3 @@ def main(page: ft.Page):
     
     # Actualizar la página
     page.update()
-
-
-if __name__ == "__main__":
-    # Ejecutar la aplicación
-    ft.run(main)
-
