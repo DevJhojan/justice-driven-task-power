@@ -447,7 +447,7 @@ class TasksView:
                     bgcolor=ft.Colors.GREEN
                 )
                 self.page.snack_bar.open = True
-                self.page.update()
+                    self.page.update()
             except Exception as ex:
                 self.page.snack_bar = ft.SnackBar(
                     content=ft.Text(f"Error al eliminar: {str(ex)}"),
@@ -495,9 +495,9 @@ class TasksView:
                     ),
                     ft.Row(
                         [
-                            cancel_button,
+                cancel_button,
                             confirm_button
-                        ],
+            ],
                         spacing=8
                     )
                 ],

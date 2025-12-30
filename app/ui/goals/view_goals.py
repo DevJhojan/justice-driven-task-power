@@ -830,9 +830,9 @@ class GoalsView:
                     ),
                     ft.Row(
                         [
-                            cancel_button,
+                cancel_button,
                             confirm_button
-                        ],
+            ],
                         spacing=8
                     )
                 ],
