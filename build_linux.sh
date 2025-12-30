@@ -30,15 +30,15 @@ show_help() {
     echo ""
     echo "Opciones:"
     echo "  --deb        Genera solo el paquete .deb (Debian/Ubuntu)"
-    echo "  --arch        Genera solo el paquete .pkg.tar.zst (Arch Linux)"
-    echo "  --rpm         Genera solo el paquete .rpm (Fedora/RHEL)"
-    echo "  --all         Genera todos los paquetes (por defecto)"
-    echo "  --help, -h    Muestra esta ayuda"
+    echo "  --zst        Genera solo el paquete .pkg.tar.zst (Arch Linux)"
+    echo "  --rpm        Genera solo el paquete .rpm (Fedora/RHEL)"
+    echo "  --all        Genera todos los paquetes (por defecto si no se especifica flag)"
+    echo "  --help, -h   Muestra esta ayuda"
     echo ""
     echo "Ejemplos:"
     echo "  $0              # Genera todos los paquetes"
     echo "  $0 --deb        # Genera solo .deb"
-    echo "  $0 --arch       # Genera solo .pkg.tar.zst"
+    echo "  $0 --zst        # Genera solo .pkg.tar.zst"
     echo "  $0 --rpm        # Genera solo .rpm"
     echo "  $0 --all        # Genera todos los paquetes"
     exit 0
@@ -618,28 +618,28 @@ EOF
 
 # Procesar argumentos
 BUILD_DEB=false
-BUILD_ARCH=false
+BUILD_ZST=false
 BUILD_RPM=false
 
 if [ $# -eq 0 ]; then
     # Por defecto, construir todos
     BUILD_DEB=true
-    BUILD_ARCH=true
+    BUILD_ZST=true
     BUILD_RPM=true
 else
     case "$1" in
         --deb)
             BUILD_DEB=true
             ;;
-        --arch)
-            BUILD_ARCH=true
+        --zst)
+            BUILD_ZST=true
             ;;
         --rpm)
             BUILD_RPM=true
             ;;
         --all)
             BUILD_DEB=true
-            BUILD_ARCH=true
+            BUILD_ZST=true
             BUILD_RPM=true
             ;;
         --help|-h)
@@ -674,7 +674,7 @@ echo ""
 
 # Construir bundle una sola vez si se necesita
 BUNDLE_BUILT=false
-if [ "$BUILD_DEB" = true ] || [ "$BUILD_ARCH" = true ] || [ "$BUILD_RPM" = true ]; then
+if [ "$BUILD_DEB" = true ] || [ "$BUILD_ZST" = true ] || [ "$BUILD_RPM" = true ]; then
     # Construir bundle primero (solo una vez)
     if ! build_linux_bundle; then
         log_error "No se pudo construir el bundle de Linux. Abortando."
@@ -686,7 +686,7 @@ fi
 # Construir según las opciones
 BUILD_SUCCESS=true
 DEB_SUCCESS=false
-ARCH_SUCCESS=false
+ZST_SUCCESS=false
 RPM_SUCCESS=false
 
 if [ "$BUILD_DEB" = true ]; then
@@ -699,10 +699,10 @@ if [ "$BUILD_DEB" = true ]; then
     echo ""
 fi
 
-if [ "$BUILD_ARCH" = true ]; then
+if [ "$BUILD_ZST" = true ]; then
     echo ""
     if build_arch; then
-        ARCH_SUCCESS=true
+        ZST_SUCCESS=true
     else
         BUILD_SUCCESS=false
     fi
@@ -739,8 +739,8 @@ if [ "$BUILD_DEB" = true ]; then
     fi
 fi
 
-if [ "$BUILD_ARCH" = true ]; then
-    if [ "$ARCH_SUCCESS" = true ]; then
+if [ "$BUILD_ZST" = true ]; then
+    if [ "$ZST_SUCCESS" = true ]; then
         log_success "✓ Paquete .pkg.tar.zst generado para Arch Linux"
     else
         log_error "✗ Paquete .pkg.tar.zst NO se generó"
