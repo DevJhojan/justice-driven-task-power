@@ -1,6 +1,6 @@
 """
 Punto de entrada principal de la aplicación.
-Este archivo permite ejecutar la aplicación desde el directorio raíz.
+Este archivo configura el entorno y ejecuta la aplicación desde app.app.
 """
 import sys
 import os
@@ -23,10 +23,10 @@ try:
     logger.info(f"Working directory: {os.getcwd()}")
     logger.info(f"Python path: {sys.path[:3]}...")
     
-    # Importar y ejecutar la función main desde app.main
-    logger.info("Importando app.main...")
-    from app.main import main
-    logger.info("app.main importado correctamente")
+    # Importar y ejecutar la función main desde app.app
+    logger.info("Importando app.app...")
+    from app.app import main
+    logger.info("app.app importado correctamente")
     
     import flet as ft
     logger.info("flet importado correctamente")

@@ -1,5 +1,6 @@
 """
-Punto de entrada principal de la aplicación.
+Módulo principal de la aplicación Flet.
+Contiene la función main() que configura e inicializa la aplicación.
 """
 import warnings
 # Suprimir advertencias de pkg_resources (deprecation warning de gcloud/pyrebase4)
