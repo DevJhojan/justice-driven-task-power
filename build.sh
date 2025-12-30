@@ -13,6 +13,7 @@ NC='\033[0m' # No Color
 
 # Información de la aplicación (desde pyproject.toml)
 APP_NAME="justice-driven-task-power"
+APP_EXECUTABLE="justice_driven_task_power"  # Nombre del ejecutable generado por Flet (con guiones bajos)
 APP_VERSION="1.0.0"
 APP_DESCRIPTION="conviértete en el héroe de tu propio progreso con tareas y hábitos organizados"
 APP_MAINTAINER="Developer <dev@example.com>"
@@ -43,8 +44,11 @@ cd "${SCRIPT_DIR}"
 flet build linux
 
 # Verificar que el build se completó correctamente
-if [ ! -f "${LINUX_BUILD_DIR}/${APP_NAME}" ]; then
+if [ ! -f "${LINUX_BUILD_DIR}/${APP_EXECUTABLE}" ]; then
     echo -e "${RED}❌ Error: El ejecutable no se generó correctamente${NC}"
+    echo -e "${YELLOW}   Buscando: ${LINUX_BUILD_DIR}/${APP_EXECUTABLE}${NC}"
+    echo -e "${YELLOW}   Archivos encontrados en build/linux:${NC}"
+    ls -la "${LINUX_BUILD_DIR}" | grep -E "^-" | awk '{print "   " $9}'
     exit 1
 fi
 
@@ -74,7 +78,8 @@ EOF
 
 # Copiar todo el contenido del build a /opt
 echo -e "${YELLOW}📚 Copiando aplicación y dependencias...${NC}"
-cp "${LINUX_BUILD_DIR}/${APP_NAME}" "${DEB_PACKAGE_DIR}/opt/${APP_NAME}/"
+cp "${LINUX_BUILD_DIR}/${APP_EXECUTABLE}" "${DEB_PACKAGE_DIR}/opt/${APP_NAME}/${APP_EXECUTABLE}"
+chmod +x "${DEB_PACKAGE_DIR}/opt/${APP_NAME}/${APP_EXECUTABLE}"
 
 if [ -d "${LINUX_BUILD_DIR}/lib" ]; then
     cp -r "${LINUX_BUILD_DIR}/lib" "${DEB_PACKAGE_DIR}/opt/${APP_NAME}/"
@@ -94,13 +99,13 @@ fi
 
 # Crear script launcher en /usr/bin que ejecuta desde /opt
 echo -e "${YELLOW}📋 Creando script launcher...${NC}"
-cat > "${DEB_PACKAGE_DIR}/usr/bin/${APP_NAME}" << LAUNCHER_EOF
+cat > "${DEB_PACKAGE_DIR}/usr/bin/${APP_NAME}" << EOF
 #!/bin/bash
 # Launcher script para la aplicación
 APP_DIR="/opt/${APP_NAME}"
 cd "\${APP_DIR}"
-exec "\${APP_DIR}/${APP_NAME}" "\$@"
-LAUNCHER_EOF
+exec "\${APP_DIR}/${APP_EXECUTABLE}" "\$@"
+EOF
 chmod +x "${DEB_PACKAGE_DIR}/usr/bin/${APP_NAME}"
 
 # Copiar icono
