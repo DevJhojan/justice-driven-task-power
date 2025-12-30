@@ -273,7 +273,7 @@ build_linux_bundle() {
     local build_log=$(mktemp)
     local build_success=false
     
-    log_info "Ejecutando 'flet build linux'..."
+    log_info "Ejecutando 'flet build linux --module-name app.main'..."
     if flet build linux --module-name app.main > "$build_log" 2>&1; then
         # Verificar si realmente se generó algo
         if [ -d "build/linux" ]; then

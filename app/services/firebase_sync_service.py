@@ -273,12 +273,32 @@ class FirebaseSyncService:
     def _load_firebase_config(self) -> Optional[Dict[str, Any]]:
         """Carga la configuración de Firebase desde google-services.json."""
         try:
-            # Buscar google-services.json en el directorio raíz del proyecto
-            root_dir = Path(__file__).parent.parent.parent
-            google_services_path = root_dir / "google-services.json"
+            # Buscar google-services.json (funciona tanto en desarrollo como empaquetado)
+            # Detectar si estamos en modo empaquetado
+            flet_app_dir = os.getenv("FLET_APP_STORAGE_DATA")
+            current_file = Path(__file__).resolve()
             
-            if not google_services_path.exists():
-                print(f"Warning: google-services.json no encontrado en {google_services_path}")
+            # Verificar si estamos en un directorio de Flet empaquetado
+            if flet_app_dir or "flet/app" in str(current_file) or ".local/share/com.flet" in str(current_file):
+                # En modo empaquetado, buscar en el directorio de la app
+                app_dir = current_file.parent.parent
+                possible_paths = [
+                    app_dir / "google-services.json",
+                    current_file.parent.parent / "google-services.json",
+                    Path("google-services.json"),  # Ruta relativa
+                ]
+                google_services_path = None
+                for path in possible_paths:
+                    if path.exists():
+                        google_services_path = path
+                        break
+            else:
+                # En modo desarrollo, usar la ruta del proyecto
+                root_dir = current_file.parent.parent.parent
+                google_services_path = root_dir / "google-services.json"
+            
+            if not google_services_path or not google_services_path.exists():
+                print(f"Warning: google-services.json no encontrado")
                 return None
             
             with open(google_services_path, 'r') as f:

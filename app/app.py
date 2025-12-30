@@ -8,8 +8,41 @@ warnings.filterwarnings('ignore', category=UserWarning, module='pkg_resources')
 warnings.filterwarnings('ignore', category=UserWarning, module='gcloud')
 
 import flet as ft
+import os
 from pathlib import Path
 from app.ui.home_view import HomeView
+
+
+def get_assets_path():
+    """
+    Obtiene la ruta de los assets.
+    Funciona tanto en desarrollo como en modo empaquetado.
+    
+    Returns:
+        Path: Ruta a los assets
+    """
+    # Detectar si estamos en modo empaquetado
+    flet_app_dir = os.getenv("FLET_APP_STORAGE_DATA")
+    current_file = Path(__file__).resolve()
+    
+    # Verificar si estamos en un directorio de Flet empaquetado
+    if flet_app_dir or "flet/app" in str(current_file) or ".local/share/com.flet" in str(current_file):
+        # En modo empaquetado, buscar assets en el directorio de la app
+        app_dir = current_file.parent.parent
+        # Intentar diferentes ubicaciones donde Flet puede copiar assets
+        possible_paths = [
+            app_dir / "assets",
+            current_file.parent.parent / "assets",
+            Path("assets"),  # Ruta relativa
+        ]
+        for path in possible_paths:
+            if path.exists():
+                return path
+        # Si no se encuentra, devolver la ruta relativa
+        return Path("assets")
+    else:
+        # En modo desarrollo, usar la ruta del proyecto
+        return current_file.parent.parent / "assets"
 
 
 def main(page: ft.Page):
@@ -47,11 +80,16 @@ def main(page: ft.Page):
 
         # Configurar icono de la ventana para escritorio
         try:
-            # Obtener la ruta del icono desde la raíz del proyecto
-            project_root = Path(__file__).parent.parent
-            icon_path = project_root / "assets" / "app_icon.png"
+            # Obtener la ruta del icono (funciona tanto en desarrollo como empaquetado)
+            assets_path = get_assets_path()
+            icon_path = assets_path / "app_icon.png"
             if icon_path.exists():
                 page.window.icon = str(icon_path)
+            else:
+                # Intentar ruta alternativa
+                alt_path = Path("assets") / "app_icon.png"
+                if alt_path.exists():
+                    page.window.icon = str(alt_path)
         except Exception as e:
             print(f"No se pudo cargar el icono: {e}")
         

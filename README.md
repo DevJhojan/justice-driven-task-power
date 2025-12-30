@@ -54,6 +54,11 @@ O directamente:
 python app/main.py
 ```
 
+O usando el punto de entrada de Flet:
+```bash
+python app.py
+```
+
 ## 📱 Plataformas
 
 - **💻 Escritorio**: Linux, Windows, macOS
