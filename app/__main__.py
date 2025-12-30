@@ -116,11 +116,11 @@ try:
             assets_path = Path("assets")
             logger.info(f"Using relative assets path: {assets_path}")
     
-    logger.info("Iniciando ft.run...")
-    # Usar ft.run() en lugar de ft.app() (ft.app() está deprecado desde Flet 0.70.0)
-    # ft.run() requiere main como primer argumento posicional
-    ft.run(
-        main, 
+    logger.info("Iniciando ft.app...")
+    # Usar ft.app() - compatible con todas las versiones de Flet
+    # Nota: ft.run() está disponible desde Flet 0.70.0, pero ft.app() sigue funcionando
+    ft.app(
+        target=main, 
         view=ft.AppView.FLET_APP, 
         assets_dir=str(assets_path) if assets_path.exists() else None
     )
