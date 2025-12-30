@@ -36,7 +36,7 @@ def main(page: ft.Page):
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
-            alignment=ft.Alignment.center,
+            alignment=ft.alignment.center,
             bgcolor=ft.Colors.BLACK87,
             expand=True,
         )
@@ -137,7 +137,7 @@ def main(page: ft.Page):
                             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
                         padding=20,
-                        alignment=ft.Alignment.center,
+                        alignment=ft.alignment.center,
                         bgcolor=ft.Colors.BLACK87,
                         expand=True,
                     )
@@ -395,7 +395,7 @@ def main(page: ft.Page):
                             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
                         padding=20,
-                        alignment=ft.Alignment.center,
+                        alignment=ft.alignment.center,
                         bgcolor=ft.Colors.BLACK87,
                         expand=True,
                     )
@@ -424,7 +424,7 @@ def main(page: ft.Page):
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
                     padding=20,
-                    alignment=ft.Alignment.center,
+                    alignment=ft.alignment.center,
                 )
             )
             page.update()
