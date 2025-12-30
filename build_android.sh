@@ -387,7 +387,7 @@ build_apk() {
     log_info "Generando APK para Android..."
     log_info "Building version $BASE_VERSION (code $VERSION_CODE)"
     
-    if flet build apk; then
+    if flet build apk --module-name app.main; then
         log_success "APK generado exitosamente"
         find_built_files "apk"
     else
@@ -403,7 +403,7 @@ build_aab() {
     
     check_keystore
     
-    if flet build aab; then
+    if flet build aab --module-name app.main; then
         log_success "AAB generado exitosamente"
         find_built_files "aab"
     else

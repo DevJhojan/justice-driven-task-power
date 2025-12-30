@@ -274,7 +274,7 @@ build_linux_bundle() {
     local build_success=false
     
     log_info "Ejecutando 'flet build linux'..."
-    if flet build linux > "$build_log" 2>&1; then
+    if flet build linux --module-name app.main > "$build_log" 2>&1; then
         # Verificar si realmente se generó algo
         if [ -d "build/linux" ]; then
             # Buscar ejecutable generado

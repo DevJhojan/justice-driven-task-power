@@ -47,7 +47,9 @@ def main(page: ft.Page):
 
         # Configurar icono de la ventana para escritorio
         try:
-            icon_path = Path("assets/app_icon.png")
+            # Obtener la ruta del icono desde la raíz del proyecto
+            project_root = Path(__file__).parent.parent
+            icon_path = project_root / "assets" / "app_icon.png"
             if icon_path.exists():
                 page.window.icon = str(icon_path)
         except Exception as e:

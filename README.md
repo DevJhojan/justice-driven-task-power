@@ -46,12 +46,12 @@ pip install -r requirements.txt
 
 2. **Ejecutar la aplicación:**
 ```bash
-python main.py
+python -m app.main
 ```
 
-O desde el módulo app:
+O directamente:
 ```bash
-python -m app.app
+python app/main.py
 ```
 
 ## 📱 Plataformas

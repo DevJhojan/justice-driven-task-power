@@ -33,6 +33,6 @@ python_files = "test_*.py"
 [tool.flet]
 # Configuración de icono y splash screen para Android
 icon = "assets/app_icon.png"
-# Módulo de entrada de la aplicación (app.app contiene la función main)
-module = "app.app"
+# Módulo de entrada de la aplicación (app.main es el punto de entrada)
+module = "app.main"
 
