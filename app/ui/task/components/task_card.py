@@ -39,6 +39,7 @@ def create_task_card(
     show_tags: bool = True,
     show_progress: bool = True,
     compact: bool = False,
+    subtasks_expanded: bool = True,
 ) -> ft.Container:
     """
     Crea un componente visual para mostrar una tarea completa
@@ -57,6 +58,7 @@ def create_task_card(
         show_tags: Si se muestran las etiquetas (default: True)
         show_progress: Si se muestra la barra de progreso (default: True)
         compact: Si se usa un diseño compacto (default: False)
+        subtasks_expanded: Si las subtareas están expandidas por defecto (default: True)
     
     Returns:
         Container con el componente de tarea estilizado
@@ -162,24 +164,32 @@ def create_task_card(
         info_controls.append(due_date_row)
     
     # Barra de progreso (si hay subtareas o si está completada)
+    progress_bar = None
+    progress_text = None
+    
     if show_progress:
         completion_percentage = calculate_completion_percentage(task)
+        
+        # Crear controles de progreso con referencias para actualización dinámica
+        progress_text = ft.Text(
+            format_completion_percentage(task),
+            size=description_size,
+            color=ft.Colors.WHITE_70,
+        )
+        
+        progress_bar = ft.ProgressBar(
+            value=completion_percentage,
+            width=100 if compact else 150,
+            height=6,
+            color=ft.Colors.BLUE_400,
+            bgcolor=ft.Colors.GREY_800,
+        )
         
         progress_row = ft.Row(
             controls=[
                 ft.Icon(ft.Icons.CHECK_CIRCLE_OUTLINE, size=16, color=ft.Colors.BLUE_400),
-                ft.Text(
-                    format_completion_percentage(task),
-                    size=description_size,
-                    color=ft.Colors.WHITE_70,
-                ),
-                ft.ProgressBar(
-                    value=completion_percentage,
-                    width=100 if compact else 150,
-                    height=6,
-                    color=ft.Colors.BLUE_400,
-                    bgcolor=ft.Colors.GREY_800,
-                ),
+                progress_text,
+                progress_bar,
             ],
             spacing=8,
             alignment=ft.MainAxisAlignment.START,
@@ -218,13 +228,34 @@ def create_task_card(
     
     # Subtareas (si existen y están habilitadas)
     if show_subtasks and task.subtasks:
-        subtasks_title = ft.Text(
-            f"Subtareas ({len(task.subtasks)})",
-            size=description_size,
-            weight=ft.FontWeight.W_500,
-            color=ft.Colors.WHITE_70,
-        )
-        card_controls.append(subtasks_title)
+        # Estado inicial de expansión (usar el parámetro recibido)
+        # Usamos una lista para poder modificar el valor desde el closure
+        subtasks_expanded_state = [subtasks_expanded]
+        
+        # Función wrapper para actualizar progreso automáticamente
+        def create_subtask_toggle_handler(subtask_id: str):
+            """Crea un handler que actualiza el progreso automáticamente"""
+            def handler(received_subtask_id: str):
+                # Usar el ID recibido (que viene del callback de subtask_item)
+                # Actualizar el objeto Task localmente
+                subtask = next((st for st in task.subtasks if st.id == received_subtask_id), None)
+                if subtask:
+                    subtask.toggle_completed()
+                    
+                    # Actualizar progreso si está habilitado
+                    if show_progress and progress_bar is not None and progress_text is not None:
+                        new_percentage = calculate_completion_percentage(task)
+                        progress_bar.value = new_percentage
+                        progress_text.value = format_completion_percentage(task)
+                        
+                        # Actualizar la página si está disponible
+                        if page:
+                            page.update()
+                    
+                    # Llamar al callback original si existe
+                    if on_subtask_toggle:
+                        on_subtask_toggle(task.id, received_subtask_id)
+            return handler
         
         # Lista de subtareas
         subtasks_list = ft.Column(
@@ -232,7 +263,7 @@ def create_task_card(
                 create_subtask_item(
                     subtask=subtask,
                     page=page,
-                    on_toggle_completed=lambda sid=subtask.id: on_subtask_toggle(task.id, sid) if on_subtask_toggle else None,
+                    on_toggle_completed=create_subtask_toggle_handler(subtask.id),
                     on_edit=lambda sid=subtask.id: on_subtask_edit(task.id, sid) if on_subtask_edit else None,
                     on_delete=lambda sid=subtask.id: on_subtask_delete(task.id, sid) if on_subtask_delete else None,
                     show_priority=True,
@@ -242,7 +273,44 @@ def create_task_card(
                 for subtask in task.subtasks
             ],
             spacing=6,
+            visible=subtasks_expanded_state[0],
         )
+        
+        # Botón para expandir/contraer
+        expand_button = ft.IconButton(
+            icon=ft.Icons.EXPAND_MORE if subtasks_expanded_state[0] else ft.Icons.CHEVRON_RIGHT,
+            icon_size=20,
+            icon_color=ft.Colors.WHITE_70,
+            tooltip="Expandir/Contraer subtareas",
+        )
+        
+        # Función para toggle de expandir/contraer
+        def toggle_subtasks(e):
+            subtasks_expanded_state[0] = not subtasks_expanded_state[0]
+            subtasks_list.visible = subtasks_expanded_state[0]
+            expand_button.icon = ft.Icons.EXPAND_MORE if subtasks_expanded_state[0] else ft.Icons.CHEVRON_RIGHT
+            if page:
+                page.update()
+        
+        expand_button.on_click = toggle_subtasks
+        
+        # Título con botón de expandir/contraer
+        subtasks_title_row = ft.Row(
+            controls=[
+                expand_button,
+                ft.Text(
+                    f"Subtareas ({len(task.subtasks)})",
+                    size=description_size,
+                    weight=ft.FontWeight.W_500,
+                    color=ft.Colors.WHITE_70,
+                ),
+            ],
+            spacing=8,
+            tight=True,
+            alignment=ft.MainAxisAlignment.START,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+        card_controls.append(subtasks_title_row)
         card_controls.append(subtasks_list)
     
     # Botones de acción
@@ -328,6 +396,7 @@ class TaskCard:
         show_tags: bool = True,
         show_progress: bool = True,
         compact: bool = False,
+        subtasks_expanded: bool = True,
     ):
         """
         Inicializa la tarjeta de tarea
@@ -346,6 +415,7 @@ class TaskCard:
             show_tags: Si se muestran las etiquetas
             show_progress: Si se muestra la barra de progreso
             compact: Si se usa un diseño compacto
+            subtasks_expanded: Si las subtareas están expandidas por defecto
         """
         self.task = task
         self.page = page
@@ -360,6 +430,7 @@ class TaskCard:
         self.show_tags = show_tags
         self.show_progress = show_progress
         self.compact = compact
+        self.subtasks_expanded = subtasks_expanded
         self._card: Optional[ft.Container] = None
     
     def build(self) -> ft.Container:
@@ -384,6 +455,7 @@ class TaskCard:
                 show_tags=self.show_tags,
                 show_progress=self.show_progress,
                 compact=self.compact,
+                subtasks_expanded=self.subtasks_expanded,
             )
         return self._card
     
