@@ -72,5 +72,5 @@ class HomeView:
             return bottom_nav.build(page)
         else:
             # Si no hay página, retornar solo Resume (fallback)
-            return resume_view.build()
+            return ResumeView().build()
 
