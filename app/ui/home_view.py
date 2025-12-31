@@ -28,7 +28,7 @@ class HomeView:
                         weight=ft.FontWeight.BOLD,
                         text_align=ft.TextAlign.CENTER,
                     ),
-                    ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
+                    ft.Divider(height=20, color=ft.Colors.RED),
                     ft.Text(
                         "Tu aplicación está lista para comenzar",
                         size=16,
