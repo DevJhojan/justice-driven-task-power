@@ -5,6 +5,14 @@ Verifica la creación y funcionalidad de badges de estado de tareas
 
 import pytest
 import flet as ft
+from pathlib import Path
+import sys
+
+# Agregar el directorio raíz al path para imports (necesario cuando se ejecuta directamente)
+if __name__ == "__main__":
+    project_root = Path(__file__).resolve().parents[3]  # test/ui/task/components/ -> raíz
+    sys.path.insert(0, str(project_root))
+
 from app.ui.task.components.status_badge import create_status_badge, StatusBadge
 from app.utils.task_helper import (
     TASK_STATUS_PENDING,
@@ -332,3 +340,267 @@ class TestStatusBadgeClass:
         assert len(built_badge.content.controls) == 1
         assert isinstance(built_badge.content.controls[0], ft.Icon)
 
+
+# ============================================================================
+# DEMO UI - Ejecutar con: python test/ui/task/components/test_status_badge.py
+# ============================================================================
+
+def main(page: ft.Page):
+    """
+    Demo visual de Status Badge
+    Muestra todos los badges de estado en una interfaz visual
+    """
+    # Configuración de la ventana
+    page.title = "Status Badge - Demo Visual"
+    page.window.width = 900
+    page.window.height = 700
+    page.window.min_width = 600
+    page.window.min_height = 500
+    
+    # Configuración del tema
+    page.theme_mode = ft.ThemeMode.DARK
+    page.padding = 20
+    page.spacing = 0
+    
+    # Título principal
+    title = ft.Text(
+        "Status Badge - Demostración Visual",
+        size=32,
+        weight=ft.FontWeight.BOLD,
+        text_align=ft.TextAlign.CENTER,
+        color=ft.Colors.WHITE,
+    )
+    
+    # Sección 1: Todos los estados
+    section1_title = ft.Text(
+        "1. Todos los Estados de Tareas",
+        size=24,
+        weight=ft.FontWeight.BOLD,
+        color=ft.Colors.WHITE,
+    )
+    
+    states_demo = ft.Column(
+        controls=[
+            ft.Row(
+                controls=[
+                    ft.Text("Pendiente:", color=ft.Colors.WHITE70, size=16, width=120),
+                    create_status_badge(TASK_STATUS_PENDING, page=page),
+                ],
+                spacing=15,
+            ),
+            ft.Row(
+                controls=[
+                    ft.Text("En Progreso:", color=ft.Colors.WHITE70, size=16, width=120),
+                    create_status_badge(TASK_STATUS_IN_PROGRESS, page=page),
+                ],
+                spacing=15,
+            ),
+            ft.Row(
+                controls=[
+                    ft.Text("Completada:", color=ft.Colors.WHITE70, size=16, width=120),
+                    create_status_badge(TASK_STATUS_COMPLETED, page=page),
+                ],
+                spacing=15,
+            ),
+            ft.Row(
+                controls=[
+                    ft.Text("Cancelada:", color=ft.Colors.WHITE70, size=16, width=120),
+                    create_status_badge(TASK_STATUS_CANCELLED, page=page),
+                ],
+                spacing=15,
+            ),
+        ],
+        spacing=15,
+    )
+    
+    # Sección 2: Diferentes tamaños
+    section2_title = ft.Text(
+        "2. Diferentes Tamaños",
+        size=24,
+        weight=ft.FontWeight.BOLD,
+        color=ft.Colors.WHITE,
+    )
+    
+    sizes_demo = ft.Column(
+        controls=[
+            ft.Row(
+                controls=[
+                    ft.Text("Small:", color=ft.Colors.WHITE70, size=16, width=120),
+                    create_status_badge(TASK_STATUS_PENDING, page=page, size="small"),
+                ],
+                spacing=15,
+            ),
+            ft.Row(
+                controls=[
+                    ft.Text("Medium:", color=ft.Colors.WHITE70, size=16, width=120),
+                    create_status_badge(TASK_STATUS_PENDING, page=page, size="medium"),
+                ],
+                spacing=15,
+            ),
+            ft.Row(
+                controls=[
+                    ft.Text("Large:", color=ft.Colors.WHITE70, size=16, width=120),
+                    create_status_badge(TASK_STATUS_PENDING, page=page, size="large"),
+                ],
+                spacing=15,
+            ),
+            ft.Row(
+                controls=[
+                    ft.Text("Responsive:", color=ft.Colors.WHITE70, size=16, width=120),
+                    create_status_badge(TASK_STATUS_PENDING, page=page),  # Sin size = responsive
+                ],
+                spacing=15,
+            ),
+        ],
+        spacing=15,
+    )
+    
+    # Sección 3: Variaciones (solo icono, solo texto)
+    section3_title = ft.Text(
+        "3. Variaciones de Visualización",
+        size=24,
+        weight=ft.FontWeight.BOLD,
+        color=ft.Colors.WHITE,
+    )
+    
+    variations_demo = ft.Column(
+        controls=[
+            ft.Row(
+                controls=[
+                    ft.Text("Icono + Texto:", color=ft.Colors.WHITE70, size=16, width=150),
+                    create_status_badge(
+                        TASK_STATUS_PENDING,
+                        page=page,
+                        show_icon=True,
+                        show_text=True
+                    ),
+                ],
+                spacing=15,
+            ),
+            ft.Row(
+                controls=[
+                    ft.Text("Solo Icono:", color=ft.Colors.WHITE70, size=16, width=150),
+                    create_status_badge(
+                        TASK_STATUS_PENDING,
+                        page=page,
+                        show_icon=True,
+                        show_text=False
+                    ),
+                ],
+                spacing=15,
+            ),
+            ft.Row(
+                controls=[
+                    ft.Text("Solo Texto:", color=ft.Colors.WHITE70, size=16, width=150),
+                    create_status_badge(
+                        TASK_STATUS_PENDING,
+                        page=page,
+                        show_icon=False,
+                        show_text=True
+                    ),
+                ],
+                spacing=15,
+            ),
+        ],
+        spacing=15,
+    )
+    
+    # Sección 4: Usando la clase StatusBadge
+    section4_title = ft.Text(
+        "4. Usando la Clase StatusBadge",
+        size=24,
+        weight=ft.FontWeight.BOLD,
+        color=ft.Colors.WHITE,
+    )
+    
+    badge_class_demo = ft.Column(
+        controls=[
+            ft.Row(
+                controls=[
+                    ft.Text("Con Clase:", color=ft.Colors.WHITE70, size=16, width=150),
+                    StatusBadge(
+                        status=TASK_STATUS_IN_PROGRESS,
+                        page=page,
+                        size="medium"
+                    ).build(),
+                ],
+                spacing=15,
+            ),
+            ft.Row(
+                controls=[
+                    ft.Text("Actualizado:", color=ft.Colors.WHITE70, size=16, width=150),
+                    StatusBadge(
+                        status=TASK_STATUS_COMPLETED,
+                        page=page,
+                        size="large"
+                    ).build(),
+                ],
+                spacing=15,
+            ),
+        ],
+        spacing=15,
+    )
+    
+    # Sección 5: Comparación lado a lado
+    section5_title = ft.Text(
+        "5. Comparación de Estados",
+        size=24,
+        weight=ft.FontWeight.BOLD,
+        color=ft.Colors.WHITE,
+    )
+    
+    comparison_demo = ft.Row(
+        controls=[
+            create_status_badge(TASK_STATUS_PENDING, page=page, size="medium"),
+            create_status_badge(TASK_STATUS_IN_PROGRESS, page=page, size="medium"),
+            create_status_badge(TASK_STATUS_COMPLETED, page=page, size="medium"),
+            create_status_badge(TASK_STATUS_CANCELLED, page=page, size="medium"),
+        ],
+        spacing=20,
+        alignment=ft.MainAxisAlignment.CENTER,
+    )
+    
+    # Contenedor principal con scroll
+    main_content = ft.Column(
+        controls=[
+            title,
+            ft.Divider(height=30, color=ft.Colors.TRANSPARENT),
+            
+            section1_title,
+            ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+            states_demo,
+            ft.Divider(height=30, color=ft.Colors.TRANSPARENT),
+            
+            section2_title,
+            ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+            sizes_demo,
+            ft.Divider(height=30, color=ft.Colors.TRANSPARENT),
+            
+            section3_title,
+            ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+            variations_demo,
+            ft.Divider(height=30, color=ft.Colors.TRANSPARENT),
+            
+            section4_title,
+            ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+            badge_class_demo,
+            ft.Divider(height=30, color=ft.Colors.TRANSPARENT),
+            
+            section5_title,
+            ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+            comparison_demo,
+            ft.Divider(height=30, color=ft.Colors.TRANSPARENT),
+        ],
+        spacing=0,
+        scroll=ft.ScrollMode.AUTO,
+        expand=True,
+    )
+    
+    # Agregar contenido a la página
+    page.add(main_content)
+    page.update()
+
+
+if __name__ == "__main__":
+    # Si se ejecuta directamente, mostrar el demo UI
+    ft.app(target=main)
