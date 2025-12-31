@@ -1,8 +1,15 @@
 """
 Vista principal (Home) de la aplicación
+Incluye navegación inferior entre diferentes secciones
 """
 
 import flet as ft
+from app.utils.bottom_nav import create_bottom_nav_with_views
+from app.ui.resume.resume_view import ResumeView
+from app.ui.task.task_view import TaskView
+from app.ui.settings.settings_view import SettingsView
+from app.ui.habits.habits_view import HabitsView
+from app.ui.goals.goals_view import GoalsView
 
 
 class HomeView:
@@ -10,35 +17,60 @@ class HomeView:
     
     def __init__(self):
         """Inicializa la vista principal"""
-        pass
+        self.page_ref = None
     
-    def build(self) -> ft.Container:
+    def build(self, page: ft.Page = None) -> ft.Container:
         """
-        Construye y retorna el widget principal de la vista
+        Construye y retorna el widget principal de la vista con BottomNav
+        
+        Args:
+            page: Objeto Page de Flet (requerido para BottomNav)
         
         Returns:
-            Container con el contenido de la vista principal
+            Container con el contenido de la vista principal y navegación
         """
-        return ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Text(
-                        "Welcome to theJustice Driven Task Power",
-                        size=24,
-                        weight=ft.FontWeight.BOLD,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    ft.Divider(height=20, color=ft.Colors.RED),
-                    ft.Text(
-                        "Tu aplicación está lista para comenzar",
-                        size=16,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            padding=20,
-            expand=True,
-        )
+        # Guardar referencia a la página
+        if page:
+            self.page_ref = page
+        
+        # Lista de vistas en orden
+        views = [
+            ResumeView(),  # Índice 0 - Pantalla principal
+            TaskView(),     # Índice 1
+            HabitsView(),   # Índice 2
+            GoalsView(),    # Índice 3
+            SettingsView(), # Índice 4
+        ]
+        
+        # Definir iconos para cada vista
+        icons = {
+            0: ft.Icons.DASHBOARD,  # Resume
+            1: ft.Icons.TASK,        # Task
+            2: ft.Icons.REPEAT,      # Habits
+            3: ft.Icons.FLAG,        # Goals
+            4: ft.Icons.SETTINGS,    # Settings
+        }
+        
+        # Definir etiquetas para cada vista
+        labels = {
+            0: "Resumen",
+            1: "Tareas",
+            2: "Hábitos",
+            3: "Metas",
+            4: "Configuración",
+        }
+        
+        # Crear el BottomNav con las vistas, iconos y etiquetas
+        if page:
+            bottom_nav = create_bottom_nav_with_views(
+                views=views,
+                page=page,
+                icons=icons,
+                labels=labels,
+            )
+            # Retornar el layout completo con BottomNav
+            return bottom_nav.build(page)
+        else:
+            # Si no hay página, retornar solo Resume (fallback)
+            return resume_view.build()
 

@@ -1,6 +1,53 @@
 """
 Componente de navegación inferior (Bottom Navigation)
 Permite navegar entre diferentes pantallas usando una barra inferior
+
+Uso desde home_view.py o cualquier vista:
+
+    Opción 1 - Usando create_bottom_nav_with_views:
+        from app.utils.bottom_nav import create_bottom_nav_with_views
+        from app.ui.home_view import HomeView
+        from app.ui.task.task_view import TaskView
+        from app.ui.settings.settings_view import SettingsView
+        
+        views = [HomeView(), TaskView(), SettingsView()]
+        bottom_nav = create_bottom_nav_with_views(views, page)
+        page.add(bottom_nav.build(page))
+        page.update()
+
+    Opción 2 - Usando BottomNav directamente con iconos personalizados:
+        from app.utils.bottom_nav import BottomNav
+        from app.ui.home_view import HomeView
+        from app.ui.task.task_view import TaskView
+        from app.ui.settings.settings_view import SettingsView
+        
+        home_view = HomeView()
+        task_view = TaskView()
+        settings_view = SettingsView()
+        
+        # Definir iconos y etiquetas personalizados
+        icons = {
+            0: ft.Icons.HOME,
+            1: ft.Icons.TASK,
+            2: ft.Icons.SETTINGS,
+        }
+        labels = {
+            0: "Inicio",
+            1: "Tareas",
+            2: "Configuración",
+        }
+        
+        bottom_nav = BottomNav(
+            screens={
+                0: home_view.build(),
+                1: task_view.build(),
+                2: settings_view.build(),
+            },
+            icons=icons,
+            labels=labels
+        )
+        page.add(bottom_nav.build(page))
+        page.update()
 """
 
 import flet as ft
@@ -10,36 +57,68 @@ from typing import Callable, Dict, List
 class BottomNav:
     """Clase que maneja la navegación inferior entre pantallas"""
     
-    def __init__(self, screens: Dict[int, ft.Control], on_navigate: Callable = None):
+    def __init__(
+        self, 
+        screens: Dict[int, ft.Control], 
+        on_navigate: Callable = None,
+        icons: Dict[int, str] = None,
+        labels: Dict[int, str] = None
+    ):
         """
         Inicializa el componente de navegación inferior
         
         Args:
             screens: Diccionario con las pantallas {índice: control}
             on_navigate: Callback opcional que se ejecuta al cambiar de pantalla
+            icons: Diccionario con los iconos {índice: icono} (ej: {0: ft.Icons.HOME})
+            labels: Diccionario con las etiquetas {índice: etiqueta} (ej: {0: "Inicio"})
         """
         self.screens = screens
         self.on_navigate = on_navigate
         self.current_index = 0
+        self.icons = icons or {}
+        self.labels = labels or {}
+        
+        # Crear los destinos de navegación con iconos y etiquetas personalizados
+        destinations = []
+        num_screens = len(screens)
+        
+        # Iconos por defecto si no se proporcionan
+        default_icons = [
+            ft.Icons.HOME,
+            ft.Icons.TASK,
+            ft.Icons.SETTINGS,
+            ft.Icons.DASHBOARD,
+            ft.Icons.PERSON,
+        ]
+        
+        # Etiquetas por defecto si no se proporcionan
+        default_labels = [
+            "Inicio",
+            "Tareas",
+            "Configuración",
+            "Panel",
+            "Perfil",
+        ]
+        
+        for i in range(num_screens):
+            # Usar icono personalizado o por defecto
+            icon = self.icons.get(i, default_icons[i] if i < len(default_icons) else ft.Icons.CIRCLE)
+            # Usar etiqueta personalizada o por defecto
+            label = self.labels.get(i, default_labels[i] if i < len(default_labels) else f"Pantalla {i+1}")
+            
+            destinations.append(
+                ft.NavigationBarDestination(
+                    icon=icon,
+                    label=label,
+                )
+            )
         
         # Crear la barra de navegación
         self.nav_bar = ft.NavigationBar(
             selected_index=0,
             on_change=self._handle_navigation,
-            destinations=[
-                ft.NavigationBarDestination(
-                    icon=ft.Icons.HOME,
-                    label="Inicio",
-                ),
-                ft.NavigationBarDestination(
-                    icon=ft.Icons.TASK,
-                    label="Tareas",
-                ),
-                ft.NavigationBarDestination(
-                    icon=ft.Icons.SETTINGS,
-                    label="Configuración",
-                ),
-            ],
+            destinations=destinations,
         )
     
     def _handle_navigation(self, e):
@@ -50,6 +129,12 @@ class BottomNav:
             e: Evento de cambio de navegación
         """
         self.current_index = e.control.selected_index
+        
+        # Actualizar la pantalla mostrada
+        if hasattr(self, 'screen_container'):
+            current_screen = self.screens.get(self.current_index, self.screens[0])
+            self.screen_container.content = current_screen
+            e.page.update()
         
         # Ejecutar callback si existe
         if self.on_navigate:
@@ -68,14 +153,17 @@ class BottomNav:
         # Obtener la pantalla actual
         current_screen = self.screens.get(self.current_index, self.screens[0])
         
+        # Contenedor para la pantalla actual (se puede actualizar dinámicamente)
+        self.screen_container = ft.Container(
+            content=current_screen,
+            expand=True,
+        )
+        
         return ft.Container(
             content=ft.Column(
                 controls=[
                     # Contenedor para la pantalla actual - ocupa todo el espacio disponible
-                    ft.Container(
-                        content=current_screen,
-                        expand=True,
-                    ),
+                    self.screen_container,
                     # Barra de navegación inferior - solo ocupa su espacio natural
                     self.nav_bar,
                 ],
@@ -84,6 +172,18 @@ class BottomNav:
             ),
             expand=True,
         )
+    
+    def refresh_screen(self, page: ft.Page):
+        """
+        Actualiza la pantalla actual mostrada
+        
+        Args:
+            page: Objeto Page de Flet
+        """
+        current_screen = self.screens.get(self.current_index, self.screens[0])
+        if hasattr(self, 'screen_container'):
+            self.screen_container.content = current_screen
+            page.update()
     
     def navigate_to(self, index: int, page: ft.Page):
         """
@@ -97,203 +197,129 @@ class BottomNav:
             self.current_index = index
             self.nav_bar.selected_index = index
             page.update()
-
-
-# ============================================================================
-# PANTALLAS DE EJEMPLO
-# ============================================================================
-
-class Screen1:
-    """Primera pantalla de ejemplo - Inicio"""
     
-    def build(self) -> ft.Container:
-        """Construye la primera pantalla"""
-        return ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Icon(
-                        ft.Icons.HOME,
-                        size=80,
-                        color=ft.Colors.BLUE_700,
-                    ),
-                    ft.Text(
-                        "Pantalla de Inicio",
-                        size=32,
-                        weight=ft.FontWeight.BOLD,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
-                    ft.Text(
-                        "Esta es la primera pantalla de la aplicación.",
-                        size=18,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    ft.Text(
-                        "Usa la barra inferior para navegar.",
-                        size=16,
-                        color=ft.Colors.GREY_600,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            padding=20,
-            expand=True,
-            bgcolor=ft.Colors.WHITE,
-        )
-
-
-class Screen2:
-    """Segunda pantalla de ejemplo - Tareas"""
+    def update_screen(self, index: int, screen_content: ft.Control, page: ft.Page):
+        """
+        Actualiza una pantalla específica con nuevo contenido
+        
+        Args:
+            index: Índice de la pantalla a actualizar
+            screen_content: Nuevo contenido de la pantalla
+            page: Objeto Page de Flet
+        """
+        if index in self.screens:
+            self.screens[index] = screen_content
+            if self.current_index == index:
+                # Si es la pantalla actual, actualizar inmediatamente
+                page.update()
     
-    def build(self) -> ft.Container:
-        """Construye la segunda pantalla"""
-        return ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Icon(
-                        ft.Icons.TASK,
-                        size=80,
-                        color=ft.Colors.GREEN_700,
-                    ),
-                    ft.Text(
-                        "Pantalla de Tareas",
-                        size=32,
-                        weight=ft.FontWeight.BOLD,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
-                    ft.Text(
-                        "Esta es la segunda pantalla.",
-                        size=18,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    ft.Text(
-                        "Aquí puedes gestionar tus tareas.",
-                        size=16,
-                        color=ft.Colors.GREY_600,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            padding=20,
-            expand=True,
-            bgcolor=ft.Colors.WHITE,
-        )
-
-
-class Screen3:
-    """Tercera pantalla de ejemplo - Configuración"""
-    
-    def build(self) -> ft.Container:
-        """Construye la tercera pantalla"""
-        return ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Icon(
-                        ft.Icons.SETTINGS,
-                        size=80,
-                        color=ft.Colors.ORANGE_700,
-                    ),
-                    ft.Text(
-                        "Pantalla de Configuración",
-                        size=32,
-                        weight=ft.FontWeight.BOLD,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
-                    ft.Text(
-                        "Esta es la tercera pantalla.",
-                        size=18,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                    ft.Text(
-                        "Aquí puedes ajustar la configuración.",
-                        size=16,
-                        color=ft.Colors.GREY_600,
-                        text_align=ft.TextAlign.CENTER,
-                    ),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            padding=20,
-            expand=True,
-            bgcolor=ft.Colors.WHITE,
-        )
+    def get_current_screen(self) -> ft.Control:
+        """
+        Obtiene la pantalla actual
+        
+        Returns:
+            Control de la pantalla actual
+        """
+        return self.screens.get(self.current_index, self.screens[0])
 
 
 # ============================================================================
-# DEMO EJECUTABLE
+# FUNCIONES HELPER PARA INTEGRACIÓN
 # ============================================================================
 
-def main(page: ft.Page):
+def create_bottom_nav_with_views(
+    views: list,
+    page: ft.Page,
+    on_navigate: Callable = None,
+    destinations: list = None,
+    icons: Dict[int, str] = None,
+    labels: Dict[int, str] = None
+) -> BottomNav:
     """
-    Función principal del demo para probar el BottomNav
+    Crea un BottomNav con vistas que tienen método build()
     
     Args:
+        views: Lista de objetos vista (deben tener método build())
         page: Objeto Page de Flet
+        on_navigate: Callback opcional que se ejecuta al cambiar de pantalla
+        destinations: Lista opcional de NavigationBarDestination personalizados
+        icons: Diccionario con los iconos {índice: icono} (ej: {0: ft.Icons.HOME})
+        labels: Diccionario con las etiquetas {índice: etiqueta} (ej: {0: "Inicio"})
+        
+    Returns:
+        Instancia de BottomNav configurada
+        
+    Ejemplo:
+        from app.ui.home_view import HomeView
+        from app.ui.task.task_view import TaskView
+        from app.ui.settings.settings_view import SettingsView
+        
+        views = [HomeView(), TaskView(), SettingsView()]
+        icons = {0: ft.Icons.HOME, 1: ft.Icons.TASK, 2: ft.Icons.SETTINGS}
+        labels = {0: "Inicio", 1: "Tareas", 2: "Config"}
+        bottom_nav = create_bottom_nav_with_views(views, page, icons=icons, labels=labels)
     """
-    # Configuración de la ventana
-    page.title = "Demo - Bottom Navigation"
-    page.window.width = 600
-    page.window.height = 700
+    # Construir las pantallas desde las vistas
+    screens = {}
+    for i, view in enumerate(views):
+        if hasattr(view, 'build'):
+            screens[i] = view.build()
+        else:
+            # Si no tiene método build, usar directamente
+            screens[i] = view
     
-    # Configuración de la página
-    page.padding = 0
-    page.spacing = 0
-    page.bgcolor = ft.Colors.WHITE
+    # Crear el BottomNav con las pantallas construidas y los iconos/etiquetas
+    bottom_nav = BottomNav(screens, on_navigate, icons=icons, labels=labels)
     
-    # Crear las pantallas
-    screen1 = Screen1()
-    screen2 = Screen2()
-    screen3 = Screen3()
+    # Actualizar los destinos si se proporcionaron personalizados
+    if destinations and len(destinations) == len(views):
+        bottom_nav.nav_bar.destinations = destinations
     
-    # Contenedor para la pantalla actual (se actualizará dinámicamente)
-    current_screen_container = ft.Container(
-        content=screen1.build(),
-        expand=True,
-    )
-    
-    # Función para manejar la navegación
-    def handle_navigation(index: int):
-        """Actualiza la pantalla cuando se cambia de tab"""
-        screens = [screen1, screen2, screen3]
-        if 0 <= index < len(screens):
-            current_screen_container.content = screens[index].build()
-            page.update()
-    
-    # Crear el BottomNav
-    bottom_nav = BottomNav(
-        screens={
-            0: screen1.build(),
-            1: screen2.build(),
-            2: screen3.build(),
-        },
-        on_navigate=handle_navigation,
-    )
-    
-    # Crear el layout completo usando el BottomNav
-    layout = ft.Column(
-        controls=[
-            # Pantalla actual - ocupa todo el espacio disponible
-            current_screen_container,
-            # Barra de navegación - solo ocupa su espacio natural en la parte inferior
-            bottom_nav.nav_bar,
-        ],
-        spacing=0,
-        expand=True,
-    )
-    
-    # Agregar a la página
-    page.add(layout)
-    page.update()
+    return bottom_nav
 
 
-if __name__ == "__main__":
-    # Ejecutar el demo
-    ft.run(main)
-
+def wrap_view_with_bottom_nav(
+    view,
+    other_views: list,
+    page: ft.Page,
+    current_index: int = 0,
+    on_navigate: Callable = None,
+    icons: Dict[int, str] = None,
+    labels: Dict[int, str] = None
+) -> ft.Container:
+    """
+    Envuelve una vista con BottomNav, incluyendo otras vistas para navegación
+    
+    Args:
+        view: Vista principal (objeto con método build())
+        other_views: Lista de otras vistas para navegación
+        page: Objeto Page de Flet
+        current_index: Índice de la vista inicial (default: 0)
+        on_navigate: Callback opcional que se ejecuta al cambiar de pantalla
+        icons: Diccionario con los iconos {índice: icono} (ej: {0: ft.Icons.HOME})
+        labels: Diccionario con las etiquetas {índice: etiqueta} (ej: {0: "Inicio"})
+        
+    Returns:
+        Container con la vista envuelta en BottomNav
+        
+    Ejemplo:
+        from app.ui.home_view import HomeView
+        from app.ui.task.task_view import TaskView
+        from app.ui.settings.settings_view import SettingsView
+        
+        home_view = HomeView()
+        other_views = [TaskView(), SettingsView()]
+        icons = {0: ft.Icons.HOME, 1: ft.Icons.TASK, 2: ft.Icons.SETTINGS}
+        labels = {0: "Inicio", 1: "Tareas", 2: "Config"}
+        wrapped = wrap_view_with_bottom_nav(home_view, other_views, page, icons=icons, labels=labels)
+    """
+    # Combinar todas las vistas
+    all_views = [view] + other_views
+    
+    # Crear el BottomNav con iconos y etiquetas personalizados
+    bottom_nav = create_bottom_nav_with_views(all_views, page, on_navigate, icons=icons, labels=labels)
+    bottom_nav.current_index = current_index
+    bottom_nav.nav_bar.selected_index = current_index
+    
+    # Retornar el layout completo
+    return bottom_nav.build(page)

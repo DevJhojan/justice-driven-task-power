@@ -38,9 +38,9 @@ def main(page: ft.Page):
         # Limpiar la página
         page.clean()
         
-        # Cargar la vista principal (Home)
+        # Cargar la vista principal (Home) con BottomNav
         home_view = HomeView()
-        page.add(home_view.build())
+        page.add(home_view.build(page))
         
         # Actualizar la página
         page.update()
