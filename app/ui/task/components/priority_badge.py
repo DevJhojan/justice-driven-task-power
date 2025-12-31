@@ -117,13 +117,13 @@ def create_priority_badge(
     # Crear el badge con estilo
     badge = ft.Container(
         content=badge_content,
-        padding=ft.padding.symmetric(
+        padding=ft.Padding.symmetric(
             horizontal=padding_horizontal,
             vertical=padding_vertical,
         ),
         border_radius=border_radius,
         bgcolor=f"{priority_color}20",  # Color con 20% de opacidad
-        border=ft.border.all(1, priority_color),
+        border=ft.Border.all(1, priority_color),
     )
     
     return badge
@@ -221,13 +221,13 @@ def create_priority_badge_from_quadrant(
     # Crear el badge con estilo
     badge = ft.Container(
         content=badge_content,
-        padding=ft.padding.symmetric(
+        padding=ft.Padding.symmetric(
             horizontal=padding_horizontal,
             vertical=padding_vertical,
         ),
         border_radius=border_radius,
         bgcolor=f"{priority_color}20",  # Color con 20% de opacidad
-        border=ft.border.all(1, priority_color),
+        border=ft.Border.all(1, priority_color),
     )
     
     return badge
