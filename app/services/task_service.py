@@ -1,6 +1,7 @@
 """
 Servicio de Tareas (Task Service)
 Gestiona las operaciones CRUD de tareas y subtareas
+Integrado con DatabaseService para persistencia
 """
 
 from typing import Optional, List, Dict, Any
@@ -15,6 +16,7 @@ from app.utils.task_helper import (
     VALID_TASK_STATUSES,
 )
 from app.utils.eisenhower_matrix import get_eisenhower_quadrant
+from app.services.database_service import DatabaseService, TableSchema
 
 
 class TaskService:
@@ -22,7 +24,7 @@ class TaskService:
     Servicio para gestionar tareas y subtareas
     """
     
-    def __init__(self, database_service=None):
+    def __init__(self, database_service: Optional[DatabaseService] = None):
         """
         Inicializa el servicio de tareas
         
@@ -30,15 +32,63 @@ class TaskService:
             database_service: Servicio de base de datos (opcional)
         """
         self.database_service = database_service
-        # Almacenamiento temporal en memoria (se reemplazará con base de datos)
+        # Almacenamiento temporal en memoria (fallback si no hay database_service)
         self._tasks: Dict[str, Task] = {}
         self._subtasks: Dict[str, Subtask] = {}
+    
+    async def initialize(self):
+        """
+        Inicializa el servicio y la base de datos si está disponible
+        Registra los esquemas de tablas para tasks y subtasks
+        """
+        if self.database_service:
+            # Registrar esquema de tabla de tasks
+            tasks_schema = TableSchema(
+                table_name="tasks",
+                columns={
+                    "id": "TEXT PRIMARY KEY",
+                    "title": "TEXT NOT NULL",
+                    "description": "TEXT",
+                    "status": "TEXT NOT NULL DEFAULT 'pendiente'",
+                    "urgent": "INTEGER NOT NULL DEFAULT 0",
+                    "important": "INTEGER NOT NULL DEFAULT 0",
+                    "due_date": "TEXT",
+                    "created_at": "TEXT NOT NULL",
+                    "updated_at": "TEXT NOT NULL",
+                    "user_id": "TEXT NOT NULL",
+                    "tags": "TEXT",
+                    "notes": "TEXT"
+                },
+                indexes=["user_id", "status"]
+            )
+            
+            # Registrar esquema de tabla de subtasks
+            subtasks_schema = TableSchema(
+                table_name="subtasks",
+                columns={
+                    "id": "TEXT PRIMARY KEY",
+                    "task_id": "TEXT NOT NULL",
+                    "title": "TEXT NOT NULL",
+                    "completed": "INTEGER NOT NULL DEFAULT 0",
+                    "urgent": "INTEGER NOT NULL DEFAULT 0",
+                    "important": "INTEGER NOT NULL DEFAULT 0",
+                    "created_at": "TEXT NOT NULL",
+                    "updated_at": "TEXT NOT NULL",
+                    "notes": "TEXT"
+                },
+                foreign_keys=[{"column": "task_id", "references": "tasks(id)"}],
+                indexes=["task_id"]
+            )
+            
+            self.database_service.register_table_schema(tasks_schema)
+            self.database_service.register_table_schema(subtasks_schema)
+            await self.database_service.initialize()
     
     # ============================================================================
     # OPERACIONES CRUD DE TAREAS
     # ============================================================================
     
-    def create_task(self, task_data: Dict[str, Any]) -> Task:
+    async def create_task(self, task_data: Dict[str, Any]) -> Task:
         """
         Crea una nueva tarea
         
@@ -83,17 +133,23 @@ class TaskService:
             notes=task_data.get("notes", ""),
         )
         
-        # Guardar en almacenamiento
+        # Guardar en almacenamiento (fallback)
         self._tasks[task_id] = task
         
         # Si hay database_service, guardar en base de datos
         if self.database_service:
-            # TODO: Implementar guardado en base de datos
-            pass
+            try:
+                task_dict = task.to_dict()
+                # Remover subtasks del dict principal (se guardan por separado)
+                subtasks = task_dict.pop('subtasks', [])
+                await self.database_service.create('tasks', task_dict)
+            except Exception as e:
+                # Si falla la BD, mantener en memoria
+                print(f"Error guardando tarea en BD: {e}")
         
         return task
     
-    def get_task(self, task_id: str) -> Optional[Task]:
+    async def get_task(self, task_id: str) -> Optional[Task]:
         """
         Obtiene una tarea por su ID
         
@@ -103,15 +159,30 @@ class TaskService:
         Returns:
             Instancia de Task o None si no existe
         """
+        # Buscar primero en memoria
         task = self._tasks.get(task_id)
         
+        # Si no está en memoria y hay database_service, buscar en BD
         if not task and self.database_service:
-            # TODO: Buscar en base de datos
-            pass
+            try:
+                task_dict = await self.database_service.get('tasks', task_id)
+                if task_dict:
+                    # Obtener subtareas relacionadas
+                    subtasks_dict = await self.database_service.get_all(
+                        'subtasks',
+                        filters={'task_id': task_id},
+                        order_by='created_at ASC'
+                    )
+                    task_dict['subtasks'] = subtasks_dict
+                    task = Task.from_dict(task_dict)
+                    # Guardar en memoria para acceso rápido
+                    self._tasks[task_id] = task
+            except Exception as e:
+                print(f"Error obteniendo tarea de BD: {e}")
         
         return task
     
-    def get_all_tasks(self, user_id: Optional[str] = None, filters: Optional[Dict[str, Any]] = None) -> List[Task]:
+    async def get_all_tasks(self, user_id: Optional[str] = None, filters: Optional[Dict[str, Any]] = None) -> List[Task]:
         """
         Obtiene todas las tareas, opcionalmente filtradas
         
@@ -128,6 +199,67 @@ class TaskService:
         Returns:
             Lista de tareas
         """
+        # Si hay database_service, obtener de BD (fuente principal)
+        if self.database_service:
+            try:
+                # Preparar filtros para BD (excluir filtros que se aplican en memoria)
+                db_filters = {}
+                if user_id:
+                    db_filters['user_id'] = user_id
+                
+                if filters:
+                    if filters.get("status"):
+                        db_filters['status'] = filters["status"]
+                    if "urgent" in filters:
+                        db_filters['urgent'] = filters["urgent"]
+                    if "important" in filters:
+                        db_filters['important'] = filters["important"]
+                
+                tasks_dict = await self.database_service.get_all(
+                    'tasks',
+                    filters=db_filters if db_filters else None,
+                    order_by='created_at DESC'
+                )
+                
+                # Obtener subtareas para cada tarea
+                for task_dict in tasks_dict:
+                    task_id = task_dict['id']
+                    subtasks_dict = await self.database_service.get_all(
+                        'subtasks',
+                        filters={'task_id': task_id},
+                        order_by='created_at ASC'
+                    )
+                    task_dict['subtasks'] = subtasks_dict
+                
+                tasks = [Task.from_dict(t) for t in tasks_dict]
+                
+                # Actualizar cache en memoria
+                for task in tasks:
+                    self._tasks[task.id] = task
+                
+                # Aplicar filtros adicionales que no están en BD
+                if filters:
+                    if filters.get("quadrant"):
+                        quadrant = filters["quadrant"]
+                        tasks = [
+                            t for t in tasks
+                            if get_eisenhower_quadrant(t.urgent, t.important) == quadrant
+                        ]
+                    
+                    if filters.get("overdue"):
+                        from app.utils.task_helper import is_task_overdue
+                        tasks = [t for t in tasks if is_task_overdue(t)]
+                    
+                    if filters.get("due_today"):
+                        from app.utils.task_helper import is_task_due_today
+                        tasks = [t for t in tasks if is_task_due_today(t)]
+                
+                return tasks
+            except Exception as e:
+                print(f"Error obteniendo tareas de BD: {e}")
+                # Fallback a memoria
+        
+        # Fallback: usar almacenamiento en memoria
         tasks = list(self._tasks.values())
         
         # Filtrar por usuario si se proporciona
@@ -160,14 +292,9 @@ class TaskService:
                 from app.utils.task_helper import is_task_due_today
                 tasks = [t for t in tasks if is_task_due_today(t)]
         
-        # Si hay database_service, buscar también en base de datos
-        if self.database_service:
-            # TODO: Buscar en base de datos
-            pass
-        
         return tasks
     
-    def update_task(self, task_id: str, task_data: Dict[str, Any]) -> Optional[Task]:
+    async def update_task(self, task_id: str, task_data: Dict[str, Any]) -> Optional[Task]:
         """
         Actualiza una tarea existente
         
@@ -178,7 +305,7 @@ class TaskService:
         Returns:
             Instancia de Task actualizada o None si no existe
         """
-        task = self.get_task(task_id)
+        task = await self.get_task(task_id)
         if not task:
             return None
         
@@ -209,17 +336,37 @@ class TaskService:
         # Actualizar timestamp
         task.updated_at = datetime.now()
         
-        # Guardar cambios
+        # Guardar cambios en memoria
         self._tasks[task_id] = task
         
         # Si hay database_service, actualizar en base de datos
         if self.database_service:
-            # TODO: Actualizar en base de datos
-            pass
+            try:
+                # Preparar datos para actualización
+                update_data = {}
+                if "title" in task_data:
+                    update_data["title"] = task.title
+                if "description" in task_data:
+                    update_data["description"] = task.description
+                if "status" in task_data:
+                    update_data["status"] = task.status
+                if "urgent" in task_data or "important" in task_data:
+                    update_data["urgent"] = task.urgent
+                    update_data["important"] = task.important
+                if "due_date" in task_data:
+                    update_data["due_date"] = task.due_date
+                if "tags" in task_data:
+                    update_data["tags"] = task.tags
+                if "notes" in task_data:
+                    update_data["notes"] = task.notes
+                
+                await self.database_service.update('tasks', task_id, update_data)
+            except Exception as e:
+                print(f"Error actualizando tarea en BD: {e}")
         
         return task
     
-    def delete_task(self, task_id: str) -> bool:
+    async def delete_task(self, task_id: str) -> bool:
         """
         Elimina una tarea y todas sus subtareas
         
@@ -229,21 +376,25 @@ class TaskService:
         Returns:
             True si se eliminó correctamente, False si no existe
         """
-        task = self.get_task(task_id)
+        task = await self.get_task(task_id)
         if not task:
             return False
         
         # Eliminar todas las subtareas asociadas
         for subtask in task.subtasks:
-            self.delete_subtask(subtask.id)
+            await self.delete_subtask(subtask.id)
         
-        # Eliminar la tarea
-        del self._tasks[task_id]
+        # Eliminar de memoria
+        if task_id in self._tasks:
+            del self._tasks[task_id]
         
         # Si hay database_service, eliminar de base de datos
+        # Las subtareas se eliminan automáticamente por CASCADE
         if self.database_service:
-            # TODO: Eliminar de base de datos
-            pass
+            try:
+                await self.database_service.delete('tasks', task_id)
+            except Exception as e:
+                print(f"Error eliminando tarea de BD: {e}")
         
         return True
     
@@ -251,7 +402,7 @@ class TaskService:
     # OPERACIONES CRUD DE SUBTAREAS
     # ============================================================================
     
-    def create_subtask(self, task_id: str, subtask_data: Dict[str, Any]) -> Optional[Subtask]:
+    async def create_subtask(self, task_id: str, subtask_data: Dict[str, Any]) -> Optional[Subtask]:
         """
         Crea una nueva subtarea para una tarea
         
@@ -267,7 +418,7 @@ class TaskService:
         Returns:
             Instancia de Subtask creada o None si la tarea no existe
         """
-        task = self.get_task(task_id)
+        task = await self.get_task(task_id)
         if not task:
             return None
         
@@ -291,17 +442,20 @@ class TaskService:
         # Agregar a la tarea
         task.add_subtask(subtask)
         
-        # Guardar en almacenamiento
+        # Guardar en almacenamiento (fallback)
         self._subtasks[subtask_id] = subtask
         
         # Si hay database_service, guardar en base de datos
         if self.database_service:
-            # TODO: Implementar guardado en base de datos
-            pass
+            try:
+                subtask_dict = subtask.to_dict()
+                await self.database_service.create('subtasks', subtask_dict)
+            except Exception as e:
+                print(f"Error guardando subtarea en BD: {e}")
         
         return subtask
     
-    def get_subtask(self, subtask_id: str) -> Optional[Subtask]:
+    async def get_subtask(self, subtask_id: str) -> Optional[Subtask]:
         """
         Obtiene una subtarea por su ID
         
@@ -311,9 +465,23 @@ class TaskService:
         Returns:
             Instancia de Subtask o None si no existe
         """
-        return self._subtasks.get(subtask_id)
+        # Buscar primero en memoria
+        subtask = self._subtasks.get(subtask_id)
+        
+        # Si no está en memoria y hay database_service, buscar en BD
+        if not subtask and self.database_service:
+            try:
+                subtask_dict = await self.database_service.get('subtasks', subtask_id)
+                if subtask_dict:
+                    subtask = Subtask.from_dict(subtask_dict)
+                    # Guardar en memoria para acceso rápido
+                    self._subtasks[subtask_id] = subtask
+            except Exception as e:
+                print(f"Error obteniendo subtarea de BD: {e}")
+        
+        return subtask
     
-    def get_subtasks_by_task(self, task_id: str) -> List[Subtask]:
+    async def get_subtasks_by_task(self, task_id: str) -> List[Subtask]:
         """
         Obtiene todas las subtareas de una tarea
         
@@ -323,13 +491,13 @@ class TaskService:
         Returns:
             Lista de subtareas
         """
-        task = self.get_task(task_id)
+        task = await self.get_task(task_id)
         if not task:
             return []
         
         return task.subtasks
     
-    def update_subtask(self, subtask_id: str, subtask_data: Dict[str, Any]) -> Optional[Subtask]:
+    async def update_subtask(self, subtask_id: str, subtask_data: Dict[str, Any]) -> Optional[Subtask]:
         """
         Actualiza una subtarea existente
         
@@ -340,7 +508,7 @@ class TaskService:
         Returns:
             Instancia de Subtask actualizada o None si no existe
         """
-        subtask = self.get_subtask(subtask_id)
+        subtask = await self.get_subtask(subtask_id)
         if not subtask:
             return None
         
@@ -365,22 +533,46 @@ class TaskService:
         # Actualizar timestamp
         subtask.updated_at = datetime.now()
         
-        # Guardar cambios
+        # Guardar cambios en memoria
         self._subtasks[subtask_id] = subtask
         
         # Actualizar también en la tarea padre
-        task = self.get_task(subtask.task_id)
+        task = await self.get_task(subtask.task_id)
         if task:
             task.updated_at = datetime.now()
+            # Actualizar tarea en BD también
+            if self.database_service:
+                try:
+                    await self.database_service.update(
+                        'tasks',
+                        task.id,
+                        {"updated_at": task.updated_at}
+                    )
+                except Exception as e:
+                    print(f"Error actualizando timestamp de tarea en BD: {e}")
         
         # Si hay database_service, actualizar en base de datos
         if self.database_service:
-            # TODO: Actualizar en base de datos
-            pass
+            try:
+                # Preparar datos para actualización
+                update_data = {}
+                if "title" in subtask_data:
+                    update_data["title"] = subtask.title
+                if "completed" in subtask_data:
+                    update_data["completed"] = subtask.completed
+                if "urgent" in subtask_data or "important" in subtask_data:
+                    update_data["urgent"] = subtask.urgent
+                    update_data["important"] = subtask.important
+                if "notes" in subtask_data:
+                    update_data["notes"] = subtask.notes
+                
+                await self.database_service.update('subtasks', subtask_id, update_data)
+            except Exception as e:
+                print(f"Error actualizando subtarea en BD: {e}")
         
         return subtask
     
-    def delete_subtask(self, subtask_id: str) -> bool:
+    async def delete_subtask(self, subtask_id: str) -> bool:
         """
         Elimina una subtarea
         
@@ -390,22 +582,25 @@ class TaskService:
         Returns:
             True si se eliminó correctamente, False si no existe
         """
-        subtask = self.get_subtask(subtask_id)
+        subtask = await self.get_subtask(subtask_id)
         if not subtask:
             return False
         
         # Eliminar de la tarea padre
-        task = self.get_task(subtask.task_id)
+        task = await self.get_task(subtask.task_id)
         if task:
             task.remove_subtask(subtask_id)
         
-        # Eliminar de almacenamiento
-        del self._subtasks[subtask_id]
+        # Eliminar de memoria
+        if subtask_id in self._subtasks:
+            del self._subtasks[subtask_id]
         
         # Si hay database_service, eliminar de base de datos
         if self.database_service:
-            # TODO: Eliminar de base de datos
-            pass
+            try:
+                await self.database_service.delete('subtasks', subtask_id)
+            except Exception as e:
+                print(f"Error eliminando subtarea de BD: {e}")
         
         return True
     
@@ -413,7 +608,7 @@ class TaskService:
     # MÉTODOS DE FILTRADO Y BÚSQUEDA
     # ============================================================================
     
-    def get_tasks_by_status(self, status: str, user_id: Optional[str] = None) -> List[Task]:
+    async def get_tasks_by_status(self, status: str, user_id: Optional[str] = None) -> List[Task]:
         """
         Obtiene tareas filtradas por estado
         
@@ -424,12 +619,12 @@ class TaskService:
         Returns:
             Lista de tareas con el estado especificado
         """
-        return self.get_all_tasks(
+        return await self.get_all_tasks(
             user_id=user_id,
             filters={"status": status}
         )
     
-    def get_tasks_by_priority(self, urgent: bool, important: bool, user_id: Optional[str] = None) -> List[Task]:
+    async def get_tasks_by_priority(self, urgent: bool, important: bool, user_id: Optional[str] = None) -> List[Task]:
         """
         Obtiene tareas filtradas por prioridad
         
@@ -441,12 +636,12 @@ class TaskService:
         Returns:
             Lista de tareas con la prioridad especificada
         """
-        return self.get_all_tasks(
+        return await self.get_all_tasks(
             user_id=user_id,
             filters={"urgent": urgent, "important": important}
         )
     
-    def get_tasks_by_quadrant(self, quadrant: str, user_id: Optional[str] = None) -> List[Task]:
+    async def get_tasks_by_quadrant(self, quadrant: str, user_id: Optional[str] = None) -> List[Task]:
         """
         Obtiene tareas filtradas por cuadrante de Eisenhower
         
@@ -457,12 +652,12 @@ class TaskService:
         Returns:
             Lista de tareas del cuadrante especificado
         """
-        return self.get_all_tasks(
+        return await self.get_all_tasks(
             user_id=user_id,
             filters={"quadrant": quadrant}
         )
     
-    def get_overdue_tasks(self, user_id: Optional[str] = None) -> List[Task]:
+    async def get_overdue_tasks(self, user_id: Optional[str] = None) -> List[Task]:
         """
         Obtiene tareas vencidas
         
@@ -472,12 +667,12 @@ class TaskService:
         Returns:
             Lista de tareas vencidas
         """
-        return self.get_all_tasks(
+        return await self.get_all_tasks(
             user_id=user_id,
             filters={"overdue": True}
         )
     
-    def get_tasks_due_today(self, user_id: Optional[str] = None) -> List[Task]:
+    async def get_tasks_due_today(self, user_id: Optional[str] = None) -> List[Task]:
         """
         Obtiene tareas que vencen hoy
         
@@ -487,12 +682,12 @@ class TaskService:
         Returns:
             Lista de tareas que vencen hoy
         """
-        return self.get_all_tasks(
+        return await self.get_all_tasks(
             user_id=user_id,
             filters={"due_today": True}
         )
     
-    def search_tasks(self, query: str, user_id: Optional[str] = None) -> List[Task]:
+    async def search_tasks(self, query: str, user_id: Optional[str] = None) -> List[Task]:
         """
         Busca tareas por título o descripción
         
@@ -503,7 +698,7 @@ class TaskService:
         Returns:
             Lista de tareas que coinciden con la búsqueda
         """
-        tasks = self.get_all_tasks(user_id=user_id)
+        tasks = await self.get_all_tasks(user_id=user_id)
         query_lower = query.lower()
         
         return [
@@ -515,7 +710,7 @@ class TaskService:
     # MÉTODOS DE ESTADÍSTICAS
     # ============================================================================
     
-    def get_task_statistics(self, user_id: Optional[str] = None) -> Dict[str, Any]:
+    async def get_task_statistics(self, user_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Obtiene estadísticas de tareas del usuario
         
@@ -525,7 +720,7 @@ class TaskService:
         Returns:
             Diccionario con estadísticas
         """
-        tasks = self.get_all_tasks(user_id=user_id)
+        tasks = await self.get_all_tasks(user_id=user_id)
         
         total = len(tasks)
         pending = len([t for t in tasks if t.status == TASK_STATUS_PENDING])
@@ -534,13 +729,13 @@ class TaskService:
         cancelled = len([t for t in tasks if t.status == TASK_STATUS_CANCELLED])
         
         # Estadísticas por cuadrante
-        q1 = len(self.get_tasks_by_quadrant("Q1", user_id))
-        q2 = len(self.get_tasks_by_quadrant("Q2", user_id))
-        q3 = len(self.get_tasks_by_quadrant("Q3", user_id))
-        q4 = len(self.get_tasks_by_quadrant("Q4", user_id))
+        q1_tasks = await self.get_tasks_by_quadrant("Q1", user_id)
+        q2_tasks = await self.get_tasks_by_quadrant("Q2", user_id)
+        q3_tasks = await self.get_tasks_by_quadrant("Q3", user_id)
+        q4_tasks = await self.get_tasks_by_quadrant("Q4", user_id)
         
         # Tareas vencidas
-        overdue = len(self.get_overdue_tasks(user_id))
+        overdue_tasks = await self.get_overdue_tasks(user_id)
         
         return {
             "total": total,
@@ -549,11 +744,11 @@ class TaskService:
             "completed": completed,
             "cancelled": cancelled,
             "quadrants": {
-                "Q1": q1,
-                "Q2": q2,
-                "Q3": q3,
-                "Q4": q4,
+                "Q1": len(q1_tasks),
+                "Q2": len(q2_tasks),
+                "Q3": len(q3_tasks),
+                "Q4": len(q4_tasks),
             },
-            "overdue": overdue,
+            "overdue": len(overdue_tasks),
         }
 
