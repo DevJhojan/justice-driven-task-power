@@ -9,9 +9,14 @@ from pathlib import Path
 import sys
 
 # Agregar el directorio raíz al path para imports (necesario cuando se ejecuta directamente)
-if __name__ == "__main__":
+# Solo se ejecuta si el módulo 'app' no está disponible (cuando se ejecuta directamente)
+try:
+    import app
+except ImportError:
+    # Si no se puede importar 'app', agregar el path del proyecto
     project_root = Path(__file__).resolve().parents[3]  # test/ui/task/components/ -> raíz
-    sys.path.insert(0, str(project_root))
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
 
 from app.ui.task.components.status_badge import create_status_badge, StatusBadge
 from app.utils.task_helper import (
