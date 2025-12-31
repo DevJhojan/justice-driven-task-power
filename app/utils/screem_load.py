@@ -26,7 +26,12 @@ Uso con callback:
 """
 
 import flet as ft
-from pathlib import Path
+from app.utils.helpers import (
+    get_asset_path,
+    get_responsive_padding,
+    get_responsive_width,
+    format_percentage,
+)
 
 
 class LoadingScreen:
@@ -109,17 +114,11 @@ class LoadingScreen:
         Returns:
             Container con la pantalla de carga completa
         """
-        # Obtener la ruta de la imagen
-        project_root = Path(__file__).parent.parent.parent
-        image_path = project_root / "assets" / "app_icon.png"
+        # Obtener la ruta de la imagen usando helper
+        image_path = get_asset_path("app_icon.png")
         
-        # Calcular padding responsive (menor en móvil, mayor en desktop)
-        if page and page.window.width > 0:
-            window_width = page.window.width
-            # Padding responsive: 10px en móvil (< 600px), 20px en desktop
-            padding_value = 10 if window_width < 600 else 20
-        else:
-            padding_value = 20  # Valor por defecto
+        # Calcular padding responsive usando helper
+        padding_value = get_responsive_padding(page=page)
         
         # Crear la imagen de fondo que ocupa toda la pantalla de forma responsive
         background_image = ft.Image(
@@ -171,15 +170,12 @@ class LoadingScreen:
         
         self.animation_running = True
         
-        # Calcular el ancho máximo disponible de forma responsive
+        # Calcular el ancho máximo disponible usando helper responsive
+        # get_responsive_width ya multiplica el padding por 2 internamente
         def get_max_width():
-            window_width = page.window.width if page.window.width > 0 else 600
-            # Padding responsive: 20px en móvil (< 600px), 40px en desktop
-            if window_width < 600:
-                padding = 20  # 10px a cada lado en móvil
-            else:
-                padding = 40  # 20px a cada lado en desktop
-            return max(window_width - padding, 200)  # Mínimo 200px de ancho
+            # Usar helper para obtener el ancho con padding responsive
+            # get_responsive_width ya resta el padding * 2 automáticamente
+            return get_responsive_width(page=page)
         
         max_width = get_max_width()
         
@@ -206,15 +202,14 @@ class LoadingScreen:
                 # Calcular el ancho del progreso
                 progress_width = current_max_width * progress
                 
-                # Calcular el porcentaje
-                percentage = int(progress * 100)
+                # Calcular el porcentaje usando helper de formateo
+                self.percentage_label.value = format_percentage(progress, decimals=0)
                 
                 # Actualizar los valores con el ancho actualizado
                 self.progress_fill.width = progress_width
                 self.bar_background.width = current_max_width
                 self.progress_bar.width = current_max_width
                 self.label_container.width = current_max_width
-                self.percentage_label.value = f"{percentage}%"
                 
                 # Actualizar la página
                 page.update()
