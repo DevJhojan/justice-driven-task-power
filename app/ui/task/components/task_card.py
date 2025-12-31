@@ -97,16 +97,20 @@ def create_task_card(
     header_controls.append(title_text)
     
     # Badges de estado y prioridad
+    # Guardar referencia al badge de estado para poder actualizarlo
+    status_badge = create_status_badge(task.status, page=page, size="small")
+    priority_badge = create_priority_badge(
+        urgent=task.urgent,
+        important=task.important,
+        page=page,
+        size="small",
+        show_quadrant=False,
+    )
+    
     badges_row = ft.Row(
         controls=[
-            create_status_badge(task.status, page=page, size="small"),
-            create_priority_badge(
-                urgent=task.urgent,
-                important=task.important,
-                page=page,
-                size="small",
-                show_quadrant=False,
-            ),
+            status_badge,
+            priority_badge,
         ],
         spacing=6,
         tight=True,
@@ -242,15 +246,47 @@ def create_task_card(
                 if subtask:
                     subtask.toggle_completed()
                     
+                    # Calcular nuevo porcentaje de completitud
+                    new_percentage = calculate_completion_percentage(task)
+                    
+                    # Actualizar estado de la tarea según el progreso
+                    from app.utils.task_helper import (
+                        TASK_STATUS_PENDING,
+                        TASK_STATUS_IN_PROGRESS,
+                        TASK_STATUS_COMPLETED,
+                    )
+                    
+                    # Actualizar estado de la tarea según el progreso
+                    # Si está al 100%, cambiar a "Completada"
+                    if new_percentage >= 1.0:
+                        if task.status != TASK_STATUS_COMPLETED:
+                            task.update_status(TASK_STATUS_COMPLETED)
+                            # Reconstruir el badge de estado
+                            new_status_badge = create_status_badge(task.status, page=page, size="small")
+                            badges_row.controls[0] = new_status_badge
+                    # Si está al 0% (no hay subtareas completadas), cambiar a "Pendiente"
+                    elif new_percentage == 0.0:
+                        if task.status != TASK_STATUS_PENDING:
+                            task.update_status(TASK_STATUS_PENDING)
+                            # Reconstruir el badge de estado
+                            new_status_badge = create_status_badge(task.status, page=page, size="small")
+                            badges_row.controls[0] = new_status_badge
+                    # Si está entre 0% y 100%, cambiar a "En progreso" si no lo está
+                    else:
+                        if task.status == TASK_STATUS_PENDING or task.status == TASK_STATUS_COMPLETED:
+                            task.update_status(TASK_STATUS_IN_PROGRESS)
+                            # Reconstruir el badge de estado
+                            new_status_badge = create_status_badge(task.status, page=page, size="small")
+                            badges_row.controls[0] = new_status_badge
+                    
                     # Actualizar progreso si está habilitado
                     if show_progress and progress_bar is not None and progress_text is not None:
-                        new_percentage = calculate_completion_percentage(task)
                         progress_bar.value = new_percentage
                         progress_text.value = format_completion_percentage(task)
-                        
-                        # Actualizar la página si está disponible
-                        if page:
-                            page.update()
+                    
+                    # Actualizar la página si está disponible
+                    if page:
+                        page.update()
                     
                     # Llamar al callback original si existe
                     if on_subtask_toggle:
@@ -316,15 +352,62 @@ def create_task_card(
     # Botones de acción
     action_buttons = []
     
-    if on_toggle_status:
+    # El botón de completar solo se muestra si no hay subtareas
+    # Si hay subtareas, el progreso se controla a través de las subtareas individuales
+    if on_toggle_status and (not task.subtasks or len(task.subtasks) == 0):
         status_icon = ft.Icons.CHECK_CIRCLE if task.status != "completada" else ft.Icons.UNDO
+        
+        # Crear el botón primero
         toggle_button = ft.IconButton(
             icon=status_icon,
             icon_size=20,
             icon_color=ft.Colors.GREEN_400,
             tooltip="Cambiar estado",
-            on_click=lambda e: on_toggle_status(task.id) if on_toggle_status else None,
         )
+        
+        # Handler para el botón de toggle de estado
+        # Solo se usa cuando NO hay subtareas
+        def handle_toggle_status(e):
+            from app.utils.task_helper import (
+                TASK_STATUS_PENDING,
+                TASK_STATUS_COMPLETED,
+            )
+            
+            # Si la tarea no está completada, marcarla como completada
+            if task.status != TASK_STATUS_COMPLETED:
+                # Actualizar estado a completada
+                task.update_status(TASK_STATUS_COMPLETED)
+                
+                # Actualizar progreso a 100% (sin subtareas, completar = 100%)
+                if show_progress and progress_bar is not None and progress_text is not None:
+                    progress_bar.value = 1.0
+                    progress_text.value = format_completion_percentage(task)
+            else:
+                # Si está completada, marcarla como pendiente
+                task.update_status(TASK_STATUS_PENDING)
+                
+                # Actualizar progreso a 0% (sin subtareas, descompletar = 0%)
+                if show_progress and progress_bar is not None and progress_text is not None:
+                    progress_bar.value = 0.0
+                    progress_text.value = format_completion_percentage(task)
+            
+            # Reconstruir el badge de estado
+            new_status_badge = create_status_badge(task.status, page=page, size="small")
+            badges_row.controls[0] = new_status_badge
+            
+            # Actualizar el ícono del botón
+            toggle_button.icon = ft.Icons.CHECK_CIRCLE if task.status != TASK_STATUS_COMPLETED else ft.Icons.UNDO
+            
+            # Actualizar la página
+            if page:
+                page.update()
+            
+            # Llamar al callback original si existe
+            if on_toggle_status:
+                on_toggle_status(task.id)
+        
+        # Asignar el handler al botón
+        toggle_button.on_click = handle_toggle_status
         action_buttons.append(toggle_button)
     
     if on_edit:
