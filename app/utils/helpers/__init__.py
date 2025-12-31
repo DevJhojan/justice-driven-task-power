@@ -73,7 +73,7 @@ from .responsives import (
 # ============================================================================
 # IMPORTACIONES DE VALIDATIONS
 # ============================================================================
-from .validations import (
+from .validators import (
     is_valid_email,
     is_valid_username,
     is_valid_password,
