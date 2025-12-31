@@ -3,21 +3,18 @@ Tests para el componente Status Badge
 Verifica la creación y funcionalidad de badges de estado de tareas
 """
 
-import pytest
-import flet as ft
 from pathlib import Path
 import sys
 
 # Agregar el directorio raíz al path para imports (necesario cuando se ejecuta directamente)
-# Solo se ejecuta si el módulo 'app' no está disponible (cuando se ejecuta directamente)
-try:
-    import app
-except ImportError:
-    # Si no se puede importar 'app', agregar el path del proyecto
-    project_root = Path(__file__).resolve().parents[3]  # test/ui/task/components/ -> raíz
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
+# Esto debe hacerse ANTES de cualquier import de 'app'
+# Desde test/ui/task/components/test_status_badge.py necesitamos subir 4 niveles para llegar a la raíz
+project_root = Path(__file__).resolve().parents[4]  # components -> task -> ui -> test -> raíz
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
+import pytest
+import flet as ft
 from app.ui.task.components.status_badge import create_status_badge, StatusBadge
 from app.utils.task_helper import (
     TASK_STATUS_PENDING,
@@ -608,4 +605,4 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     # Si se ejecuta directamente, mostrar el demo UI
-    ft.app(target=main)
+    ft.run(main)
