@@ -25,19 +25,21 @@ class SettingsView:
                     ft.Icon(
                         ft.Icons.SETTINGS,
                         size=80,
-                        color=ft.Colors.GREY_700,
+                        color=ft.Colors.GREY_400,
                     ),
                     ft.Text(
                         "Configuración",
                         size=32,
                         weight=ft.FontWeight.BOLD,
                         text_align=ft.TextAlign.CENTER,
+                        color=ft.Colors.WHITE,
                     ),
                     ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
                     ft.Text(
                         "Estás en la sección de Configuración",
                         size=18,
                         text_align=ft.TextAlign.CENTER,
+                        color=ft.Colors.WHITE70,
                     ),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -45,6 +47,6 @@ class SettingsView:
             ),
             padding=20,
             expand=True,
-            bgcolor=ft.Colors.WHITE,
+            bgcolor=None,
         )
 
