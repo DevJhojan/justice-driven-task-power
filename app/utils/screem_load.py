@@ -99,9 +99,12 @@ class LoadingScreen:
             height=self.bar_height,
         )
         
-    def build(self) -> ft.Container:
+    def build(self, page: ft.Page = None) -> ft.Container:
         """
         Construye y retorna el widget de la pantalla de carga
+        
+        Args:
+            page: Objeto Page de Flet (opcional, para cálculos responsive)
         
         Returns:
             Container con la pantalla de carga completa
@@ -110,10 +113,19 @@ class LoadingScreen:
         project_root = Path(__file__).parent.parent.parent
         image_path = project_root / "assets" / "app_icon.png"
         
-        # Crear la imagen de fondo que ocupa toda la pantalla
+        # Calcular padding responsive (menor en móvil, mayor en desktop)
+        if page and page.window.width > 0:
+            window_width = page.window.width
+            # Padding responsive: 10px en móvil (< 600px), 20px en desktop
+            padding_value = 10 if window_width < 600 else 20
+        else:
+            padding_value = 20  # Valor por defecto
+        
+        # Crear la imagen de fondo que ocupa toda la pantalla de forma responsive
         background_image = ft.Image(
             src=str(image_path),
             expand=True,
+            # La imagen se ajustará automáticamente al contenedor
         )
         
         # Contenedor para la imagen que ocupa todo el ancho y alto
@@ -133,13 +145,13 @@ class LoadingScreen:
                 controls=[
                     # Imagen de fondo que ocupa toda la pantalla
                     image_container,
-                    # Barra de progreso en la parte inferior (bottom bar)
+                    # Barra de progreso en la parte inferior (bottom bar) - responsive
                     ft.Container(
                         content=self.progress_bar,
                         bottom=0,
                         left=0,
                         right=0,
-                        padding=20,
+                        padding=padding_value,  # Padding responsive
                     ),
                 ],
             ),
@@ -159,11 +171,15 @@ class LoadingScreen:
         
         self.animation_running = True
         
-        # Calcular el ancho máximo disponible (ancho de ventana menos padding)
+        # Calcular el ancho máximo disponible de forma responsive
         def get_max_width():
             window_width = page.window.width if page.window.width > 0 else 600
-            padding = 40  # 20px a cada lado
-            return window_width - padding
+            # Padding responsive: 20px en móvil (< 600px), 40px en desktop
+            if window_width < 600:
+                padding = 20  # 10px a cada lado en móvil
+            else:
+                padding = 40  # 20px a cada lado en desktop
+            return max(window_width - padding, 200)  # Mínimo 200px de ancho
         
         max_width = get_max_width()
         
@@ -180,21 +196,24 @@ class LoadingScreen:
             for step in range(steps + 1):
                 if not self.animation_running:
                     break
+                
+                # Recalcular el ancho en cada paso para ser responsive
+                current_max_width = get_max_width()
                     
                 progress = step / steps
                 self.progress_value = progress
                 
                 # Calcular el ancho del progreso
-                progress_width = max_width * progress
+                progress_width = current_max_width * progress
                 
                 # Calcular el porcentaje
                 percentage = int(progress * 100)
                 
-                # Actualizar los valores
+                # Actualizar los valores con el ancho actualizado
                 self.progress_fill.width = progress_width
-                self.bar_background.width = max_width
-                self.progress_bar.width = max_width
-                self.label_container.width = max_width
+                self.bar_background.width = current_max_width
+                self.progress_bar.width = current_max_width
+                self.label_container.width = current_max_width
                 self.percentage_label.value = f"{percentage}%"
                 
                 # Actualizar la página

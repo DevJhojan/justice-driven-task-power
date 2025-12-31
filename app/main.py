@@ -46,7 +46,7 @@ def main(page: ft.Page):
     
     # Mostrar la pantalla de carga primero
     loading_screen = LoadingScreen(on_complete=show_home_view)
-    page.add(loading_screen.build())
+    page.add(loading_screen.build(page))  # Pasar page para cálculos responsive
     page.update()
     
     # Iniciar la animación de carga (dura 5 segundos por defecto)
