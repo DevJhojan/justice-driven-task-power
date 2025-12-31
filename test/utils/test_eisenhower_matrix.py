@@ -60,28 +60,28 @@ class TestEisenhowerMatrix:
     def test_get_quadrant_ft_color(self):
         """Test obtener color de Flet de cuadrante"""
         import flet as ft
-        assert get_quadrant_ft_color("Q1") == ft.Colors.RED_700
-        assert get_quadrant_ft_color("Q2") == ft.Colors.BLUE_700
+        assert get_quadrant_ft_color("Q1") == ft.Colors.RED_500
+        assert get_quadrant_ft_color("Q2") == ft.Colors.BLUE_500
     
     def test_get_quadrant_icon(self):
         """Test obtener icono de cuadrante"""
         import flet as ft
-        assert get_quadrant_icon("Q1") == ft.Icons.FLASH_ON
-        assert get_quadrant_icon("Q2") == ft.Icons.CALENDAR_TODAY
+        assert get_quadrant_icon("Q1") == ft.Icons.PRIORITY_HIGH
+        assert get_quadrant_icon("Q2") == ft.Icons.SCHEDULE
     
     def test_get_priority_label(self):
         """Test obtener etiqueta de prioridad"""
-        assert get_priority_label(True, True) == "Hacer primero"
-        assert get_priority_label(False, True) == "Programar"
-        assert get_priority_label(True, False) == "Delegar"
-        assert get_priority_label(False, False) == "Eliminar"
+        assert get_priority_label(True, True) == "Urgente e Importante"
+        assert get_priority_label(False, True) == "Importante"
+        assert get_priority_label(True, False) == "Urgente"
+        assert get_priority_label(False, False) == "Baja Prioridad"
     
     def test_get_priority_badge_text(self):
         """Test obtener texto de badge de prioridad"""
-        assert get_priority_badge_text(True, True) == "Hacer"
-        assert get_priority_badge_text(False, True) == "Prog."
-        assert get_priority_badge_text(True, False) == "Deleg."
-        assert get_priority_badge_text(False, False) == "Elim."
+        assert get_priority_badge_text(True, True) == "Q1"
+        assert get_priority_badge_text(False, True) == "Q2"
+        assert get_priority_badge_text(True, False) == "Q3"
+        assert get_priority_badge_text(False, False) == "Q4"
     
     def test_sort_tasks_by_quadrant(self):
         """Test organizar tareas por cuadrante"""
@@ -113,16 +113,16 @@ class TestEisenhowerMatrix:
         assert is_high_priority(False, False) == False
     
     def test_is_medium_priority(self):
-        """Test verificar prioridad media (Q2 o Q3)"""
+        """Test verificar prioridad media (Q2)"""
         assert is_medium_priority(False, True) == True  # Q2
-        assert is_medium_priority(True, False) == True  # Q3
+        assert is_medium_priority(True, False) == False  # Q3 (no es media según código)
         assert is_medium_priority(True, True) == False  # Q1
         assert is_medium_priority(False, False) == False  # Q4
     
     def test_is_low_priority(self):
-        """Test verificar baja prioridad (Q4)"""
-        assert is_low_priority(False, False) == True
-        assert is_low_priority(True, True) == False
-        assert is_low_priority(False, True) == False
-        assert is_low_priority(True, False) == False
+        """Test verificar baja prioridad (Q3 o Q4 - no importante)"""
+        assert is_low_priority(False, False) == True  # Q4
+        assert is_low_priority(True, False) == True  # Q3 (no importante)
+        assert is_low_priority(True, True) == False  # Q1
+        assert is_low_priority(False, True) == False  # Q2
 

@@ -246,13 +246,19 @@ class TestDatabaseService:
             columns={
                 "id": "TEXT PRIMARY KEY",
                 "name": "TEXT",
-                "value": "INTEGER"
+                "value": "INTEGER",
+                "updated_at": "TEXT"
             }
         )
         database_service.register_table_schema(schema)
         await database_service.initialize()
         
-        await database_service.create("test_table", {"id": "test_1", "name": "Original", "value": 100})
+        await database_service.create("test_table", {
+            "id": "test_1",
+            "name": "Original",
+            "value": 100,
+            "updated_at": datetime.now().isoformat()
+        })
         
         updated = await database_service.update("test_table", "test_1", {"name": "Updated", "value": 200})
         
