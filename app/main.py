@@ -24,7 +24,7 @@ def main(page: ft.Page):
     # page.window.center() eliminado - no necesario en Flet 0.80.0
     
     # Configuración del tema
-    page.theme_mode = ft.ThemeMode.LIGHT
+    page.theme_mode = ft.ThemeMode.DARK
     
     # Configuración de la página
     page.padding = 0
