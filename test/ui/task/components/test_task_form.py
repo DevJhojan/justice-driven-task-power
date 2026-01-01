@@ -2,6 +2,14 @@
 Tests para el componente TaskForm
 """
 
+import sys
+import os
+from pathlib import Path
+
+# Agregar el directorio raíz al PYTHONPATH
+root_dir = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.insert(0, str(root_dir))
+
 import pytest
 import flet as ft
 from datetime import datetime, date, timedelta
