@@ -183,8 +183,8 @@ class TaskForm:
                 self.title_field,
                 self.description_field,
                 
-                # Fila de estado y prioridad
-                ft.Row(
+                # Estado y prioridad (layout vertical para evitar sobre-expansión del dropdown)
+                ft.Column(
                     controls=[
                         self.status_dropdown,
                         ft.Column(
@@ -196,8 +196,7 @@ class TaskForm:
                             spacing=4,
                         ),
                     ],
-                    spacing=20,
-                    wrap=True,
+                    spacing=12,
                 ),
                 
                 # Fecha de vencimiento

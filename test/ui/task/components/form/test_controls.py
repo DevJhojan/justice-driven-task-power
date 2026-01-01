@@ -61,6 +61,7 @@ def test_create_status_dropdown_defaults_and_options():
     assert isinstance(dropdown, ft.Dropdown)
     assert dropdown.label == "Estado"
     assert dropdown.value == TASK_STATUS_PENDING
+    assert getattr(dropdown, "expand", None) is not True
 
     keys = {getattr(opt, "key", None) for opt in dropdown.options}
     assert keys == {

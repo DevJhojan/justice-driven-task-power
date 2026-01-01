@@ -60,7 +60,7 @@ def create_status_dropdown(task: Optional[Task]) -> ft.Dropdown:
 		],
 		border_color=ft.Colors.RED_700,
 		focused_border_color=ft.Colors.RED_400,
-		width=200,
+		# El ancho responsive se controla desde el layout contenedor.
 	)
 
 
