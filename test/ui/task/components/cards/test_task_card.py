@@ -344,11 +344,11 @@ def test_task_card_class_with_all_options(mock_page):
 def main(page: ft.Page):
     page.title = "Task Card - Demo"
     page.window.width = 800
-    page.window.height = 900
-    page.padding = 20
+    page.window.height = 1200
+    page.padding = 0
     page.theme_mode = ft.ThemeMode.DARK
     
-    # Tarea simple
+    # 1. Tarea simple sin subtareas
     simple_task = Task(
         id="t1",
         title="Tarea Simple",
@@ -357,10 +357,10 @@ def main(page: ft.Page):
     )
     simple_task.subtasks = []
     
-    # Tarea con subtareas
+    # 2. Tarea con subtareas (50% completadas)
     task_with_sub = Task(
         id="t2",
-        title="Tarea con Subtareas",
+        title="Tarea con Subtareas (50%)",
         description="Esta tarea tiene varias subtareas",
         user_id="user_demo",
         tags=["trabajo", "urgente"]
@@ -370,38 +370,182 @@ def main(page: ft.Page):
     sub3 = Subtask(id="s3", task_id="t2", title="Subtarea 3", completed=False)
     task_with_sub.subtasks = [sub1, sub2, sub3]
     
-    # Tarea con fecha de vencimiento
-    future_date = (date.today() + timedelta(days=3))
-    task_with_date = Task(
+    # 3. Tarea con todas subtareas completadas (100%)
+    task_all_completed = Task(
         id="t3",
-        title="Tarea con Vencimiento",
-        description="Vence en 3 días",
+        title="Tarea 100% Completada",
+        description="Todas las subtareas están completadas",
         user_id="user_demo",
-        due_date=future_date,
-        status=TASK_STATUS_IN_PROGRESS
+        tags=["finalizado"]
     )
-    task_with_date.subtasks = []
+    sub_c1 = Subtask(id="sc1", task_id="t3", title="Subtarea 1", completed=True)
+    sub_c2 = Subtask(id="sc2", task_id="t3", title="Subtarea 2", completed=True)
+    task_all_completed.subtasks = [sub_c1, sub_c2]
     
-    simple_card = TaskCard(task=simple_task, page=page)
-    task_with_sub_card = TaskCard(task=task_with_sub, page=page, subtasks_expanded=True)
-    task_with_date_card = TaskCard(task=task_with_date, page=page)
+    # 4. Tarea sin subtareas completadas (0%)
+    task_no_completed = Task(
+        id="t4",
+        title="Tarea Sin Avance",
+        description="Ninguna subtarea está completada",
+        user_id="user_demo",
+        tags=["pendiente"]
+    )
+    sub_nc1 = Subtask(id="snc1", task_id="t4", title="Subtarea 1", completed=False)
+    sub_nc2 = Subtask(id="snc2", task_id="t4", title="Subtarea 2", completed=False)
+    task_no_completed.subtasks = [sub_nc1, sub_nc2]
     
+    # 5. Tarea con vencimiento futuro
+    future_date = (date.today() + timedelta(days=7))
+    task_future = Task(
+        id="t5",
+        title="Tarea Vence en 7 Días",
+        description="Vencimiento futuro",
+        user_id="user_demo",
+        due_date=future_date
+    )
+    task_future.subtasks = []
+    
+    # 6. Tarea vencida hace poco
+    overdue_date = (date.today() - timedelta(days=2))
+    task_overdue = Task(
+        id="t6",
+        title="Tarea Vencida",
+        description="Venció hace 2 días",
+        user_id="user_demo",
+        due_date=overdue_date,
+        tags=["urgente", "atrasada"]
+    )
+    task_overdue.subtasks = []
+    
+    # 7. Tarea vencida hoy
+    task_due_today = Task(
+        id="t7",
+        title="Tarea Vence Hoy",
+        description="El vencimiento es hoy",
+        user_id="user_demo",
+        due_date=date.today()
+    )
+    task_due_today.subtasks = []
+    
+    # 8. Tarea con muchos tags
+    task_many_tags = Task(
+        id="t8",
+        title="Tarea con Muchos Tags",
+        description="Demuestra más de 5 tags (solo se muestran 5)",
+        user_id="user_demo",
+        tags=["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8"]
+    )
+    task_many_tags.subtasks = []
+    
+    # 9. Tarea completada (sin subtareas)
+    task_completed = Task(
+        id="t9",
+        title="Tarea Completada",
+        description="Esta tarea ya está completada",
+        user_id="user_demo",
+        status=TASK_STATUS_COMPLETED
+    )
+    task_completed.subtasks = []
+    
+    # Variables para manejar estado de la demo
+    status_text = ft.Text("", size=12, color=ft.Colors.BLUE_400)
+    
+    # Callbacks para las acciones
+    def on_edit(task_id):
+        status_text.value = f"✏️ Editando tarea: {task_id}"
+        page.update()
+    
+    def on_delete(task_id):
+        status_text.value = f"🗑️ Eliminando tarea: {task_id}"
+        page.update()
+    
+    def on_toggle_status(task_id):
+        status_text.value = f"✓ Alternando estado de: {task_id}"
+        page.update()
+    
+    # Construir tarjetas con callbacks
+    cards = [
+        ("Tarea Simple (3 botones)", TaskCard(
+            task=simple_task, page=page,
+            on_edit=on_edit, on_delete=on_delete, on_toggle_status=on_toggle_status
+        )),
+        ("Tarea con Subtareas 50% (2 botones)", TaskCard(
+            task=task_with_sub, page=page, subtasks_expanded=True,
+            on_edit=on_edit, on_delete=on_delete, on_toggle_status=on_toggle_status
+        )),
+        ("Tarea 100% Completada (2 botones)", TaskCard(
+            task=task_all_completed, page=page, subtasks_expanded=True,
+            on_edit=on_edit, on_delete=on_delete, on_toggle_status=on_toggle_status
+        )),
+        ("Tarea Sin Avance 0% (2 botones)", TaskCard(
+            task=task_no_completed, page=page, subtasks_expanded=True,
+            on_edit=on_edit, on_delete=on_delete, on_toggle_status=on_toggle_status
+        )),
+        ("Tarea Vence en 7 Días (3 botones)", TaskCard(
+            task=task_future, page=page,
+            on_edit=on_edit, on_delete=on_delete, on_toggle_status=on_toggle_status
+        )),
+        ("Tarea Vencida (3 botones)", TaskCard(
+            task=task_overdue, page=page,
+            on_edit=on_edit, on_delete=on_delete, on_toggle_status=on_toggle_status
+        )),
+        ("Tarea Vence Hoy (3 botones)", TaskCard(
+            task=task_due_today, page=page,
+            on_edit=on_edit, on_delete=on_delete, on_toggle_status=on_toggle_status
+        )),
+        ("Tarea con Muchos Tags (3 botones)", TaskCard(
+            task=task_many_tags, page=page,
+            on_edit=on_edit, on_delete=on_delete, on_toggle_status=on_toggle_status
+        )),
+        ("Tarea Completada (3 botones)", TaskCard(
+            task=task_completed, page=page,
+            on_edit=on_edit, on_delete=on_delete, on_toggle_status=on_toggle_status
+        )),
+    ]
+    
+    # Construir lista de controles
+    controls: list[ft.Control] = [
+        ft.Container(
+            content=ft.Text("Task Card - Demo UI (Orquestador Final)", size=20, weight=ft.FontWeight.BOLD),
+            padding=20,
+        ),
+        ft.Container(
+            content=ft.Text("9 casos de uso diferentes - Prueba los botones de acción", size=14, color=ft.Colors.WHITE_70),
+            padding=ft.Padding(left=20, right=20, top=0, bottom=10),
+        ),
+        ft.Container(
+            content=ft.Column(controls=[
+                ft.Text("Estado:", size=12, color=ft.Colors.WHITE_70),
+                status_text,
+            ]),
+            padding=ft.Padding(left=20, right=20, top=0, bottom=20),
+            bgcolor=ft.Colors.GREY_900,
+            border_radius=8,
+        ),
+    ]
+    
+    for title, card in cards:
+        controls.extend([
+            ft.Container(
+                content=ft.Divider(),
+                padding=ft.Padding(left=20, right=20, top=0, bottom=0),
+            ),
+            ft.Container(
+                content=ft.Text(title, size=16, weight=ft.FontWeight.BOLD),
+                padding=ft.Padding(left=20, right=20, top=10, bottom=10),
+            ),
+            ft.Container(
+                content=card.build(),
+                padding=20,
+            ),
+        ])
+    
+    # Usar ListView en lugar de Column con scroll para mejor funcionamiento
     page.add(
-        ft.Column(
-            controls=[
-                ft.Text("Task Card - Demo UI (Orquestador Final)", size=20, weight=ft.FontWeight.BOLD),
-                ft.Divider(),
-                ft.Text("Tarea Simple", size=16, weight=ft.FontWeight.BOLD),
-                simple_card.build(),
-                ft.Divider(),
-                ft.Text("Tarea con Subtareas", size=16, weight=ft.FontWeight.BOLD),
-                task_with_sub_card.build(),
-                ft.Divider(),
-                ft.Text("Tarea con Vencimiento", size=16, weight=ft.FontWeight.BOLD),
-                task_with_date_card.build(),
-            ],
-            spacing=12,
-            scroll=ft.ScrollMode.AUTO,
+        ft.ListView(
+            controls=controls,
+            spacing=0,
+            expand=True,
         )
     )
     page.update()

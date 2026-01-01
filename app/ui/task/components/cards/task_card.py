@@ -18,6 +18,12 @@ from app.utils.helpers.responsives import (
     get_responsive_spacing,
     get_responsive_border_radius,
 )
+from app.utils.task_helper import (
+    calculate_completion_percentage,
+    TASK_STATUS_PENDING,
+    TASK_STATUS_IN_PROGRESS,
+    TASK_STATUS_COMPLETED,
+)
 
 
 def create_task_card(
@@ -63,6 +69,27 @@ def create_task_card(
     if compact:
         padding_value = padding_value // 2
     spacing_value = get_responsive_spacing(page=page, mobile=8, tablet=10, desktop=12)
+    
+    # =========================================================================
+    # ACTUALIZAR ESTADO INICIAL SI TIENE SUBTAREAS
+    # =========================================================================
+    # Si la tarea tiene subtareas, calcular y actualizar su estado según progreso
+    if task.subtasks and len(task.subtasks) > 0:
+        completion_percentage = calculate_completion_percentage(task)
+        
+        # Actualizar estado de la tarea según el progreso inicial
+        if completion_percentage >= 1.0:
+            # 100% completadas
+            if task.status != TASK_STATUS_COMPLETED:
+                task.update_status(TASK_STATUS_COMPLETED)
+        elif completion_percentage == 0.0:
+            # 0% completadas
+            if task.status != TASK_STATUS_PENDING:
+                task.update_status(TASK_STATUS_PENDING)
+        else:
+            # Entre 0% y 100% completadas
+            if task.status == TASK_STATUS_PENDING or task.status == TASK_STATUS_COMPLETED:
+                task.update_status(TASK_STATUS_IN_PROGRESS)
     
     card_controls: list[ft.Control] = []
     
