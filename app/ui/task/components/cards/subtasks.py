@@ -7,7 +7,7 @@ class that caches and updates those controls.
 import flet as ft
 from typing import Optional, Callable, Tuple, List
 from app.models.task import Task
-from app.ui.task.components.subtask_item import create_subtask_item
+
 from app.ui.task.components.status_badge import create_status_badge
 from app.utils.task_helper import (
     calculate_completion_percentage,
@@ -118,19 +118,68 @@ def create_subtasks_list(
     on_edit_fn = _make_on_edit(task.id)
     on_delete_fn = _make_on_delete(task.id)
 
-    controls: list[ft.Control] = [
-        create_subtask_item(
-            subtask=subtask,
-            page=page,
-            on_toggle_completed=handler_factory,
-            on_edit=(on_edit_fn),
-            on_delete=(on_delete_fn),
-            show_priority=show_priority,
-            show_actions=show_actions,
-            compact=compact,
+    controls: list[ft.Control] = []
+    
+    for subtask in task.subtasks:
+        # Crear checkbox para la subtarea
+        checkbox = ft.Checkbox(
+            value=subtask.completed,
+            label=subtask.title,
+            on_change=lambda e, sid=subtask.id: handler_factory(sid),
+            fill_color=ft.Colors.RED_700 if subtask.completed else ft.Colors.GREY_700,
         )
-        for subtask in task.subtasks
-    ]
+        
+        # Crear fila con checkbox y acciones (si se solicitan)
+        subtask_controls: list[ft.Control] = [checkbox]
+        
+        if show_actions:
+            action_buttons: list[ft.Control] = []
+            if on_edit_fn:
+                action_buttons.append(
+                    ft.IconButton(
+                        icon=ft.Icons.EDIT,
+                        icon_size=16,
+                        icon_color=ft.Colors.BLUE_400,
+                        tooltip="Editar subtarea",
+                        on_click=lambda e, sid=subtask.id: on_edit_fn(sid),
+                    )
+                )
+            if on_delete_fn:
+                action_buttons.append(
+                    ft.IconButton(
+                        icon=ft.Icons.DELETE,
+                        icon_size=16,
+                        icon_color=ft.Colors.RED_400,
+                        tooltip="Eliminar subtarea",
+                        on_click=lambda e, sid=subtask.id: on_delete_fn(sid),
+                    )
+                )
+            
+            if action_buttons:
+                subtask_controls.append(
+                    ft.Row(
+                        controls=action_buttons,
+                        spacing=4,
+                        tight=True,
+                    )
+                )
+        
+        # Crear contenedor para la subtarea
+        subtask_row = ft.Row(
+            controls=subtask_controls,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+        
+        controls.append(
+            ft.Container(
+                content=subtask_row,
+                padding=4 if compact else 8,
+                border_radius=6,
+                bgcolor=ft.Colors.GREY_900 if not subtask.completed else ft.Colors.GREEN_900,
+                border=ft.Border.all(1, ft.Colors.GREY_700),
+            )
+        )
 
     subtasks_list = ft.Column(
         controls=controls,
