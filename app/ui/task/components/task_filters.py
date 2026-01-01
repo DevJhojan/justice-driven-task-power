@@ -30,7 +30,7 @@ def create_task_filters(
     show_tags: bool = True,
     show_due_date: bool = True,
     compact: bool = False,
-) -> Tuple[ft.Row, Dict[str, Any]]:
+) -> Tuple[ft.Container, Dict[str, Any]]:
     """
     Crea un componente de filtrado simplificado con un menú desplegable para elegir qué filtro mostrar.
     """
@@ -145,7 +145,7 @@ def create_task_filters(
             search_field_ref = ft.TextField(
                 label="🔍 Buscar tareas",
                 prefix_icon=ft.Icons.SEARCH,
-                width=320 if not compact else 240,
+                expand=True,
                 on_change=lambda e: (
                     filters_state.__setitem__("search", search_field_ref.value or ""),
                     notify_filters(),
@@ -299,29 +299,31 @@ def create_task_filters(
 
     render_filter_body()
 
-    filters_row = ft.Row(
-        controls=[
-            ft.Column(
-                controls=[
-                    ft.Row(
-                        controls=[
-                            ft.Text("¿Cómo deseas filtrar?", size=14, weight=ft.FontWeight.BOLD),
-                            filter_menu,
-                        ],
-                        spacing=spacing,
-                        wrap=True,
-                    ),
-                    filter_body,
-                ],
-                spacing=12,
-            )
-        ],
-        spacing=spacing,
-        wrap=True,
-        scroll=ft.ScrollMode.AUTO,
+    # Contenedor principal que toma todo el ancho
+    filters_container = ft.Container(
+        content=ft.Column(
+            controls=[
+                ft.Row(
+                    controls=[
+                        ft.Text("¿Cómo deseas filtrar?", size=14, weight=ft.FontWeight.BOLD),
+                        filter_menu,
+                    ],
+                    spacing=spacing,
+                ),
+                filter_body,
+            ],
+            spacing=12,
+        ),
+        padding=get_responsive_padding(page=page),
+        border=ft.Border(
+            left=ft.BorderSide(2, ft.Colors.RED_700),
+        ),
+        bgcolor=ft.Colors.GREY_900,
+        border_radius=8,
+        expand=True,
     )
 
-    return filters_row, controls_map
+    return filters_container, controls_map
 
 
 class TaskFilters:
@@ -371,15 +373,15 @@ class TaskFilters:
             "due_date": None,
         }
         
-        self._filters_component: Optional[ft.Row] = None
+        self._filters_component: Optional[ft.Container] = None
         self._controls_map: Dict[str, Any] = {}
     
-    def build(self) -> ft.Row:
+    def build(self) -> ft.Container:
         """
         Construye y retorna el componente de filtros.
         
         Returns:
-            Row con los controles de filtrado
+            Container con los controles de filtrado que toma todo el ancho
         """
         if self._filters_component is None:
             self._filters_component, self._controls_map = create_task_filters(

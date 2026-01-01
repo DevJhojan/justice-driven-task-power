@@ -61,12 +61,12 @@ def create_test_task(
 # ============================================================================
 
 def test_create_task_filters():
-    """Test: create_task_filters debe retornar tupla (Row, Dict)."""
+    """Test: create_task_filters debe retornar tupla (Container, Dict)."""
     result = create_task_filters()
     assert isinstance(result, tuple)
     assert len(result) == 2
-    filters_row, controls_map = result
-    assert isinstance(filters_row, ft.Row)
+    filters_container, controls_map = result
+    assert isinstance(filters_container, ft.Container)
     assert isinstance(controls_map, dict)
     print("✅ test_create_task_filters: Passed")
 
@@ -83,10 +83,10 @@ def test_task_filters_init():
 
 
 def test_task_filters_build():
-    """Test: TaskFilters.build() retorna un Row."""
+    """Test: TaskFilters.build() retorna Container."""
     filters = TaskFilters()
     result = filters.build()
-    assert isinstance(result, ft.Row)
+    assert isinstance(result, ft.Container)
     print("✅ test_task_filters_build: Passed")
 
 
