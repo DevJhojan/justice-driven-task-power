@@ -153,7 +153,7 @@ class TaskView:
                             ft.Text(
                                 f"{len(self.tasks)} tareas totales",
                                 size=14,
-                                color=ft.Colors.WHITE70,
+                                color=ft.Colors.WHITE_70,
                             ),
                         ],
                         spacing=4,
@@ -162,7 +162,7 @@ class TaskView:
                 ],
                 spacing=16,
             ),
-            padding=ft.padding.only(bottom=16),
+            padding=ft.Padding.only(bottom=16),
         )
     
     async def _load_tasks(self):

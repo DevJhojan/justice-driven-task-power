@@ -385,28 +385,28 @@ def main(page: ft.Page):
         controls=[
             ft.Row(
                 controls=[
-                    ft.Text("Pendiente:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Pendiente:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_status_badge(TASK_STATUS_PENDING, page=page),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("En Progreso:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("En Progreso:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_status_badge(TASK_STATUS_IN_PROGRESS, page=page),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Completada:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Completada:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_status_badge(TASK_STATUS_COMPLETED, page=page),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Cancelada:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Cancelada:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_status_badge(TASK_STATUS_CANCELLED, page=page),
                 ],
                 spacing=15,
@@ -427,28 +427,28 @@ def main(page: ft.Page):
         controls=[
             ft.Row(
                 controls=[
-                    ft.Text("Small:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Small:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_status_badge(TASK_STATUS_PENDING, page=page, size="small"),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Medium:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Medium:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_status_badge(TASK_STATUS_PENDING, page=page, size="medium"),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Large:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Large:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_status_badge(TASK_STATUS_PENDING, page=page, size="large"),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Responsive:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Responsive:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_status_badge(TASK_STATUS_PENDING, page=page),  # Sin size = responsive
                 ],
                 spacing=15,
@@ -469,7 +469,7 @@ def main(page: ft.Page):
         controls=[
             ft.Row(
                 controls=[
-                    ft.Text("Icono + Texto:", color=ft.Colors.WHITE70, size=16, width=150),
+                    ft.Text("Icono + Texto:", color=ft.Colors.WHITE_70, size=16, width=150),
                     create_status_badge(
                         TASK_STATUS_PENDING,
                         page=page,
@@ -481,7 +481,7 @@ def main(page: ft.Page):
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Solo Icono:", color=ft.Colors.WHITE70, size=16, width=150),
+                    ft.Text("Solo Icono:", color=ft.Colors.WHITE_70, size=16, width=150),
                     create_status_badge(
                         TASK_STATUS_PENDING,
                         page=page,
@@ -493,7 +493,7 @@ def main(page: ft.Page):
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Solo Texto:", color=ft.Colors.WHITE70, size=16, width=150),
+                    ft.Text("Solo Texto:", color=ft.Colors.WHITE_70, size=16, width=150),
                     create_status_badge(
                         TASK_STATUS_PENDING,
                         page=page,
@@ -519,7 +519,7 @@ def main(page: ft.Page):
         controls=[
             ft.Row(
                 controls=[
-                    ft.Text("Con Clase:", color=ft.Colors.WHITE70, size=16, width=150),
+                    ft.Text("Con Clase:", color=ft.Colors.WHITE_70, size=16, width=150),
                     StatusBadge(
                         status=TASK_STATUS_IN_PROGRESS,
                         page=page,
@@ -530,7 +530,7 @@ def main(page: ft.Page):
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Actualizado:", color=ft.Colors.WHITE70, size=16, width=150),
+                    ft.Text("Actualizado:", color=ft.Colors.WHITE_70, size=16, width=150),
                     StatusBadge(
                         status=TASK_STATUS_COMPLETED,
                         page=page,

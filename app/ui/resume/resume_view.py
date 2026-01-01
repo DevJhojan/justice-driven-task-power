@@ -39,7 +39,7 @@ class ResumeView:
                         "Estás en la sección de Resumen",
                         size=18,
                         text_align=ft.TextAlign.CENTER,
-                        color=ft.Colors.WHITE70,
+                        color=ft.Colors.WHITE_70,
                     ),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,

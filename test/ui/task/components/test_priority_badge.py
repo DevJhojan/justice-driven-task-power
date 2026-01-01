@@ -431,28 +431,28 @@ def main(page: ft.Page):
         controls=[
             ft.Row(
                 controls=[
-                    ft.Text("Q1 (Urgente e Importante):", color=ft.Colors.WHITE70, size=16, width=200),
+                    ft.Text("Q1 (Urgente e Importante):", color=ft.Colors.WHITE_70, size=16, width=200),
                     create_priority_badge(urgent=True, important=True, page=page),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Q2 (Importante, no Urgente):", color=ft.Colors.WHITE70, size=16, width=200),
+                    ft.Text("Q2 (Importante, no Urgente):", color=ft.Colors.WHITE_70, size=16, width=200),
                     create_priority_badge(urgent=False, important=True, page=page),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Q3 (Urgente, no Importante):", color=ft.Colors.WHITE70, size=16, width=200),
+                    ft.Text("Q3 (Urgente, no Importante):", color=ft.Colors.WHITE_70, size=16, width=200),
                     create_priority_badge(urgent=True, important=False, page=page),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Q4 (Ni Urgente ni Importante):", color=ft.Colors.WHITE70, size=16, width=200),
+                    ft.Text("Q4 (Ni Urgente ni Importante):", color=ft.Colors.WHITE_70, size=16, width=200),
                     create_priority_badge(urgent=False, important=False, page=page),
                 ],
                 spacing=15,
@@ -473,28 +473,28 @@ def main(page: ft.Page):
         controls=[
             ft.Row(
                 controls=[
-                    ft.Text("Q1:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Q1:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_priority_badge_from_quadrant("Q1", page=page),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Q2:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Q2:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_priority_badge_from_quadrant("Q2", page=page),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Q3:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Q3:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_priority_badge_from_quadrant("Q3", page=page),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Q4:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Q4:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_priority_badge_from_quadrant("Q4", page=page),
                 ],
                 spacing=15,
@@ -515,21 +515,21 @@ def main(page: ft.Page):
         controls=[
             ft.Row(
                 controls=[
-                    ft.Text("Small:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Small:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_priority_badge(urgent=True, important=True, page=page, size="small"),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Medium:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Medium:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_priority_badge(urgent=True, important=True, page=page, size="medium"),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Large:", color=ft.Colors.WHITE70, size=16, width=120),
+                    ft.Text("Large:", color=ft.Colors.WHITE_70, size=16, width=120),
                     create_priority_badge(urgent=True, important=True, page=page, size="large"),
                 ],
                 spacing=15,
@@ -550,14 +550,14 @@ def main(page: ft.Page):
         controls=[
             ft.Row(
                 controls=[
-                    ft.Text("Con Nombre:", color=ft.Colors.WHITE70, size=16, width=150),
+                    ft.Text("Con Nombre:", color=ft.Colors.WHITE_70, size=16, width=150),
                     create_priority_badge(urgent=True, important=True, page=page, show_quadrant=False),
                 ],
                 spacing=15,
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Con Cuadrante (Q1):", color=ft.Colors.WHITE70, size=16, width=150),
+                    ft.Text("Con Cuadrante (Q1):", color=ft.Colors.WHITE_70, size=16, width=150),
                     create_priority_badge(urgent=True, important=True, page=page, show_quadrant=True),
                 ],
                 spacing=15,
@@ -578,7 +578,7 @@ def main(page: ft.Page):
         controls=[
             ft.Row(
                 controls=[
-                    ft.Text("Icono + Texto:", color=ft.Colors.WHITE70, size=16, width=150),
+                    ft.Text("Icono + Texto:", color=ft.Colors.WHITE_70, size=16, width=150),
                     create_priority_badge(
                         urgent=True,
                         important=True,
@@ -591,7 +591,7 @@ def main(page: ft.Page):
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Solo Icono:", color=ft.Colors.WHITE70, size=16, width=150),
+                    ft.Text("Solo Icono:", color=ft.Colors.WHITE_70, size=16, width=150),
                     create_priority_badge(
                         urgent=True,
                         important=True,
@@ -604,7 +604,7 @@ def main(page: ft.Page):
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Solo Texto:", color=ft.Colors.WHITE70, size=16, width=150),
+                    ft.Text("Solo Texto:", color=ft.Colors.WHITE_70, size=16, width=150),
                     create_priority_badge(
                         urgent=True,
                         important=True,
@@ -631,7 +631,7 @@ def main(page: ft.Page):
         controls=[
             ft.Row(
                 controls=[
-                    ft.Text("Con urgent/important:", color=ft.Colors.WHITE70, size=16, width=180),
+                    ft.Text("Con urgent/important:", color=ft.Colors.WHITE_70, size=16, width=180),
                     PriorityBadge(
                         urgent=True,
                         important=False,
@@ -643,7 +643,7 @@ def main(page: ft.Page):
             ),
             ft.Row(
                 controls=[
-                    ft.Text("Con cuadrante:", color=ft.Colors.WHITE70, size=16, width=180),
+                    ft.Text("Con cuadrante:", color=ft.Colors.WHITE_70, size=16, width=180),
                     PriorityBadge(
                         quadrant="Q2",
                         page=page,

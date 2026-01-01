@@ -8,6 +8,15 @@ from typing import Optional, Callable, List, Union, Awaitable
 from datetime import date, timedelta, datetime
 from app.models.task import Task
 from app.models.subtask import Subtask
+from app.ui.task.components.form.controls import (
+    create_description_field,
+    create_error_text,
+    create_notes_field,
+    create_priority_checkboxes,
+    create_status_dropdown,
+    create_tags_field,
+    create_title_field,
+)
 from app.utils.task_helper import (
     TASK_STATUS_PENDING,
     TASK_STATUS_IN_PROGRESS,
@@ -71,60 +80,11 @@ class TaskForm:
     
     def build(self) -> ft.Container:
         """Construye el formulario completo."""
-        # Campo de título
-        self.title_field = ft.TextField(
-            label="Título *",
-            hint_text="Ingrese el título de la tarea",
-            value=self.task.title if self.task else "",
-            max_length=100,
-            border_color=ft.Colors.RED_700,
-            focused_border_color=ft.Colors.RED_400,
-            cursor_color=ft.Colors.RED_400,
-            expand=True,
-        )
-        
-        # Campo de descripción
-        self.description_field = ft.TextField(
-            label="Descripción",
-            hint_text="Descripción detallada de la tarea",
-            value=self.task.description if self.task else "",
-            multiline=True,
-            min_lines=3,
-            max_lines=5,
-            max_length=500,
-            border_color=ft.Colors.RED_700,
-            focused_border_color=ft.Colors.RED_400,
-            cursor_color=ft.Colors.RED_400,
-            expand=True,
-        )
-        
-        # Dropdown de estado
-        self.status_dropdown = ft.Dropdown(
-            label="Estado",
-            value=self.task.status if self.task else TASK_STATUS_PENDING,
-            options=[
-                ft.dropdown.Option(TASK_STATUS_PENDING, "Pendiente"),
-                ft.dropdown.Option(TASK_STATUS_IN_PROGRESS, "En Progreso"),
-                ft.dropdown.Option(TASK_STATUS_COMPLETED, "Completada"),
-                ft.dropdown.Option(TASK_STATUS_CANCELLED, "Cancelada"),
-            ],
-            border_color=ft.Colors.RED_700,
-            focused_border_color=ft.Colors.RED_400,
-            width=200,
-        )
-        
-        # Checkboxes de prioridad (Matriz de Eisenhower)
-        self.urgent_checkbox = ft.Checkbox(
-            label="Urgente",
-            value=self.task.urgent if self.task else False,
-            fill_color=ft.Colors.RED_700,
-        )
-        
-        self.important_checkbox = ft.Checkbox(
-            label="Importante",
-            value=self.task.important if self.task else False,
-            fill_color=ft.Colors.RED_700,
-        )
+        # Controles principales (delegados a factories)
+        self.title_field = create_title_field(self.task)
+        self.description_field = create_description_field(self.task)
+        self.status_dropdown = create_status_dropdown(self.task)
+        self.urgent_checkbox, self.important_checkbox = create_priority_checkboxes(self.task)
         
         # DatePicker para fecha de vencimiento
         def handle_date_change(e):
@@ -163,33 +123,9 @@ class TaskForm:
             self.due_date_text.value = "📅 Sin fecha"
             self.page.update()
         
-        # Campo de tags
-        tags_value = ""
-        if self.task and self.task.tags:
-            tags_value = ", ".join(self.task.tags)
-        
-        self.tags_field = ft.TextField(
-            label="Etiquetas",
-            hint_text="Separadas por comas (ej: python, backend, api)",
-            value=tags_value,
-            border_color=ft.Colors.RED_700,
-            focused_border_color=ft.Colors.RED_400,
-            cursor_color=ft.Colors.RED_400,
-        )
-        
-        # Campo de notas
-        self.notes_field = ft.TextField(
-            label="Notas adicionales",
-            hint_text="Notas, comentarios o recordatorios",
-            value=self.task.notes if self.task else "",
-            multiline=True,
-            min_lines=2,
-            max_lines=4,
-            max_length=300,
-            border_color=ft.Colors.RED_700,
-            focused_border_color=ft.Colors.RED_400,
-            cursor_color=ft.Colors.RED_400,
-        )
+        # Campo de tags y notas (delegados a factories)
+        self.tags_field = create_tags_field(self.task)
+        self.notes_field = create_notes_field(self.task)
         
         # Sección de subtareas
         self.subtasks_column = ft.Column(spacing=8)
@@ -200,12 +136,7 @@ class TaskForm:
             self.page.update()
         
         # Texto de error
-        self.error_text = ft.Text(
-            "",
-            color=ft.Colors.RED_400,
-            size=12,
-            visible=False,
-        )
+        self.error_text = create_error_text()
         
         # Botones de acción
         def handle_save(e):

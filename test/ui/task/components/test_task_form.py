@@ -80,6 +80,17 @@ class TestTaskForm:
         assert isinstance(content, ft.Column)
         assert getattr(content, 'scroll', None) == ft.ScrollMode.AUTO
         assert getattr(content, 'expand', False) is True
+
+    def test_textfields_do_not_expand(self, page: ft.Page):
+        """Test: los TextField no deben usar expand en vertical para no bloquear el scroll"""
+        form = TaskForm(page=page)
+        form.build()
+
+        assert form.title_field is not None
+        assert form.description_field is not None
+        # Expand no debe ser True (puede ser False o None según la implementación)
+        assert getattr(form.title_field, 'expand', None) is not True
+        assert getattr(form.description_field, 'expand', None) is not True
     
     def test_form_loads_task_data_in_edit_mode(self, page: ft.Page, sample_task: Task):
         """Test: el formulario carga datos de la tarea en modo editar"""
