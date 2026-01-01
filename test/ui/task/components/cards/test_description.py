@@ -97,14 +97,16 @@ def main(page: ft.Page):
         # Reconstruir y actualizar la UI
         new = desc.build()
         # Reemplazar control en página (simplificado: limpiar y re-add)
-        page.clean()
+        page.c()
         if new:
             page.add(new)
         page.add(ft.Divider(height=10, color=ft.Colors.TRANSPARENT))
         page.add(ft.ElevatedButton("Toggle Description", on_click=toggle_desc))
         page.update()
 
-    page.add(ft.Column(controls=[desc_control, ft.Divider(height=10, color=ft.Colors.TRANSPARENT), ft.ElevatedButton("Toggle Description", on_click=toggle_desc)]))
+    # inicial
+    controls = [desc_control, ft.Divider(height=10, color=ft.Colors.TRANSPARENT), ft.ElevatedButton("Toggle Description", on_click=toggle_desc)]
+    page.add(ft.Column(controls=[c for c in controls if c is not None]))
     page.update()
 
 
