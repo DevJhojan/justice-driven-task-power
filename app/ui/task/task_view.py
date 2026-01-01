@@ -33,6 +33,7 @@ class TaskView:
         # Componentes
         self.task_list: Optional[TaskList] = None
         self.task_filters: Optional[TaskFilters] = None
+        self.task_filters_container: Optional[ft.Container] = None
         self.form_container: Optional[ft.Container] = None
         self.main_content: Optional[ft.Column] = None
         self.fab: Optional[ft.FloatingActionButton] = None
@@ -52,11 +53,12 @@ class TaskView:
         # Header
         header = self._build_header()
         
-        # Filtros
+        # Filtros - guardar referencia al contenedor
         self.task_filters = TaskFilters(
             page=self.page,
             on_filter_change=self._handle_filter_change,
         )
+        self.task_filters_container = self.task_filters.build()
         
         # Lista de tareas
         self.task_list = TaskList(
@@ -74,11 +76,11 @@ class TaskView:
             padding=get_responsive_padding(page=self.page),
         )
         
-        # Contenido principal
+        # Contenido principal - usar la referencia guardada
         self.main_content = ft.Column(
             controls=[
                 header,
-                self.task_filters.build(),
+                self.task_filters_container,
                 ft.Divider(height=1, color=ft.Colors.RED_900),
                 self.task_list.build(),
             ],
