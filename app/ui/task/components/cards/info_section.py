@@ -24,6 +24,9 @@ def create_due_date_row(task: Task, page: Optional[ft.Page] = None, description_
     if not getattr(task, "due_date", None):
         return None
 
+    due_date = task.due_date
+    assert due_date is not None
+
     # Allow caller to pass a specific text size, otherwise compute responsive
     if description_size is None:
         description_size = get_responsive_size(page=page, mobile=13, tablet=14, desktop=15)
@@ -44,7 +47,7 @@ def create_due_date_row(task: Task, page: Optional[ft.Page] = None, description_
         controls=[
             ft.Icon(due_date_icon, size=16, color=due_date_color),
             ft.Text(
-                format_date(task.due_date),
+                format_date(due_date),
                 size=description_size,
                 color=due_date_color,
             ),
@@ -95,10 +98,10 @@ def create_info_section(task: Task, page: Optional[ft.Page] = None, compact: boo
     Returns:
         (info_row_or_None, progress_bar_or_None, progress_text_or_None)
     """
-    info_controls = []
+    info_controls: list[ft.Control] = []
 
     due_row = create_due_date_row(task, page=page, description_size=None)
-    if due_row:
+    if due_row is not None:
         info_controls.append(due_row)
 
     progress_bar = None
