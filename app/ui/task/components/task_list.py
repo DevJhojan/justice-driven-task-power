@@ -5,7 +5,7 @@ Proporciona funcionalidades para filtrado, ordenamiento y gestión de tareas.
 """
 
 import flet as ft
-from typing import Optional, Callable, List
+from typing import Optional, Callable, List, Union, Awaitable
 from app.models.task import Task
 from app.ui.task.components.cards import TaskCard
 from app.utils.helpers.responsives import (
@@ -21,7 +21,7 @@ def create_task_list(
     on_task_edit: Optional[Callable[[str], None]] = None,
     on_task_delete: Optional[Callable[[str], None]] = None,
     on_task_toggle_status: Optional[Callable[[str], None]] = None,
-    on_subtask_toggle: Optional[Callable[[str, str], None]] = None,
+    on_subtask_toggle: Optional[Union[Callable[[str, str], None], Callable[[str, str], Awaitable[None]]]] = None,
     on_subtask_edit: Optional[Callable[[str, str], None]] = None,
     on_subtask_delete: Optional[Callable[[str, str], None]] = None,
     show_subtasks: bool = True,
@@ -143,7 +143,7 @@ class TaskList:
         on_task_edit: Optional[Callable[[str], None]] = None,
         on_task_delete: Optional[Callable[[str], None]] = None,
         on_task_toggle_status: Optional[Callable[[str], None]] = None,
-        on_subtask_toggle: Optional[Callable[[str, str], None]] = None,
+        on_subtask_toggle: Optional[Union[Callable[[str, str], None], Callable[[str, str], Awaitable[None]]]] = None,
         on_subtask_edit: Optional[Callable[[str, str], None]] = None,
         on_subtask_delete: Optional[Callable[[str, str], None]] = None,
         show_subtasks: bool = True,

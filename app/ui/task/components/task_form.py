@@ -4,7 +4,7 @@ Formulario para crear y editar tareas con todos sus atributos
 """
 
 import flet as ft
-from typing import Optional, Callable, List
+from typing import Optional, Callable, List, Union, Awaitable
 from datetime import date, timedelta, datetime
 from app.models.task import Task
 from app.models.subtask import Subtask
@@ -28,7 +28,7 @@ class TaskForm:
         self,
         page: ft.Page,
         task: Optional[Task] = None,
-        on_save: Optional[Callable[[Task], None]] = None,
+        on_save: Optional[Union[Callable[[Task], None], Callable[[Task], Awaitable[None]]]] = None,
         on_cancel: Optional[Callable] = None,
     ):
         """

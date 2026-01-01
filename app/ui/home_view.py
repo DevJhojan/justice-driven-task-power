@@ -19,24 +19,23 @@ class HomeView:
         """Inicializa la vista principal"""
         self.page_ref = None
     
-    def build(self, page: ft.Page = None) -> ft.Container:
+    def build(self, page: ft.Page) -> ft.Container:
         """
         Construye y retorna el widget principal de la vista con BottomNav
         
         Args:
-            page: Objeto Page de Flet (requerido para BottomNav)
+            page: Objeto Page de Flet (requerido)
         
         Returns:
             Container con el contenido de la vista principal y navegación
         """
         # Guardar referencia a la página
-        if page:
-            self.page_ref = page
+        self.page_ref = page
         
         # Lista de vistas en orden
         views = [
             ResumeView(),  # Índice 0 - Pantalla principal
-            TaskView(),     # Índice 1
+            TaskView(page),     # Índice 1
             HabitsView(),   # Índice 2
             GoalsView(),    # Índice 3
             SettingsView(), # Índice 4
@@ -44,11 +43,11 @@ class HomeView:
         
         # Definir iconos para cada vista
         icons = {
-            0: ft.Icons.DASHBOARD,  # Resume
-            1: ft.Icons.TASK,        # Task
-            2: ft.Icons.REPEAT,      # Habits
-            3: ft.Icons.FLAG,        # Goals
-            4: ft.Icons.SETTINGS,    # Settings
+            0: ft.Icons.DASHBOARD.value,  # Resume
+            1: ft.Icons.TASK.value,        # Task
+            2: ft.Icons.REPEAT.value,      # Habits
+            3: ft.Icons.FLAG.value,        # Goals
+            4: ft.Icons.SETTINGS.value,    # Settings
         }
         
         # Definir etiquetas para cada vista
@@ -61,16 +60,12 @@ class HomeView:
         }
         
         # Crear el BottomNav con las vistas, iconos y etiquetas
-        if page:
-            bottom_nav = create_bottom_nav_with_views(
-                views=views,
-                page=page,
-                icons=icons,
-                labels=labels,
-            )
-            # Retornar el layout completo con BottomNav
-            return bottom_nav.build(page)
-        else:
-            # Si no hay página, retornar solo Resume (fallback)
-            return ResumeView().build()
+        bottom_nav = create_bottom_nav_with_views(
+            views=views,
+            page=page,
+            icons=icons,
+            labels=labels,
+        )
+        # Retornar el layout completo con BottomNav
+        return bottom_nav.build(page)
 

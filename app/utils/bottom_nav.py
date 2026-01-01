@@ -51,7 +51,7 @@ Uso desde home_view.py o cualquier vista:
 """
 
 import flet as ft
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
 
 class BottomNav:
@@ -60,9 +60,9 @@ class BottomNav:
     def __init__(
         self, 
         screens: Dict[int, ft.Control], 
-        on_navigate: Callable = None,
-        icons: Dict[int, str] = None,
-        labels: Dict[int, str] = None
+        on_navigate: Optional[Callable] = None,
+        icons: Optional[Dict[int, str]] = None,
+        labels: Optional[Dict[int, str]] = None
     ):
         """
         Inicializa el componente de navegación inferior
@@ -85,11 +85,11 @@ class BottomNav:
         
         # Iconos por defecto si no se proporcionan
         default_icons = [
-            ft.Icons.HOME,
-            ft.Icons.TASK,
-            ft.Icons.SETTINGS,
-            ft.Icons.DASHBOARD,
-            ft.Icons.PERSON,
+            ft.Icons.HOME.value,
+            ft.Icons.TASK.value,
+            ft.Icons.SETTINGS.value,
+            ft.Icons.DASHBOARD.value,
+            ft.Icons.PERSON.value,
         ]
         
         # Etiquetas por defecto si no se proporcionan
@@ -103,7 +103,7 @@ class BottomNav:
         
         for i in range(num_screens):
             # Usar icono personalizado o por defecto
-            icon = self.icons.get(i, default_icons[i] if i < len(default_icons) else ft.Icons.CIRCLE)
+            icon = self.icons.get(i, default_icons[i] if i < len(default_icons) else ft.Icons.CIRCLE.value)
             # Usar etiqueta personalizada o por defecto
             label = self.labels.get(i, default_labels[i] if i < len(default_labels) else f"Pantalla {i+1}")
             
@@ -230,10 +230,10 @@ class BottomNav:
 def create_bottom_nav_with_views(
     views: list,
     page: ft.Page,
-    on_navigate: Callable = None,
-    destinations: list = None,
-    icons: Dict[int, str] = None,
-    labels: Dict[int, str] = None
+    on_navigate: Optional[Callable] = None,
+    destinations: Optional[list] = None,
+    icons: Optional[Dict[int, str]] = None,
+    labels: Optional[Dict[int, str]] = None
 ) -> BottomNav:
     """
     Crea un BottomNav con vistas que tienen método build()
@@ -264,6 +264,12 @@ def create_bottom_nav_with_views(
     for i, view in enumerate(views):
         if hasattr(view, 'build'):
             screens[i] = view.build()
+            # Si la vista tiene método initialize async, llamarlo después
+            if hasattr(view, 'initialize') and callable(getattr(view, 'initialize')):
+                # Programar la inicialización async
+                async def init_view(v=view):
+                    await v.initialize()
+                page.run_task(init_view)
         else:
             # Si no tiene método build, usar directamente
             screens[i] = view
@@ -283,9 +289,9 @@ def wrap_view_with_bottom_nav(
     other_views: list,
     page: ft.Page,
     current_index: int = 0,
-    on_navigate: Callable = None,
-    icons: Dict[int, str] = None,
-    labels: Dict[int, str] = None
+    on_navigate: Optional[Callable] = None,
+    icons: Optional[Dict[int, str]] = None,
+    labels: Optional[Dict[int, str]] = None
 ) -> ft.Container:
     """
     Envuelve una vista con BottomNav, incluyendo otras vistas para navegación
