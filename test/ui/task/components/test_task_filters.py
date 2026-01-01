@@ -259,6 +259,11 @@ def demo_ui(page: ft.Page):
     """Demo UI interactiva del componente TaskFilters."""
     page.title = "TaskFilters Component Demo"
     page.theme_mode = ft.ThemeMode.DARK
+    page.theme = ft.Theme(
+        color_scheme_seed=ft.Colors.RED_900,
+        use_material3=True,
+    )
+    page.bgcolor = ft.Colors.GREY_900
     
     # Crear tareas de ejemplo
     demo_tasks = [
