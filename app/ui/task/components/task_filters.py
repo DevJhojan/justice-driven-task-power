@@ -88,18 +88,24 @@ def create_task_filters(
     def set_selected_filter(filter_key: str):
         selected_filter["value"] = filter_key
         render_filter_body()
+        if page:
+            page.update()
 
     def update_status(value: Optional[str]):
         filters_state["status"] = value
         for chip in status_chips:
             chip.selected = chip.data == value
         notify_filters()
+        if page:
+            page.update()
 
     def update_priority(value: Optional[str]):
         filters_state["urgent_important"] = None if value == "Todas" else value
         for chip in priority_chips:
             chip.selected = chip.data == value
         notify_filters()
+        if page:
+            page.update()
 
     def update_tags(tag: str, selected: bool):
         tags = set(filters_state.get("tags") or [])
@@ -109,6 +115,8 @@ def create_task_filters(
             tags.discard(tag)
         filters_state["tags"] = list(tags)
         notify_filters()
+        if page:
+            page.update()
 
     def update_due_date(selected_date: Optional[date]):
         filters_state["due_date"] = selected_date
