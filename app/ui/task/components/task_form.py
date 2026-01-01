@@ -336,20 +336,19 @@ class TaskForm:
                 ),
             ],
             spacing=16,
+            # Hacer la columna desplazable para permitir navegar en pantallas pequeñas
             scroll=ft.ScrollMode.AUTO,
+            expand=True,
         )
-        
+
         return ft.Container(
-            content=ft.Column(
-                controls=[form_content],
-                scroll=ft.ScrollMode.AUTO,
-                expand=True,
-            ),
+            content=form_content,
             padding=get_responsive_padding(page=self.page),
             bgcolor=ft.Colors.GREY_900,
             border_radius=12,
             border=ft.Border.all(1, ft.Colors.RED_900),
-            height=600,
+            # Permitir que el contenedor ocupe el espacio disponible para que el scroll funcione
+            expand=True,
         )
     
     def _render_subtasks(self):

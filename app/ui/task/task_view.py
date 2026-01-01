@@ -73,7 +73,8 @@ class TaskView:
         # Contenedor del formulario (inicialmente oculto)
         self.form_container = ft.Container(
             visible=False,
-            padding=get_responsive_padding(page=self.page),
+            expand=True,
+            bgcolor=ft.Colors.GREY_900,
         )
         
         # Contenido principal - usar la referencia guardada
@@ -108,6 +109,7 @@ class TaskView:
                         padding=20,
                     ),
                 ],
+                expand=True,
             ),
             padding=get_responsive_padding(page=self.page),
             expand=True,
@@ -119,6 +121,9 @@ class TaskView:
         Inicializa la vista cargando datos async.
         Debe llamarse después de build() y agregar la vista al page.
         """
+        # Actualizar page primero para que los eventos del filtro se registren
+        self.page.update()
+        
         await self._load_tasks()
         if self.task_list:
             self.task_list.set_tasks(self.filtered_tasks)
@@ -172,6 +177,8 @@ class TaskView:
         self.filtered_tasks = self.task_filters.apply_filters(self.tasks)
         if self.task_list:
             self.task_list.set_tasks(self.filtered_tasks)
+            # Actualizar la vista para reflejar los cambios
+            self.page.update()
     
     def _handle_task_click(self, task_id: str):
         """Maneja clic en una tarea"""
@@ -299,7 +306,14 @@ class TaskView:
         assert self.main_content is not None
         assert self.fab is not None
         
-        self.form_container.content = form.build()
+        # En un Stack, ListView suele ser más confiable para scroll que Column
+        self.form_container.content = ft.ListView(
+            controls=[form.build()],
+            expand=True,
+            spacing=0,
+            padding=get_responsive_padding(page=self.page),
+            auto_scroll=False,
+        )
         self.form_container.visible = True
         self.main_content.visible = False
         self.fab.visible = False

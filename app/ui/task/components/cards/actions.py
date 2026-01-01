@@ -100,18 +100,20 @@ def create_actions_row(
     """
     action_buttons: list[ft.Control] = []
 
-    # Toggle status button (only if no subtasks)
-    toggle_btn = create_toggle_status_button(
-        task=task,
-        page=page,
-        progress_bar=progress_bar,
-        progress_text=progress_text,
-        badges_row=badges_row,
-        show_progress=show_progress,
-        on_toggle_status=on_toggle_status,
-    )
-    if toggle_btn is not None:
-        action_buttons.append(toggle_btn)
+    # Toggle status button (only if no subtasks and a toggle handler was provided)
+    toggle_btn = None
+    if on_toggle_status:
+        toggle_btn = create_toggle_status_button(
+            task=task,
+            page=page,
+            progress_bar=progress_bar,
+            progress_text=progress_text,
+            badges_row=badges_row,
+            show_progress=show_progress,
+            on_toggle_status=on_toggle_status,
+        )
+        if toggle_btn is not None:
+            action_buttons.append(toggle_btn)
 
     # Edit button
     if on_edit:

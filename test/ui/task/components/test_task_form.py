@@ -65,6 +65,21 @@ class TestTaskForm:
         assert form.notes_field is not None
         assert form.subtasks_column is not None
         assert form.error_text is not None
+
+    def test_form_is_scrollable(self, page: ft.Page):
+        """Test: el formulario debe ser desplazable para poder navegar en pantallas pequeñas"""
+        form = TaskForm(page=page)
+        container = form.build()
+
+        # El contenedor debe poder expandir para usar todo el espacio disponible
+        assert isinstance(container, ft.Container)
+        assert getattr(container, 'expand', False) is True
+
+        # El contenido debe ser una Column desplazable y expandible
+        content = container.content
+        assert isinstance(content, ft.Column)
+        assert getattr(content, 'scroll', None) == ft.ScrollMode.AUTO
+        assert getattr(content, 'expand', False) is True
     
     def test_form_loads_task_data_in_edit_mode(self, page: ft.Page, sample_task: Task):
         """Test: el formulario carga datos de la tarea en modo editar"""
