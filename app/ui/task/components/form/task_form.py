@@ -249,9 +249,14 @@ class TaskForm:
 
 		errors: list[str] = []
 
-		title = self.title_field.value or ""
-		if not is_valid_string(title, min_length=1, max_length=100, allow_empty=False):
+		title = (self.title_field.value or "").strip()
+		if not title:
 			errors.append("El título es obligatorio")
+		elif len(title) > 100:
+			errors.append("El título no puede exceder 100 caracteres")
+		elif not is_valid_string(title, min_length=1, max_length=100, allow_empty=False):
+			# Fallback por si el validador aplica reglas adicionales
+			errors.append("El título no es válido")
 
 		description = self.description_field.value or ""
 		if description and not is_valid_string(description, min_length=0, max_length=500, allow_empty=True):
