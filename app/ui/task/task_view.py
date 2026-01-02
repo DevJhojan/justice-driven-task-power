@@ -7,7 +7,8 @@ import flet as ft
 from typing import Optional, List
 from app.models.task import Task
 from app.services.task_service import TaskService
-from app.ui.task.components import TaskForm, TaskList, TaskFilters
+from app.ui.task.components import TaskList, TaskFilters
+from app.ui.task.components.form.task_form import TaskForm
 from app.utils.helpers.responsives import get_responsive_padding, get_responsive_size
 
 
