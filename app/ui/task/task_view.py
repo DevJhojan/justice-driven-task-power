@@ -313,7 +313,6 @@ class TaskView:
             expand=True,
             spacing=0,
             padding=get_responsive_padding(page=self.page),
-            auto_scroll=False,
         )
         self.form_container.visible = True
         self.main_content.visible = False
