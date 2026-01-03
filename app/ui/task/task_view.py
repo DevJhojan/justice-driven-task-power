@@ -53,8 +53,13 @@ class TaskView:
 			padding=16,
 			content=ft.Column(
 				controls=[
-					ft.Row([add_button], alignment=ft.MainAxisAlignment.END),
-					ft.Text("Listado de tareas", size=24, weight=ft.FontWeight.BOLD),
+					ft.Row(
+						[
+							ft.Text("Listado de tareas", size=24, weight=ft.FontWeight.BOLD),
+							add_button,
+						],
+						alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+					),
 					self.form_card,
 					ft.Divider(height=16, color=ft.Colors.TRANSPARENT),
 					self.list_column,
