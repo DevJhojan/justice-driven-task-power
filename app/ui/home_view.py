@@ -32,10 +32,9 @@ class HomeView:
         # Guardar referencia a la página
         self.page_ref = page
         
-        # Crear ResumeView primero para obtener la referencia a RewardsView y UserService
+        # Crear ResumeView primero para obtener la referencia a RewardsView
         resume_view = ResumeView()
-        user_service = resume_view.get_user_service()  # Obtener el servicio de usuario compartido
-        task_view = TaskView(page, rewards_view=resume_view.rewards_view, user_service=user_service)
+        task_view = TaskView(page, rewards_view=resume_view.rewards_view)
         
         # Lista de vistas en orden
         views = [

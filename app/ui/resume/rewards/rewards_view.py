@@ -5,17 +5,16 @@ Interfaz para mostrar nivel, puntos y recompensas
 
 import flet as ft
 from typing import Optional
-from app.services.user_service import UserService
+from app.services.progress_service import ProgressService
 
 
 class RewardsView(ft.Container):
     """Vista principal de recompensas con paneles de información"""
     
-    def __init__(self, user_service: Optional[UserService] = None, user_id: str = "default_user"):
+    def __init__(self, progress_service: Optional[ProgressService] = None):
         super().__init__()
         
-        self.user_service = user_service
-        self.user_id = user_id
+        self.progress_service = progress_service if progress_service else ProgressService()
         self.current_user_points = 0.0
         self.current_user_level = "Nadie"
         
@@ -78,8 +77,7 @@ class RewardsView(ft.Container):
     
     def did_mount(self):
         """Se llama cuando el control es añadido a la página"""
-        if self.user_service:
-            self.refresh_from_user_service()
+        self.refresh_from_progress_service()
     
     def set_user_points(self, points: float):
         """Establece los puntos del usuario"""
@@ -104,13 +102,12 @@ class RewardsView(ft.Container):
             except Exception as e:
                 print(f"[RewardsView] Error actualizando UI: {e}")
     
-    def refresh_from_user_service(self):
-        """Actualiza los puntos y nivel desde el UserService"""
-        if self.user_service:
-            stats = self.user_service.get_user_stats(self.user_id)
-            if stats:
-                self.set_user_points(stats.get("points", 0.0))
-                self.set_user_level(stats.get("level", "Nadie"))
+    def refresh_from_progress_service(self):
+        """Actualiza los puntos y nivel desde el ProgressService"""
+        stats = self.progress_service.get_stats()
+        self.set_user_points(stats.get("points", 0.0))
+        self.set_user_level(stats.get("level", "Nadie"))
+        print(f"[RewardsView] Stats cargados desde ProgressService")
     
     def update_points_display(self, points: float):
         """Actualiza la visualización de puntos"""
