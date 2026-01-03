@@ -8,7 +8,14 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import flet as ft
+import sys
+from pathlib import Path
 from app.ui.task.form.task_form import TaskForm
+
+# Permite ejecución directa añadiendo la raíz del proyecto al path
+ROOT_DIR = Path(__file__).resolve().parents[2]
+if str(ROOT_DIR) not in sys.path:
+	sys.path.insert(0, str(ROOT_DIR))
 
 
 @dataclass
@@ -39,12 +46,14 @@ class TaskView:
 			icon=ft.Icons.ADD,
 			tooltip="Agregar tarea",
 			bgcolor=ft.Colors.RED,
+			on_click=self._start_new,
 		)
 
 		main_content = ft.Container(
 			padding=16,
 			content=ft.Column(
 				controls=[
+					ft.Row([add_button], alignment=ft.MainAxisAlignment.END),
 					ft.Text("Listado de tareas", size=24, weight=ft.FontWeight.BOLD),
 					self.form_card,
 					ft.Divider(height=16, color=ft.Colors.TRANSPARENT),
@@ -54,20 +63,10 @@ class TaskView:
 			),
 		)
 
-		root = ft.Stack(
-			controls=[
-				main_content,
-				ft.Container(
-					content=add_button,
-					alignment=ft.alignment.Alignment(1, 1),
-					padding=16,
-					expand=True,
-				),
-			],
-		)
+		host = main_content
 
 		self._refresh_list()
-		return root
+		return host
 
 	# ------------------------------------------------------------------
 	# Actions
@@ -92,6 +91,11 @@ class TaskView:
 		self._refresh_list()
 
 	def _handle_cancel(self, _):
+		self.editing = None
+		self._reset_form()
+		self._refresh_list()
+
+	def _start_new(self, _):
 		self.editing = None
 		self._reset_form()
 		self._refresh_list()
