@@ -37,9 +37,11 @@ class TaskView:
 		self.list_column: Optional[ft.Column] = None
 		self.form: TaskForm = TaskForm(self._handle_save, self._handle_cancel)
 		self.form_card: Optional[ft.Card] = None
+		self.form_container: Optional[ft.Container] = None
 
 	def build(self) -> ft.Container:
 		self.form_card = self.form.build()
+		self.form_container = ft.Container(content=self.form_card, visible=False)
 		self.list_column = ft.Column(spacing=8)
 
 		add_button = ft.FloatingActionButton(
@@ -60,7 +62,7 @@ class TaskView:
 						],
 						alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
 					),
-					self.form_card,
+					self.form_container,
 					ft.Divider(height=16, color=ft.Colors.TRANSPARENT),
 					self.list_column,
 				],
@@ -93,21 +95,25 @@ class TaskView:
 
 		self.editing = None
 		self._reset_form()
+		self._hide_form()
 		self._refresh_list()
 
 	def _handle_cancel(self, _):
 		self.editing = None
 		self._reset_form()
+		self._hide_form()
 		self._refresh_list()
 
 	def _start_new(self, _):
 		self.editing = None
 		self._reset_form()
+		self._show_form()
 		self._refresh_list()
 
 	def _edit_task(self, task: SimpleTask):
 		self.editing = task
 		self.form.set_values(task.title, task.description)
+		self._show_form()
 		if self.page:
 			self.page.update()
 
@@ -125,6 +131,18 @@ class TaskView:
 		self.form.reset()
 		if self.page:
 			self.page.update()
+
+	def _show_form(self):
+		if self.form_container:
+			self.form_container.visible = True
+			if self.page:
+				self.page.update()
+
+	def _hide_form(self):
+		if self.form_container:
+			self.form_container.visible = False
+			if self.page:
+				self.page.update()
 
 	def _refresh_list(self):
 		if not self.list_column:
