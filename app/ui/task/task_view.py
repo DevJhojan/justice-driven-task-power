@@ -31,6 +31,7 @@ class SimpleTask:
 	id: int
 	title: str
 	description: str = ""
+	completed: bool = False
 	subtasks: List[SimpleSubtask] = None
 
 	def __post_init__(self):

@@ -25,6 +25,8 @@ class TaskCardView:
         """
         self.on_edit = on_edit
         self.on_delete = on_delete
+        self.expanded_tasks = set()  # Almacenar IDs de tareas expandidas
+        self.subtasks_containers = {}  # Almacenar referencias a los containers de subtareas
 
     def build(self, task: SimpleTask) -> ft.Card:
         """
@@ -39,6 +41,9 @@ class TaskCardView:
         # Control para mostrar/ocultar subtareas
         subtasks_container = self._build_subtasks_container(task)
 
+        # Mostrar checkbox solo si NO hay subtareas
+        title_row = self._build_title_row(task)
+
         return ft.Card(
             content=ft.Container(
                 padding=12,
@@ -46,23 +51,7 @@ class TaskCardView:
                     controls=[
                         ft.Row(
                             controls=[
-                                ft.Column(
-                                    controls=[
-                                        ft.Text(
-                                            task.title,
-                                            size=16,
-                                            weight=ft.FontWeight.W_600,
-                                        ),
-                                        ft.Text(
-                                            task.description
-                                            or "Sin descripción",
-                                            size=12,
-                                            color=ft.Colors.GREY_700,
-                                        ),
-                                    ],
-                                    expand=True,
-                                    spacing=4,
-                                ),
+                                title_row,
                                 ft.Column(
                                     controls=[
                                         ft.IconButton(
@@ -93,12 +82,67 @@ class TaskCardView:
             )
         )
 
+    def _build_title_row(self, task: SimpleTask) -> ft.Control:
+        """Construye la fila del título con checkbox si no hay subtareas."""
+        if task.subtasks:
+            # Si hay subtareas, solo mostrar título sin checkbox
+            return ft.Column(
+                controls=[
+                    ft.Text(
+                        task.title,
+                        size=16,
+                        weight=ft.FontWeight.W_600,
+                    ),
+                    ft.Text(
+                        task.description or "Sin descripción",
+                        size=12,
+                        color=ft.Colors.GREY_700,
+                    ),
+                ],
+                expand=True,
+                spacing=4,
+            )
+        else:
+            # Si NO hay subtareas, mostrar checkbox + título
+            return ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Checkbox(
+                                value=task.completed,
+                            ),
+                            ft.Text(
+                                task.title,
+                                size=16,
+                                weight=ft.FontWeight.W_600,
+                                color=ft.Colors.GREY_600
+                                if task.completed
+                                else ft.Colors.WHITE,
+                            ),
+                        ],
+                        spacing=6,
+                    ),
+                    ft.Text(
+                        task.description or "Sin descripción",
+                        size=12,
+                        color=ft.Colors.GREY_700,
+                    ),
+                ],
+                expand=True,
+                spacing=4,
+            )
+
     def _build_subtasks_container(self, task: SimpleTask) -> ft.Container:
         """Construye el contenedor de subtareas visible directamente."""
         if not task.subtasks:
             return ft.Container(height=0)  # Container vacío si no hay subtareas
 
-        subtasks_list = ft.Column(spacing=4)
+        is_expanded = task.id in self.expanded_tasks
+        
+        subtasks_list = ft.Column(spacing=4, visible=is_expanded)
+        
+        # Guardar referencia para poder actualizarla después
+        self.subtasks_containers[task.id] = subtasks_list
 
         for subtask in task.subtasks:
             subtasks_list.controls.append(
@@ -122,12 +166,29 @@ class TaskCardView:
                 )
             )
 
+        toggle_btn = ft.TextButton(
+            "Subtareas",
+            on_click=lambda _: self._toggle_subtasks(task),
+            style=ft.ButtonStyle(color=ft.Colors.WHITE)
+        )
+
         return ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Text("Subtareas", size=11, weight=ft.FontWeight.W_600),
+                    toggle_btn,
                     subtasks_list,
                 ],
                 spacing=4,
             )
         )
+
+    def _toggle_subtasks(self, task: SimpleTask):
+        """Alterna la visibilidad de las subtareas."""
+        if task.id in self.expanded_tasks:
+            self.expanded_tasks.remove(task.id)
+        else:
+            self.expanded_tasks.add(task.id)
+        
+        # Actualizar la visibilidad del container
+        if task.id in self.subtasks_containers:
+            self.subtasks_containers[task.id].visible = task.id in self.expanded_tasks
