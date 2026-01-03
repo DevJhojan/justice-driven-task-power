@@ -10,7 +10,7 @@ from app.ui.task.task_view import TaskView
 from app.ui.settings.settings_view import SettingsView
 from app.ui.habits.habits_view import HabitsView
 from app.ui.goals.goals_view import GoalsView
-
+from typing import Callable, Dict, List, Optional, Any
 
 class HomeView:
     """Clase que representa la vista principal de la aplicación"""
@@ -42,7 +42,7 @@ class HomeView:
         ]
         
         # Definir iconos para cada vista
-        icons = {
+        icons: dict[int, Any] = {
             0: ft.Icons.DASHBOARD.value,  # Resume
             1: ft.Icons.TASK.value,        # Task
             2: ft.Icons.REPEAT.value,      # Habits

@@ -51,7 +51,7 @@ Uso desde home_view.py o cualquier vista:
 """
 
 import flet as ft
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Any
 
 
 class BottomNav:
@@ -61,7 +61,7 @@ class BottomNav:
         self, 
         screens: Dict[int, ft.Control], 
         on_navigate: Optional[Callable] = None,
-        icons: Optional[Dict[int, str]] = None,
+        icons: Optional[Dict[int, Any]] = None,
         labels: Optional[Dict[int, str]] = None
     ):
         """
@@ -232,7 +232,7 @@ def create_bottom_nav_with_views(
     page: ft.Page,
     on_navigate: Optional[Callable] = None,
     destinations: Optional[list] = None,
-    icons: Optional[Dict[int, str]] = None,
+    icons: Optional[Dict[int, Any]] = None,
     labels: Optional[Dict[int, str]] = None
 ) -> BottomNav:
     """
@@ -290,7 +290,7 @@ def wrap_view_with_bottom_nav(
     page: ft.Page,
     current_index: int = 0,
     on_navigate: Optional[Callable] = None,
-    icons: Optional[Dict[int, str]] = None,
+    icons: Optional[Dict[int, Any]] = None,
     labels: Optional[Dict[int, str]] = None
 ) -> ft.Container:
     """
