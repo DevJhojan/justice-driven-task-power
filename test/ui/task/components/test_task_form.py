@@ -13,7 +13,7 @@ sys.path.insert(0, str(root_dir))
 import pytest
 import flet as ft
 from datetime import datetime, date, timedelta
-from app.ui.task.components.task_form import TaskForm
+from app.ui.task.task_form import TaskForm
 from app.models.task import Task
 from app.models.subtask import Subtask
 from app.utils.task_helper import (

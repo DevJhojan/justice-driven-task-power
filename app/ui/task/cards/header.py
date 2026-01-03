@@ -7,8 +7,8 @@ based on the implementation in `task_card.py`.
 import flet as ft
 from typing import Optional, Tuple
 from app.models.task import Task
-from app.ui.task.components.status_badge import create_status_badge
-from app.ui.task.components.priority_badge import create_priority_badge
+from app.ui.task.status_badge import create_status_badge
+from app.ui.task.priority_badge import create_priority_badge
 from app.utils.helpers.responsives import get_responsive_size
 
 

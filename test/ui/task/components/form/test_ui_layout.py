@@ -21,10 +21,10 @@ if str(project_root) not in sys.path:
 	sys.path.insert(0, str(project_root))
 
 
-from app.ui.task.components.form.layout import build_form_layout
-from app.ui.task.components.form.date_controls import build_due_date_controls
+from app.ui.task.form.layout import build_form_layout
+from app.ui.task.form.date_controls import build_due_date_controls
 from app.models.subtask import Subtask
-from app.ui.task.components.form.subtask import (
+from app.ui.task.form.subtask import (
 	build_add_subtask_row,
 	create_subtask,
 	delete_subtask,

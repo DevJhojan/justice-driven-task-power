@@ -15,7 +15,7 @@ if str(project_root) not in sys.path:
 import pytest
 import flet as ft
 from datetime import date, timedelta
-from app.ui.task.components.cards.task_card import create_task_card, TaskCard
+from app.ui.task.cards.task_card import create_task_card, TaskCard
 from app.models.task import Task
 from app.models.subtask import Subtask
 from app.utils.task_helper import (

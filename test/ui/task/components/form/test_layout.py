@@ -2,7 +2,7 @@ from unittest.mock import Mock
 
 import flet as ft
 
-from app.ui.task.components.form.layout import build_form_layout
+from app.ui.task.form.layout import build_form_layout
 
 
 def _build_common_controls():

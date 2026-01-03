@@ -15,7 +15,7 @@ if str(project_root) not in sys.path:
 
 import pytest
 import flet as ft
-from app.ui.task.components.priority_badge import (
+from app.ui.task.priority_badge import (
     create_priority_badge,
     create_priority_badge_from_quadrant,
     PriorityBadge,

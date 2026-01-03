@@ -17,7 +17,7 @@ import flet as ft
 from unittest.mock import MagicMock
 
 from app.models.task import Task
-from app.ui.task.components.cards.description import create_description, Description
+from app.ui.task.cards.description import create_description, Description
 
 
 def test_create_description_basic(mock_page):

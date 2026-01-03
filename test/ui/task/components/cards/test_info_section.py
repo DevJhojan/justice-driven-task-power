@@ -19,7 +19,7 @@ from datetime import date, timedelta
 
 from app.models.task import Task
 from app.models.subtask import Subtask
-from app.ui.task.components.cards.info_section import (
+from app.ui.task.cards.info_section import (
     create_due_date_row,
     create_progress_controls,
     create_info_section,

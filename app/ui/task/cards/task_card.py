@@ -7,12 +7,12 @@ para construir una tarjeta de tarea completa.
 import flet as ft
 from typing import Optional, Callable
 from app.models.task import Task
-from app.ui.task.components.cards.header import Header
-from app.ui.task.components.cards.description import Description
-from app.ui.task.components.cards.info_section import InfoSection
-from app.ui.task.components.cards.tags import Tags
-from app.ui.task.components.cards.subtasks import SubtasksSection
-from app.ui.task.components.cards.actions import Actions
+from app.ui.task.cards.header import Header
+from app.ui.task.cards.description import Description
+from app.ui.task.cards.info_section import InfoSection
+from app.ui.task.cards.tags import Tags
+from app.ui.task.cards.subtasks import SubtasksSection
+from app.ui.task.cards.actions import Actions
 from app.utils.helpers.responsives import (
     get_responsive_padding,
     get_responsive_spacing,

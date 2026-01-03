@@ -17,8 +17,8 @@ import flet as ft
 from unittest.mock import MagicMock
 
 from app.models.task import Task
-from app.ui.task.components.cards.header import create_header, Header
-from app.ui.task.components.status_badge import create_status_badge
+from app.ui.task.cards.header import create_header, Header
+from app.ui.task.status_badge import create_status_badge
 from app.utils.task_helper import (
     TASK_STATUS_PENDING,
     TASK_STATUS_IN_PROGRESS,

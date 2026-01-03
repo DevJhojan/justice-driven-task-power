@@ -14,7 +14,7 @@ from typing import Optional
 from datetime import datetime, timedelta, date
 from app.models.task import Task
 from app.models.subtask import Subtask
-from app.ui.task.components.task_filters import create_task_filters, TaskFilters
+from app.ui.task.task_filters import create_task_filters, TaskFilters
 
 
 # ============================================================================

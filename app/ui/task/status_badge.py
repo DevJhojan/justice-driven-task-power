@@ -4,7 +4,7 @@ Muestra el estado de una tarea de forma visual con icono y color
 """
 
 import flet as ft
-from typing import Optional
+from typing import Optional, Any, cast
 from app.utils.task_helper import (
     format_task_status,
     get_task_status_ft_color,
@@ -43,7 +43,8 @@ def create_status_badge(
     # Obtener propiedades del estado
     status_text = format_task_status(status)
     status_color = get_task_status_ft_color(status)
-    status_icon = get_task_status_icon(status)
+    # ft.Icon espera IconData; tipamos explícitamente para contentar al type checker
+    status_icon: Any = get_task_status_icon(status)
     
     # Calcular tamaños responsive
     if size == "small":
@@ -65,13 +66,13 @@ def create_status_badge(
         padding_vertical = get_responsive_size(page=page, mobile=4, tablet=5, desktop=6)
         border_radius = get_responsive_size(page=page, mobile=6, tablet=8, desktop=10)
     
-    # Crear controles del badge
-    badge_controls = []
+    # Crear controles del badge (puede contener Icon y Text)
+    badge_controls: list[Any] = []
     
     # Agregar icono si está habilitado
     if show_icon:
         icon = ft.Icon(
-            status_icon,
+            cast(ft.icons.IconData, status_icon),
             size=icon_size,
             color=status_color,
         )

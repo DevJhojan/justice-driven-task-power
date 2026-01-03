@@ -18,12 +18,12 @@ from unittest.mock import MagicMock
 
 from app.models.task import Task
 from app.models.subtask import Subtask
-from app.ui.task.components.cards.handlers import (
+from app.ui.task.cards.handlers import (
     create_subtask_toggle_handler,
     create_toggle_status_handler,
     _update_task_status_by_progress,
 )
-from app.ui.task.components.status_badge import create_status_badge
+from app.ui.task.status_badge import create_status_badge
 from app.utils.task_helper import (
     calculate_completion_percentage,
     format_completion_percentage,

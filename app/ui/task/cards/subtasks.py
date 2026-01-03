@@ -8,7 +8,7 @@ import flet as ft
 from typing import Optional, Callable, Tuple, List
 from app.models.task import Task
 
-from app.ui.task.components.status_badge import create_status_badge
+from app.ui.task.status_badge import create_status_badge
 from app.utils.task_helper import (
     calculate_completion_percentage,
     format_completion_percentage,

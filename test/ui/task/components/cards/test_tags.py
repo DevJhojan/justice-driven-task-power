@@ -15,7 +15,7 @@ if str(project_root) not in sys.path:
 import pytest
 import flet as ft
 from app.models.task import Task
-from app.ui.task.components.cards.tags import create_tag_chip, create_tags_row, Tags
+from app.ui.task.cards.tags import create_tag_chip, create_tags_row, Tags
 
 
 def test_create_tag_chip_basic(mock_page):

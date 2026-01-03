@@ -1,6 +1,6 @@
 """TaskForm legacy (wrapper compatible).
 
-El formulario real fue modularizado en `app.ui.task.components.form.task_form`.
+El formulario real fue modularizado en `app.ui.task.form.task_form`.
 Este wrapper existe para mantener compatibilidad con la API anterior usada en
 tests y algunos imports históricos.
 """
@@ -12,8 +12,8 @@ from typing import Awaitable, Callable, Optional, Union
 import flet as ft
 
 from app.models.task import Task
-from app.ui.task.components.form.subtask import delete_subtask, toggle_subtask
-from app.ui.task.components.form.task_form import TaskForm as _ModularTaskForm
+from app.ui.task.form.subtask import delete_subtask, toggle_subtask
+from app.ui.task.form.task_form import TaskForm as _ModularTaskForm
 
 
 class TaskFormView(_ModularTaskForm):

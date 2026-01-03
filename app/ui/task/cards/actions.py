@@ -7,7 +7,7 @@ class that caches and updates those controls. Depends on handlers module for sta
 import flet as ft
 from typing import Optional, Callable, List
 from app.models.task import Task
-from app.ui.task.components.cards.handlers import create_toggle_status_handler
+from app.ui.task.cards.handlers import create_toggle_status_handler
 from app.utils.task_helper import TASK_STATUS_COMPLETED
 
 

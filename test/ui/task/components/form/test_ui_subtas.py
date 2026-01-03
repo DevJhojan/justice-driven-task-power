@@ -22,7 +22,7 @@ if str(project_root) not in sys.path:
 
 
 from app.models.subtask import Subtask
-from app.ui.task.components.form.subtask import (
+from app.ui.task.form.subtask import (
 	build_add_subtask_row,
 	create_subtask,
 	delete_subtask,

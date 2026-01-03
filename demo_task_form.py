@@ -2,7 +2,7 @@
 Ejecutar: python demo_task_form.py
 """
 import flet as ft
-from app.ui.task.components.task_form import TaskForm
+from app.ui.task.task_form import TaskForm
 
 
 def main(page: ft.Page):

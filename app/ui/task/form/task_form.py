@@ -18,7 +18,7 @@ import flet as ft
 
 from app.models.subtask import Subtask
 from app.models.task import Task
-from app.ui.task.components.form.controls import (
+from app.ui.task.form.controls import (
 	create_description_field,
 	create_error_text,
 	create_notes_field,
@@ -27,9 +27,9 @@ from app.ui.task.components.form.controls import (
 	create_tags_field,
 	create_title_field,
 )
-from app.ui.task.components.form.date_controls import build_due_date_controls
-from app.ui.task.components.form.layout import build_form_layout
-from app.ui.task.components.form.subtask import (
+from app.ui.task.form.date_controls import build_due_date_controls
+from app.ui.task.form.layout import build_form_layout
+from app.ui.task.form.subtask import (
 	build_add_subtask_row,
 	create_subtask,
 	delete_subtask,

@@ -7,7 +7,7 @@ Proporciona funcionalidades para filtrado, ordenamiento y gestión de tareas.
 import flet as ft
 from typing import Optional, Callable, List, Union, Awaitable
 from app.models.task import Task
-from app.ui.task.components.cards import TaskCard
+from app.ui.task.cards import TaskCard
 from app.utils.helpers.responsives import (
     get_responsive_padding,
     get_responsive_spacing,

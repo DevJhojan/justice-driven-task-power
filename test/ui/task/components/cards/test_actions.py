@@ -16,7 +16,7 @@ import pytest
 import flet as ft
 from app.models.task import Task
 from app.models.subtask import Subtask
-from app.ui.task.components.cards.actions import (
+from app.ui.task.cards.actions import (
     create_edit_button,
     create_delete_button,
     create_toggle_status_button,

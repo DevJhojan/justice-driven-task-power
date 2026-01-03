@@ -22,7 +22,7 @@ if str(project_root) not in sys.path:
 	sys.path.insert(0, str(project_root))
 
 
-from app.ui.task.components.form.date_controls import build_due_date_controls
+from app.ui.task.form.date_controls import build_due_date_controls
 from app.utils.helpers.formats import format_date
 
 

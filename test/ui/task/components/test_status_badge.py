@@ -15,7 +15,7 @@ if str(project_root) not in sys.path:
 
 import pytest
 import flet as ft
-from app.ui.task.components.status_badge import create_status_badge, StatusBadge
+from app.ui.task.status_badge import create_status_badge, StatusBadge
 from app.utils.task_helper import (
     TASK_STATUS_PENDING,
     TASK_STATUS_IN_PROGRESS,

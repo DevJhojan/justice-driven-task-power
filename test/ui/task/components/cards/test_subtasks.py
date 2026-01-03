@@ -17,7 +17,7 @@ import flet as ft
 from unittest.mock import MagicMock
 from app.models.task import Task
 from app.models.subtask import Subtask
-from app.ui.task.components.cards.subtasks import (
+from app.ui.task.cards.subtasks import (
     create_subtasks_list,
     create_subtasks_title_row,
     _create_subtask_toggle_handler,

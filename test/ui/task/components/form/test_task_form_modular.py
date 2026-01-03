@@ -10,7 +10,7 @@ import pytest
 
 from app.models.subtask import Subtask
 from app.models.task import Task
-from app.ui.task.components.form.task_form import TaskForm
+from app.ui.task.form.task_form import TaskForm
 from app.utils.task_helper import TASK_STATUS_COMPLETED, TASK_STATUS_PENDING
 
 

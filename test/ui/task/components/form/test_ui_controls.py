@@ -22,7 +22,7 @@ if str(project_root) not in sys.path:
 import flet as ft
 
 from app.models.task import Task
-from app.ui.task.components.form.controls import (
+from app.ui.task.form.controls import (
     create_description_field,
     create_error_text,
     create_notes_field,

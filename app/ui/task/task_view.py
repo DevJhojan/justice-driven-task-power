@@ -7,8 +7,9 @@ import flet as ft
 from typing import Optional, List
 from app.models.task import Task
 from app.services.task_service import TaskService
-from app.ui.task.components import TaskList, TaskFilters
-from app.ui.task.components.form.task_form import TaskForm
+from app.ui.task.task_list import TaskList
+from app.ui.task.task_filters import TaskFilters
+from app.ui.task.form.task_form import TaskForm
 from app.utils.helpers.responsives import get_responsive_padding, get_responsive_size
 
 
@@ -333,8 +334,8 @@ class TaskView:
     
     def _show_task_details(self, task: Task):
         """Muestra detalles de una tarea en un diálogo"""
-        from app.ui.task.components.status_badge import create_status_badge
-        from app.ui.task.components.priority_badge import create_priority_badge
+        from app.ui.task.status_badge import create_status_badge
+        from app.ui.task.priority_badge import create_priority_badge
         
         def close_dialog(e):
             dialog.open = False

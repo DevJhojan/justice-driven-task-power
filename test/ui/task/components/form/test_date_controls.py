@@ -3,7 +3,7 @@ import flet as ft
 from datetime import date, datetime
 from unittest.mock import Mock
 
-from app.ui.task.components.form.date_controls import build_due_date_controls
+from app.ui.task.form.date_controls import build_due_date_controls
 from app.utils.helpers.formats import format_date
 
 
