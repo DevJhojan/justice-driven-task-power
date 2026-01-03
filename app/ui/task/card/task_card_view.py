@@ -9,7 +9,7 @@ from typing import Callable, TYPE_CHECKING
 import flet as ft
 
 if TYPE_CHECKING:
-    from app.ui.task.task_view import SimpleTask
+    from app.models.task import Task
 
 
 class TaskCardView:
@@ -28,7 +28,7 @@ class TaskCardView:
         self.expanded_tasks = set()  # Almacenar IDs de tareas expandidas
         self.subtasks_containers = {}  # Almacenar referencias a los containers de subtareas
 
-    def build(self, task: SimpleTask) -> ft.Card:
+    def build(self, task: Task) -> ft.Card:
         """
         Construye y retorna la tarjeta de tarea.
 
@@ -82,7 +82,7 @@ class TaskCardView:
             )
         )
 
-    def _build_title_row(self, task: SimpleTask) -> ft.Control:
+    def _build_title_row(self, task: Task) -> ft.Control:
         """Construye la fila del título con checkbox si no hay subtareas."""
         if task.subtasks:
             # Si hay subtareas, solo mostrar título sin checkbox
@@ -109,14 +109,14 @@ class TaskCardView:
                     ft.Row(
                         controls=[
                             ft.Checkbox(
-                                value=task.completed,
+                                value=task.status == "completada",
                             ),
                             ft.Text(
                                 task.title,
                                 size=16,
                                 weight=ft.FontWeight.W_600,
                                 color=ft.Colors.GREY_600
-                                if task.completed
+                                if task.status == "completada"
                                 else ft.Colors.WHITE,
                             ),
                         ],
@@ -132,7 +132,7 @@ class TaskCardView:
                 spacing=4,
             )
 
-    def _build_subtasks_container(self, task: SimpleTask) -> ft.Container:
+    def _build_subtasks_container(self, task: Task) -> ft.Container:
         """Construye el contenedor de subtareas visible directamente."""
         if not task.subtasks:
             return ft.Container(height=0)  # Container vacío si no hay subtareas
@@ -182,7 +182,7 @@ class TaskCardView:
             )
         )
 
-    def _toggle_subtasks(self, task: SimpleTask):
+    def _toggle_subtasks(self, task: Task):
         """Alterna la visibilidad de las subtareas."""
         if task.id in self.expanded_tasks:
             self.expanded_tasks.remove(task.id)

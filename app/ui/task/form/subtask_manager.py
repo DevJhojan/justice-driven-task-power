@@ -5,21 +5,22 @@ Componente para gestionar subtareas dentro del formulario de tareas.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
+import uuid
 
 import flet as ft
+from app.models.subtask import Subtask
 
 if TYPE_CHECKING:
-    from app.ui.task.task_view import SimpleSubtask
+    pass
 
 
 class SubtaskManager:
     """Gestor de subtareas para agregar/editar dentro del formulario principal."""
 
     def __init__(self):
-        self.subtasks: list[SimpleSubtask] = []
+        self.subtasks: list[Subtask] = []
         self.subtask_input: Optional[ft.TextField] = None
         self.subtasks_column: Optional[ft.Column] = None
-        self.next_subtask_id: int = 1
 
     def build(self) -> ft.Container:
         """Construye la interfaz de gestión de subtareas."""
@@ -58,17 +59,19 @@ class SubtaskManager:
         if not title:
             return
 
-        # Importar aquí para evitar circular import
-        from app.ui.task.task_view import SimpleSubtask
-
-        subtask = SimpleSubtask(id=self.next_subtask_id, title=title, completed=False)
-        self.next_subtask_id += 1
+        # Crear subtarea con modelo real
+        subtask = Subtask(
+            id=str(uuid.uuid4()),
+            task_id="",  # Se asignará cuando se guarde la tarea
+            title=title,
+            completed=False,
+        )
         self.subtasks.append(subtask)
         self.subtask_input.value = ""
 
         self._refresh_subtasks()
 
-    def _delete_subtask(self, subtask: SimpleSubtask):
+    def _delete_subtask(self, subtask: Subtask):
         """Elimina una subtarea de la lista."""
         self.subtasks = [s for s in self.subtasks if s.id != subtask.id]
         self._refresh_subtasks()
@@ -108,20 +111,14 @@ class SubtaskManager:
                 )
             )
 
-    def _toggle_subtask(self, subtask: SimpleSubtask):
+    def _toggle_subtask(self, subtask: Subtask):
         """Marca/desmarca una subtarea como completada."""
-        for s in self.subtasks:
-            if s.id == subtask.id:
-                s.completed = not s.completed
-                break
+        subtask.toggle_completed()
         self._refresh_subtasks()
 
     def set_subtasks(self, subtasks: list):
         """Establece las subtareas (para edición)."""
-        self.subtasks = subtasks
-        # Actualizar el siguiente ID basado en las subtareas existentes
-        if self.subtasks:
-            self.next_subtask_id = max(s.id for s in self.subtasks) + 1
+        self.subtasks = subtasks if subtasks else []
         self._refresh_subtasks()
 
     def get_subtasks(self) -> list:
@@ -131,7 +128,6 @@ class SubtaskManager:
     def reset(self):
         """Reinicia el gestor de subtareas."""
         self.subtasks = []
-        self.next_subtask_id = 1
         if self.subtask_input:
             self.subtask_input.value = ""
         if self.subtasks_column:

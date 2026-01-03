@@ -4,14 +4,18 @@ Vista simple de tareas: listado, formulario para crear/editar y botón de elimin
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import List, Optional
+import uuid
+from datetime import datetime
 
 import flet as ft
 import sys
 from pathlib import Path
 from app.ui.task.form.task_form import TaskForm
 from app.ui.task.card.task_card_view import TaskCardView
+from app.models.task import Task
+from app.models.subtask import Subtask
+from app.utils.task_helper import TASK_STATUS_PENDING
 
 # Permite ejecución directa añadiendo la raíz del proyecto al path
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -19,32 +23,12 @@ if str(ROOT_DIR) not in sys.path:
 	sys.path.insert(0, str(ROOT_DIR))
 
 
-@dataclass
-class SimpleSubtask:
-	id: int
-	title: str
-	completed: bool = False
-
-
-@dataclass
-class SimpleTask:
-	id: int
-	title: str
-	description: str = ""
-	completed: bool = False
-	subtasks: List[SimpleSubtask] = None
-
-	def __post_init__(self):
-		if self.subtasks is None:
-			self.subtasks = []
-
-
 class TaskView:
 	def __init__(self, page: Optional[ft.Page] = None):
 		self.page = page
 
-		self.tasks: List[SimpleTask] = []
-		self.editing: Optional[SimpleTask] = None
+		self.tasks: List[Task] = []
+		self.editing: Optional[Task] = None
 		self.next_id: int = 1
 
 		# UI refs
@@ -110,14 +94,15 @@ class TaskView:
 			self.editing.title = title
 			self.editing.description = description
 			self.editing.subtasks = subtasks
+			self.editing.updated_at = datetime.now()
 		else:
-			task = SimpleTask(
-				id=self.next_id,
+			task = Task(
+				id=str(uuid.uuid4()),
 				title=title,
 				description=description,
+				status=TASK_STATUS_PENDING,
 				subtasks=subtasks,
 			)
-			self.next_id += 1
 			self.tasks.insert(0, task)
 
 		self.editing = None
@@ -137,14 +122,14 @@ class TaskView:
 		self._show_form()
 		self._refresh_list()
 
-	def _edit_task(self, task: SimpleTask):
+	def _edit_task(self, task: Task):
 		self.editing = task
 		self.form.set_values(task.title, task.description, task.subtasks)
 		self._show_form()
 		if self.page:
 			self.page.update()
 
-	def _delete_task(self, task: SimpleTask):
+	def _delete_task(self, task: Task):
 		self.tasks = [t for t in self.tasks if t.id != task.id]
 		if self.editing and self.editing.id == task.id:
 			self.editing = None
