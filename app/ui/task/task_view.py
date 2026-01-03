@@ -42,7 +42,7 @@ class TaskView:
 	def build(self) -> ft.Container:
 		self.form_card = self.form.build()
 		self.form_container = ft.Container(content=self.form_card, visible=False)
-		self.list_column = ft.Column(spacing=8)
+		self.list_column = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, expand=True)
 
 		add_button = ft.FloatingActionButton(
 			icon=ft.Icons.ADD,
@@ -67,6 +67,7 @@ class TaskView:
 					self.list_column,
 				],
 				spacing=12,
+				expand=True,
 			),
 		)
 
