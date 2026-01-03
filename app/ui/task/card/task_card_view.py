@@ -36,36 +36,98 @@ class TaskCardView:
         Returns:
             Card de Flet con la tarjeta renderizada
         """
+        # Control para mostrar/ocultar subtareas
+        subtasks_container = self._build_subtasks_container(task)
+
         return ft.Card(
             content=ft.Container(
                 padding=12,
-                content=ft.Row(
+                content=ft.Column(
                     controls=[
-                        ft.Column(
+                        ft.Row(
                             controls=[
-                                ft.Text(task.title, size=16, weight=ft.FontWeight.W_600),
-                                ft.Text(
-                                    task.description or "Sin descripción",
-                                    size=12,
-                                    color=ft.Colors.GREY_700,
+                                ft.Column(
+                                    controls=[
+                                        ft.Text(
+                                            task.title,
+                                            size=16,
+                                            weight=ft.FontWeight.W_600,
+                                        ),
+                                        ft.Text(
+                                            task.description
+                                            or "Sin descripción",
+                                            size=12,
+                                            color=ft.Colors.GREY_700,
+                                        ),
+                                    ],
+                                    expand=True,
+                                    spacing=4,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.IconButton(
+                                            ft.Icons.EDIT,
+                                            tooltip="Editar",
+                                            on_click=lambda _, t=task: self.on_edit(
+                                                t
+                                            ),
+                                        ),
+                                        ft.IconButton(
+                                            ft.Icons.DELETE,
+                                            tooltip="Eliminar",
+                                            icon_color=ft.Colors.RED,
+                                            on_click=lambda _, t=task: self.on_delete(
+                                                t
+                                            ),
+                                        ),
+                                    ],
+                                    spacing=0,
                                 ),
                             ],
-                            expand=True,
-                            spacing=4,
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         ),
-                        ft.IconButton(
-                            ft.Icons.EDIT,
-                            tooltip="Editar",
-                            on_click=lambda _, t=task: self.on_edit(t),
-                        ),
-                        ft.IconButton(
-                            ft.Icons.DELETE,
-                            tooltip="Eliminar",
-                            icon_color=ft.Colors.RED,
-                            on_click=lambda _, t=task: self.on_delete(t),
-                        ),
+                        subtasks_container,
                     ],
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    spacing=4,
                 ),
+            )
+        )
+
+    def _build_subtasks_container(self, task: SimpleTask) -> ft.Container:
+        """Construye el contenedor de subtareas visible directamente."""
+        if not task.subtasks:
+            return ft.Container(height=0)  # Container vacío si no hay subtareas
+
+        subtasks_list = ft.Column(spacing=4)
+
+        for subtask in task.subtasks:
+            subtasks_list.controls.append(
+                ft.Container(
+                    padding=ft.padding.only(left=12),
+                    content=ft.Row(
+                        controls=[
+                            ft.Checkbox(
+                                value=subtask.completed,
+                            ),
+                            ft.Text(
+                                subtask.title,
+                                size=12,
+                                color=ft.Colors.GREY_600
+                                if subtask.completed
+                                else ft.Colors.WHITE,
+                            ),
+                        ],
+                        spacing=6,
+                    ),
+                )
+            )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text("Subtareas", size=11, weight=ft.FontWeight.W_600),
+                    subtasks_list,
+                ],
+                spacing=4,
             )
         )

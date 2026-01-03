@@ -20,10 +20,22 @@ if str(ROOT_DIR) not in sys.path:
 
 
 @dataclass
+class SimpleSubtask:
+	id: int
+	title: str
+	completed: bool = False
+
+
+@dataclass
 class SimpleTask:
 	id: int
 	title: str
 	description: str = ""
+	subtasks: List[SimpleSubtask] = None
+
+	def __post_init__(self):
+		if self.subtasks is None:
+			self.subtasks = []
 
 
 class TaskView:
@@ -88,11 +100,20 @@ class TaskView:
 			self._show_message("El título es obligatorio")
 			return
 
+		# Obtener subtareas del formulario
+		subtasks = self.form.subtask_manager.get_subtasks() if self.form.subtask_manager else []
+
 		if self.editing:
 			self.editing.title = title
 			self.editing.description = description
+			self.editing.subtasks = subtasks
 		else:
-			task = SimpleTask(id=self.next_id, title=title, description=description)
+			task = SimpleTask(
+				id=self.next_id,
+				title=title,
+				description=description,
+				subtasks=subtasks,
+			)
 			self.next_id += 1
 			self.tasks.insert(0, task)
 
@@ -115,7 +136,7 @@ class TaskView:
 
 	def _edit_task(self, task: SimpleTask):
 		self.editing = task
-		self.form.set_values(task.title, task.description)
+		self.form.set_values(task.title, task.description, task.subtasks)
 		self._show_form()
 		if self.page:
 			self.page.update()
