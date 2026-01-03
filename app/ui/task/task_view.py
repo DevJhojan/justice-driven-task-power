@@ -11,6 +11,7 @@ import flet as ft
 import sys
 from pathlib import Path
 from app.ui.task.form.task_form import TaskForm
+from app.ui.task.card.task_card_view import TaskCardView
 
 # Permite ejecución directa añadiendo la raíz del proyecto al path
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -38,6 +39,7 @@ class TaskView:
 		self.form: TaskForm = TaskForm(self._handle_save, self._handle_cancel)
 		self.form_card: Optional[ft.Card] = None
 		self.form_container: Optional[ft.Container] = None
+		self.task_card_view: TaskCardView = TaskCardView(self._edit_task, self._delete_task)
 
 	def build(self) -> ft.Container:
 		self.form_card = self.form.build()
@@ -156,32 +158,10 @@ class TaskView:
 			)
 		else:
 			for task in self.tasks:
-				self.list_column.controls.append(self._build_task_row(task))
+				self.list_column.controls.append(self.task_card_view.build(task))
 
 		if self.page:
 			self.page.update()
-
-	def _build_task_row(self, task: SimpleTask) -> ft.Card:
-		return ft.Card(
-			content=ft.Container(
-				padding=12,
-				content=ft.Row(
-					controls=[
-						ft.Column(
-							controls=[
-								ft.Text(task.title, size=16, weight=ft.FontWeight.W_600),
-								ft.Text(task.description or "Sin descripción", size=12, color=ft.Colors.GREY_700),
-							],
-							expand=True,
-							spacing=4,
-						),
-						ft.IconButton(ft.Icons.EDIT, tooltip="Editar", on_click=lambda _, t=task: self._edit_task(t)),
-						ft.IconButton(ft.Icons.DELETE, tooltip="Eliminar", icon_color=ft.Colors.RED, on_click=lambda _, t=task: self._delete_task(t)),
-					],
-					alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-				),
-			)
-		)
 
 	def _show_message(self, text: str):
 		if not self.page:
