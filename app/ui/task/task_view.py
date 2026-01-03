@@ -4,10 +4,11 @@ Vista simple de tareas: listado, formulario para crear/editar y botón de elimin
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 
 import flet as ft
+from app.ui.task.form.task_form import TaskForm
 
 
 @dataclass
@@ -27,37 +28,20 @@ class TaskView:
 
 		# UI refs
 		self.list_column: Optional[ft.Column] = None
-		self.title_field: Optional[ft.TextField] = None
-		self.desc_field: Optional[ft.TextField] = None
-		self.save_btn: Optional[ft.ElevatedButton] = None
-		self.cancel_btn: Optional[ft.TextButton] = None
+		self.form: TaskForm = TaskForm(self._handle_save, self._handle_cancel)
 		self.form_card: Optional[ft.Card] = None
 
 	def build(self) -> ft.Container:
-		self.title_field = ft.TextField(label="Título", autofocus=True, expand=True)
-		self.desc_field = ft.TextField(label="Descripción", multiline=True, min_lines=2, max_lines=4, expand=True)
-
-		self.save_btn = ft.ElevatedButton("Guardar", icon=ft.Icons.SAVE, on_click=self._handle_save)
-		self.cancel_btn = ft.TextButton("Cancelar", icon=ft.Icons.CLOSE, on_click=self._handle_cancel)
-
-		self.form_card = ft.Card(
-			content=ft.Container(
-				padding=16,
-				content=ft.Column(
-					controls=[
-						ft.Text("Tarea", size=18, weight=ft.FontWeight.BOLD),
-						self.title_field,
-						self.desc_field,
-						ft.Row([self.save_btn, self.cancel_btn], alignment=ft.MainAxisAlignment.END),
-					],
-					spacing=12,
-				),
-			)
-		)
-
+		self.form_card = self.form.build()
 		self.list_column = ft.Column(spacing=8)
 
-		root = ft.Container(
+		add_button = ft.FloatingActionButton(
+			icon=ft.Icons.ADD,
+			tooltip="Agregar tarea",
+			bgcolor=ft.Colors.RED,
+		)
+
+		main_content = ft.Container(
 			padding=16,
 			content=ft.Column(
 				controls=[
@@ -70,6 +54,18 @@ class TaskView:
 			),
 		)
 
+		root = ft.Stack(
+			controls=[
+				main_content,
+				ft.Container(
+					content=add_button,
+					alignment=ft.alignment.Alignment(1, 1),
+					padding=16,
+					expand=True,
+				),
+			],
+		)
+
 		self._refresh_list()
 		return root
 
@@ -77,8 +73,8 @@ class TaskView:
 	# Actions
 	# ------------------------------------------------------------------
 	def _handle_save(self, _):
-		title = (self.title_field.value or "").strip()
-		description = (self.desc_field.value or "").strip()
+		title = (self.form.title_field.value or "").strip()
+		description = (self.form.desc_field.value or "").strip()
 		if not title:
 			self._show_message("El título es obligatorio")
 			return
@@ -102,8 +98,7 @@ class TaskView:
 
 	def _edit_task(self, task: SimpleTask):
 		self.editing = task
-		self.title_field.value = task.title
-		self.desc_field.value = task.description
+		self.form.set_values(task.title, task.description)
 		if self.page:
 			self.page.update()
 
@@ -118,10 +113,7 @@ class TaskView:
 	# Helpers
 	# ------------------------------------------------------------------
 	def _reset_form(self):
-		if self.title_field:
-			self.title_field.value = ""
-		if self.desc_field:
-			self.desc_field.value = ""
+		self.form.reset()
 		if self.page:
 			self.page.update()
 
