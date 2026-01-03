@@ -14,6 +14,7 @@ class ResumeView:
         """Inicializa la vista de resumen"""
         self.rewards_view = None
         self.progress_service = ProgressService()  # Sistema de progreso sin usuarios
+        self.user_id = "default_user"
         print(f"[ResumeView] Vista de resumen inicializada con ProgressService")
     
     def build(self) -> ft.Container:
@@ -25,7 +26,8 @@ class ResumeView:
         """
         # Crear la vista de recompensas con el progress_service
         self.rewards_view = RewardsView(
-            progress_service=self.progress_service
+            progress_service=self.progress_service,
+            user_id=self.user_id,
         )
         
         return self.rewards_view

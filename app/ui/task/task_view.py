@@ -214,6 +214,11 @@ class TaskView:
 			self.database_service = DatabaseService()
 			await self.database_service.initialize()
 			
+			# Usar la misma conexión para el progreso si aún no tiene una
+			if self.progress_service.database_service is None:
+				self.progress_service.database_service = self.database_service
+			await self.progress_service.ensure_persistence()
+			
 			self.task_service = TaskService(self.database_service)
 			await self.task_service.initialize()
 			
@@ -228,6 +233,7 @@ class TaskView:
 			all_tasks = await self.task_service.get_all_tasks(user_id=self.user_id)
 			self.tasks = all_tasks
 			self._refresh_list()
+			await self._async_update_completed_tasks_count()
 		except Exception as e:
 			self.form.show_error(f"Error cargando tareas: {str(e)}")
 	
@@ -289,8 +295,8 @@ class TaskView:
 		try:
 			print(f"[TaskView] Añadiendo puntos por completar tarea: {task.title}")
 			
-			# Añadir puntos usando ProgressService
-			stats = self.progress_service.add_points("task_completed")
+			# Añadir puntos usando ProgressService con persistencia
+			stats = await self.progress_service.add_points("task_completed")
 			print(f"[TaskView] Stats actualizados: Puntos={stats['points']:.2f}, Nivel={stats['level']}")
 			
 			# Actualizar RewardsView si está disponible
@@ -299,10 +305,9 @@ class TaskView:
 				current_level = stats.get("level", "Nadie")
 				
 				print(f"[TaskView] Actualizando RewardsView - Puntos: {current_points:.2f}, Nivel: {current_level}")
-				
-				# Actualizar los puntos y nivel en la vista
 				self.rewards_view.set_user_points(current_points)
 				self.rewards_view.set_user_level(current_level)
+				self.rewards_view.update_progress_from_stats(stats)
 				
 				# Mostrar notificación si hubo subida de nivel
 				if stats.get("level_up", False):
@@ -315,10 +320,29 @@ class TaskView:
 					print(f"[TaskView] Página actualizada")
 			
 			print(f"✓ Puntos añadidos por completar tarea: {task.title}")
+			# Actualizar contador de tareas completadas
+			await self._async_update_completed_tasks_count()
 		except Exception as e:
 			print(f"[TaskView] Error añadiendo puntos: {str(e)}")
 			import traceback
 			traceback.print_exc()
+
+	async def _async_update_completed_tasks_count(self):
+		"""Calcula tareas completadas y actualiza la vista de recompensas"""
+		try:
+			count = 0
+			if self.database_service:
+				count = await self.database_service.count(
+					table_name="tasks",
+					filters={"status": TASK_STATUS_COMPLETED, "user_id": self.user_id},
+				)
+			else:
+				count = sum(1 for t in self.tasks if t.status == TASK_STATUS_COMPLETED)
+
+			if self.rewards_view:
+				self.rewards_view.set_tasks_completed(count)
+		except Exception as e:
+			print(f"[TaskView] Error actualizando tareas completadas: {e}")
 
 	async def _async_update_task(self, task: Task):
 		"""Actualiza una tarea en la base de datos."""
