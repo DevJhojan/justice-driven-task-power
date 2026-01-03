@@ -57,7 +57,7 @@ class TaskView:
 	def build(self) -> ft.Container:
 		self.form_card = self.form.build()
 		self.form_container = ft.Container(content=self.form_card, visible=False)
-		self.list_column = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, expand=True)
+		self.list_column = ft.Column(spacing=8, expand=True)
 
 		add_button = ft.FloatingActionButton(
 			icon=ft.Icons.ADD,
@@ -66,27 +66,29 @@ class TaskView:
 			on_click=self._start_new,
 		)
 
-		main_content = ft.Container(
-			padding=16,
-			content=ft.Column(
-				controls=[
-					ft.Row(
-						[
-							ft.Text("Listado de tareas", size=24, weight=ft.FontWeight.BOLD),
-							add_button,
-						],
-						alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-					),
-					self.form_container,
-					ft.Divider(height=16, color=ft.Colors.TRANSPARENT),
-					self.list_column,
-				],
-				spacing=12,
-				expand=True,
-			),
+		scrollable_content = ft.Column(
+			controls=[
+				ft.Row(
+					[
+						ft.Text("Listado de tareas", size=24, weight=ft.FontWeight.BOLD),
+						add_button,
+					],
+					alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+				),
+				self.form_container,
+				ft.Divider(height=16, color=ft.Colors.TRANSPARENT),
+				self.list_column,
+			],
+			spacing=12,
+			scroll=ft.ScrollMode.AUTO,
+			expand=True,
 		)
 
-		host = main_content
+		host = ft.Container(
+			content=scrollable_content,
+			padding=16,
+			expand=True,
+		)
 
 		self._refresh_list()
 		return host
