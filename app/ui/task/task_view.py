@@ -312,6 +312,7 @@ class TaskView:
         self.form_container.content = ft.ListView(
             controls=[form.build()],
             expand=True,
+            scroll=ft.ScrollMode.AUTO,
             spacing=0,
             padding=get_responsive_padding(page=self.page),
         )

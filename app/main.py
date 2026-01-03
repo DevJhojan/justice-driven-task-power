@@ -4,6 +4,7 @@ Punto de entrada de la aplicación
 """
 
 import flet as ft
+from pathlib import Path
 from app.ui.home_view import HomeView
 from app.utils.screem_load import LoadingScreen
 
@@ -21,6 +22,9 @@ def main(page: ft.Page):
     page.window.height = 600
     page.window.min_width = 400
     page.window.min_height = 500
+    # Icono de la app (usar recurso local)
+    icon_path = (Path(__file__).parent.parent / "assets" / "task_logo.ico").resolve()
+    page.window.icon = str(icon_path)
     # page.window.center() eliminado - no necesario en Flet 0.80.0
     
     # Configuración del tema - Oscuro con matices rojos

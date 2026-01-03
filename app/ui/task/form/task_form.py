@@ -239,7 +239,7 @@ class TaskForm:
 			bgcolor=ft.Colors.GREY_900,
 			border_radius=12,
 			border=ft.Border.all(1, ft.Colors.RED_900),
-			expand=True,
+			# expand se deja en False para que el ListView padre maneje el scroll
 		)
 
 	def _validate_and_save(self) -> bool:
