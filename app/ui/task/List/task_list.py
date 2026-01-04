@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class TaskList:
     """Componente para renderizar la lista de tareas."""
 
-    def __init__(self, on_edit: Callable, on_delete: Callable, on_task_updated: Callable = None):
+    def __init__(self, on_edit: Callable, on_delete: Callable, on_task_updated: Callable = None, progress_service=None, rewards_view=None, page=None):
         """
         Inicializa el componente de lista de tareas.
 
@@ -24,16 +24,22 @@ class TaskList:
             on_edit: Callback cuando se hace clic en editar
             on_delete: Callback cuando se hace clic en eliminar
             on_task_updated: Callback cuando se actualiza una tarea (opcional)
+            progress_service: Servicio de progreso para sumar puntos (opcional)
+            rewards_view: Vista de recompensas para actualizar (opcional)
+            page: Referencia a la página de Flet (opcional)
         """
         self.on_edit = on_edit
         self.on_delete = on_delete
         self.on_task_updated = on_task_updated
+        self.progress_service = progress_service
+        self.rewards_view = rewards_view
+        self.page = page
         self.list_column: ft.Column = ft.Column(spacing=8, expand=True)
         self.task_card_view: TaskCardView = TaskCardView(
-            on_edit, on_delete, on_task_updated
+            on_edit, on_delete, on_task_updated, progress_service, rewards_view, page
         )
         self.filter_bar: ft.Row = None
-        self.current_filter: str = "todos"  # "todos", "pendiente", "en_progreso", "completada"
+        self.current_filter: str = "pendiente"  # "pendiente", "en_progreso", "completada"
         self.all_tasks: List[Task] = []
         self.container: ft.Column = None
 
@@ -84,12 +90,6 @@ class TaskList:
     
     def _build_filter_bar(self):
         """Construye la barra de filtros con los estados."""
-        todos_btn = ft.ElevatedButton(
-            "Todos",
-            on_click=lambda _: self._set_filter("todos"),
-            style=self._get_button_style("todos"),
-        )
-        
         pendiente_btn = ft.ElevatedButton(
             "Pendiente",
             on_click=lambda _: self._set_filter("pendiente"),
@@ -109,14 +109,13 @@ class TaskList:
         )
         
         self.filter_bar = ft.Row(
-            controls=[todos_btn, pendiente_btn, en_progreso_btn, completada_btn],
+            controls=[pendiente_btn, en_progreso_btn, completada_btn],
             spacing=8,
             alignment=ft.MainAxisAlignment.START,
         )
         
         # Guardar referencias a los botones para actualizar estilos
         self.filter_buttons = {
-            "todos": todos_btn,
             "pendiente": pendiente_btn,
             "en_progreso": en_progreso_btn,
             "completada": completada_btn,
@@ -128,7 +127,6 @@ class TaskList:
         
         # Colores por estado
         active_colors = {
-            "todos": (ft.Colors.GREY_700, ft.Colors.WHITE),
             "pendiente": (ft.Colors.AMBER, ft.Colors.BLACK),
             "en_progreso": (ft.Colors.BLUE_600, ft.Colors.WHITE),
             "completada": (ft.Colors.GREEN_500, ft.Colors.WHITE),
@@ -160,7 +158,4 @@ class TaskList:
     
     def _apply_filter(self, tasks: List[Task]) -> List[Task]:
         """Aplica el filtro actual a las tareas."""
-        if self.current_filter == "todos":
-            return tasks
-        else:
-            return [task for task in tasks if task.status == self.current_filter]
+        return [task for task in tasks if task.status == self.current_filter]

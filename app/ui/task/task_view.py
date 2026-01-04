@@ -44,7 +44,7 @@ class TaskView:
 		self.form: TaskForm = TaskForm(self._handle_save, self._handle_cancel, self._on_subtask_changed)
 		self.form_card: Optional[ft.Card] = None
 		self.form_container: Optional[ft.Container] = None
-		self.task_list: TaskList = TaskList(self._edit_task, self._delete_task, self._on_task_updated)
+		self.task_list: TaskList = TaskList(self._edit_task, self._delete_task, self._on_task_updated, self.progress_service, self.rewards_view, self.page)
 
 	def build(self) -> ft.Container:
 		self.form_card = self.form.build()
@@ -234,6 +234,8 @@ class TaskView:
 			self.tasks = all_tasks
 			self._refresh_list()
 			await self._async_update_completed_tasks_count()
+			# Calcular y sumar puntos por subtareas completadas
+			await self._async_sync_subtask_points()
 		except Exception as e:
 			self.form.show_error(f"Error cargando tareas: {str(e)}")
 	
@@ -343,6 +345,135 @@ class TaskView:
 				self.rewards_view.set_tasks_completed(count)
 		except Exception as e:
 			print(f"[TaskView] Error actualizando tareas completadas: {e}")
+
+	async def _async_verify_points_integrity(self):
+		"""Verifica la integridad de los puntos y corrige si hay inconsistencias"""
+		try:
+			print(f"\n{'='*70}")
+			print(f"[TaskView] 🔍 VERIFICACIÓN DE INTEGRIDAD DE PUNTOS")
+			print(f"{'='*70}")
+			
+			# Obtener puntos actuales de la BD
+			stats = await self.progress_service.load_stats()
+			current_points = stats.get("points", 0.0)
+			print(f"  📊 Puntos actuales en BD: {current_points:.2f}")
+			
+			# Calcular puntos esperados basados en tareas y subtareas completadas
+			expected_points = 0.0
+			completed_tasks = 0
+			completed_subtasks = 0
+			
+			for task in self.tasks:
+				if task.status == TASK_STATUS_COMPLETED:
+					completed_tasks += 1
+					expected_points += 0.05  # POINTS_BY_ACTION["task_completed"]
+				
+				if task.subtasks:
+					for subtask in task.subtasks:
+						if subtask.completed:
+							completed_subtasks += 1
+							expected_points += 0.02  # POINTS_BY_ACTION["subtask_completed"]
+			
+			print(f"  📋 Tareas completadas: {completed_tasks} x 0.05 = {completed_tasks * 0.05:.2f} puntos")
+			print(f"  ✓ Subtareas completadas: {completed_subtasks} x 0.02 = {completed_subtasks * 0.02:.2f} puntos")
+			print(f"  🎯 Total esperado: {expected_points:.2f} puntos")
+			
+			# Verificar si hay diferencia
+			difference = abs(current_points - expected_points)
+			had_correction = False
+			
+			if difference > 0.001:  # Tolerancia de precisión flotante
+				print(f"  ⚠️  INCONSISTENCIA DETECTADA")
+				print(f"  📉 Diferencia: {difference:.2f} puntos")
+				print(f"  🔧 Corrigiendo puntos...")
+				
+				# Corregir los puntos usando set_points
+				await self.progress_service.set_points(expected_points)
+				
+				# Recargar stats corregidos
+				stats = await self.progress_service.load_stats()
+				print(f"  ✅ Puntos corregidos: {stats['points']:.2f}")
+				print(f"  📊 Nivel actualizado: {stats['level']}")
+				
+				# Actualizar RewardsView
+				if self.rewards_view:
+					self.rewards_view.set_user_points(stats.get("points", 0.0))
+					self.rewards_view.set_user_level(stats.get("level", "Nadie"))
+					self.rewards_view.update_progress_from_stats(stats)
+				
+				had_correction = True
+			else:
+				print(f"  ✅ Integridad verificada - Los puntos son correctos")
+			
+			print(f"{'='*70}\n")
+			
+			# Mostrar resultado en el panel de RewardsView
+			if self.rewards_view:
+				self.rewards_view.show_integrity_result(
+					current_points=current_points,
+					expected_points=expected_points,
+					completed_tasks=completed_tasks,
+					completed_subtasks=completed_subtasks,
+					had_correction=had_correction
+				)
+			
+			return had_correction
+			
+		except Exception as e:
+			print(f"[TaskView] ❌ Error verificando integridad de puntos: {e}")
+			import traceback
+			traceback.print_exc()
+			return False
+	
+	async def _async_sync_subtask_points(self):
+		"""Sincroniza los puntos de subtareas completadas (suma solo si BD está en 0.00)"""
+		try:
+			print(f"\n[TaskView] 🔄 SINCRONIZACIÓN DE PUNTOS AL INICIAR")
+			
+			# Obtener puntos actuales de la BD
+			stats = await self.progress_service.load_stats()
+			current_points = stats.get("points", 0.0)
+			
+			print(f"[TaskView] 📊 Puntos actuales en BD: {current_points:.2f}")
+			
+			# Contar subtareas completadas
+			total_completed_subtasks = 0
+			for task in self.tasks:
+				if task.subtasks:
+					total_completed_subtasks += sum(1 for st in task.subtasks if st.completed)
+			
+			print(f"[TaskView] ✓ Subtareas completadas detectadas: {total_completed_subtasks}")
+			
+			# Si la BD está en 0.00 y hay subtareas completadas, sumarlas
+			if current_points == 0.0 and total_completed_subtasks > 0:
+				print(f"[TaskView] 🆕 BD en 0.00 - Sumando puntos por primera vez...")
+				
+				# Sumar 0.02 puntos por cada subtarea completada
+				for _ in range(total_completed_subtasks):
+					stats = await self.progress_service.add_points("subtask_completed")
+				
+				print(f"[TaskView] ✅ {total_completed_subtasks} subtareas sumadas - Nuevos puntos: {stats['points']:.2f}")
+			else:
+				if current_points > 0.0:
+					print(f"[TaskView] 📝 BD tiene puntos ({current_points:.2f}) - NO sumando duplicados")
+					print(f"[TaskView] 🔍 Verificando integridad de puntos...")
+					# Verificar integridad de los puntos
+					await self._async_verify_points_integrity()
+				else:
+					print(f"[TaskView] ℹ️  No hay subtareas completadas para sumar")
+			
+			# Actualizar RewardsView con los stats finales
+			if self.rewards_view:
+				stats = await self.progress_service.load_stats()
+				self.rewards_view.set_user_points(stats.get("points", 0.0))
+				self.rewards_view.set_user_level(stats.get("level", "Nadie"))
+				self.rewards_view.update_progress_from_stats(stats)
+				print(f"[TaskView] 🔄 RewardsView actualizado - Puntos totales: {stats['points']:.2f}\n")
+			
+		except Exception as e:
+			print(f"[TaskView] ❌ Error sincronizando puntos de subtareas: {e}")
+			import traceback
+			traceback.print_exc()
 
 	async def _async_update_task(self, task: Task):
 		"""Actualiza una tarea en la base de datos."""

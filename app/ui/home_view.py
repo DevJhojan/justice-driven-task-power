@@ -36,6 +36,9 @@ class HomeView:
         resume_view = ResumeView()
         task_view = TaskView(page, rewards_view=resume_view.rewards_view)
         
+        # Conectar el callback de verificación de integridad desde TaskView a ResumeView
+        resume_view.set_verify_integrity_callback(task_view._async_verify_points_integrity)
+        
         # Lista de vistas en orden
         views = [
             resume_view,  # Índice 0 - Pantalla principal

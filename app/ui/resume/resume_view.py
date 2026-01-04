@@ -15,7 +15,15 @@ class ResumeView:
         self.rewards_view = None
         self.progress_service = ProgressService()  # Sistema de progreso sin usuarios
         self.user_id = "default_user"
+        self.verify_integrity_callback = None  # Callback para verificar integridad
         print(f"[ResumeView] Vista de resumen inicializada con ProgressService")
+    
+    def set_verify_integrity_callback(self, callback):
+        """Establece el callback para verificar integridad de puntos"""
+        self.verify_integrity_callback = callback
+        if self.rewards_view:
+            self.rewards_view.on_verify_integrity = callback
+            print(f"[ResumeView] Callback de integridad configurado")
     
     def build(self) -> ft.Container:
         """
@@ -28,6 +36,7 @@ class ResumeView:
         self.rewards_view = RewardsView(
             progress_service=self.progress_service,
             user_id=self.user_id,
+            on_verify_integrity=self.verify_integrity_callback,
         )
         
         return self.rewards_view

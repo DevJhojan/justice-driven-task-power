@@ -14,11 +14,12 @@ from app.utils.task_helper import TASK_STATUS_COMPLETED
 class RewardsView(ft.Container):
     """Vista principal de recompensas con paneles de información"""
     
-    def __init__(self, progress_service: Optional[ProgressService] = None, user_id: str = "default_user"):
+    def __init__(self, progress_service: Optional[ProgressService] = None, user_id: str = "default_user", on_verify_integrity = None):
         super().__init__()
         
         self.progress_service = progress_service if progress_service else ProgressService()
         self.user_id = user_id
+        self.on_verify_integrity = on_verify_integrity  # Callback para verificar integridad
         self.database_service: Optional[DatabaseService] = None
         self.current_user_points = 0.0
         self.current_user_level = "Nadie"
@@ -36,6 +37,15 @@ class RewardsView(ft.Container):
         self.points_text = ft.Text("0.00", size=24, weight="bold", color="#4CAF50")
         self.tasks_completed_text = ft.Text("0 tareas completadas", size=14, color="#CCCCCC")
         
+        # Botón de verificación de integridad
+        self.verify_button = ft.IconButton(
+            icon=ft.Icons.REFRESH,
+            icon_size=20,
+            tooltip="Verificar y corregir integridad de puntos",
+            icon_color="#4CAF50",
+            on_click=self._on_verify_integrity_click,
+        )
+        
         self.header_stats = ft.Container(
             bgcolor="#2a2a2a",
             border_radius=10,
@@ -45,9 +55,46 @@ class RewardsView(ft.Container):
                 spacing=8,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
-                    self.level_text,
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=10,
+                        controls=[
+                            self.level_text,
+                            self.verify_button,
+                        ],
+                    ),
                     self.points_text,
                     self.tasks_completed_text,
+                ],
+            ),
+        )
+        
+        # Panel de verificación de integridad (inicialmente oculto)
+        self.integrity_log_text = ft.Column(spacing=5, scroll=ft.ScrollMode.AUTO)
+        self.integrity_panel = ft.Container(
+            visible=False,
+            bgcolor="#1f1f1f",
+            border_radius=10,
+            padding=15,
+            border=ft.border.all(1, "#4CAF50"),
+            content=ft.Column(
+                spacing=10,
+                controls=[
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Text("🔍 Verificación de Integridad", size=16, weight="bold", color="#4CAF50"),
+                            ft.IconButton(
+                                icon=ft.Icons.CLOSE,
+                                icon_size=18,
+                                tooltip="Cerrar",
+                                on_click=self._close_integrity_panel,
+                            ),
+                        ],
+                    ),
+                    ft.Divider(height=1, color="#3a3a3a"),
+                    self.integrity_log_text,
                 ],
             ),
         )
@@ -108,6 +155,9 @@ class RewardsView(ft.Container):
                         self.header_stats,
                     ],
                 ),
+                
+                # Panel de verificación de integridad (debajo del header)
+                self.integrity_panel,
                 
                 # Panel principal vacío
                 ft.Container(
@@ -202,6 +252,114 @@ class RewardsView(ft.Container):
         self.update_progress_from_stats(stats)
         await self._load_completed_tasks_count()
         print(f"[RewardsView] Stats cargados desde ProgressService")
+    
+    def _on_verify_integrity_click(self, e):
+        """Handler para el botón de verificar integridad"""
+        print(f"[RewardsView] 🔄 Botón de integridad presionado")
+        
+        # Limpiar logs anteriores y mostrar indicador de carga
+        self.integrity_log_text.controls.clear()
+        self.integrity_log_text.controls.append(
+            ft.Row(
+                controls=[
+                    ft.ProgressRing(width=20, height=20, stroke_width=2),
+                    ft.Text("Verificando integridad...", size=14, color="#CCCCCC"),
+                ]
+            )
+        )
+        self.integrity_panel.visible = True
+        
+        if self.page:
+            self.page.update()
+        
+        if self.on_verify_integrity:
+            # Ejecutar el callback de verificación de integridad
+            if self.page:
+                self.page.run_task(self._run_verification_and_update_panel)
+        else:
+            self.integrity_log_text.controls.clear()
+            self.integrity_log_text.controls.append(
+                ft.Text("⚠️  No hay callback de verificación configurado", size=13, color="#FF9800")
+            )
+            if self.page:
+                self.page.update()
+    
+    async def _run_verification_and_update_panel(self):
+        """Ejecuta la verificación y actualiza el panel con los resultados"""
+        try:
+            # Ejecutar la verificación (esto retorna si hubo corrección)
+            result = await self.on_verify_integrity()
+            
+            print(f"[RewardsView] Verificación completada. Resultado: {result}")
+            
+            # La actualización del panel ya se hace desde _async_verify_points_integrity
+            # Solo necesitamos asegurarnos de que la página se actualice
+            if self.page:
+                await self.page.update_async()
+                
+        except Exception as e:
+            print(f"[RewardsView] Error ejecutando verificación: {e}")
+            import traceback
+            traceback.print_exc()
+            self.integrity_log_text.controls.clear()
+            self.integrity_log_text.controls.append(
+                ft.Text(f"❌ Error: {str(e)}", size=13, color="#F44336")
+            )
+            if self.page:
+                await self.page.update_async()
+    
+    def _close_integrity_panel(self, e):
+        """Cierra el panel de verificación de integridad"""
+        self.integrity_panel.visible = False
+        if self.page:
+            self.page.update()
+    
+    def show_integrity_result(self, current_points, expected_points, completed_tasks, completed_subtasks, had_correction):
+        """Muestra el resultado de la verificación en el panel"""
+        print(f"[RewardsView] Mostrando resultado de integridad en el panel")
+        
+        self.integrity_log_text.controls.clear()
+        
+        # Crear los controles visuales
+        controls = [
+            ft.Text(f"📊 Puntos actuales en BD: {current_points:.2f}", size=13, color="#EEEEEE"),
+            ft.Text(f"📋 Tareas completadas: {completed_tasks} × 0.05 = {completed_tasks * 0.05:.2f} puntos", size=13, color="#CCCCCC"),
+            ft.Text(f"✓ Subtareas completadas: {completed_subtasks} × 0.02 = {completed_subtasks * 0.02:.2f} puntos", size=13, color="#CCCCCC"),
+            ft.Text(f"🎯 Total esperado: {expected_points:.2f} puntos", size=13, color="#4CAF50", weight="bold"),
+        ]
+        
+        difference = abs(current_points - expected_points)
+        
+        if had_correction:
+            controls.extend([
+                ft.Divider(height=1, color="#555"),
+                ft.Text(f"⚠️  INCONSISTENCIA DETECTADA", size=13, color="#FF9800", weight="bold"),
+                ft.Text(f"📉 Diferencia: {difference:.2f} puntos", size=13, color="#FF9800"),
+                ft.Text(f"🔧 Puntos corregidos automáticamente", size=13, color="#4CAF50"),
+                ft.Text(f"✅ Nuevos puntos: {expected_points:.2f}", size=14, color="#4CAF50", weight="bold"),
+            ])
+        else:
+            controls.extend([
+                ft.Divider(height=1, color="#555"),
+                ft.Text(f"✅ Integridad verificada correctamente", size=13, color="#4CAF50", weight="bold"),
+                ft.Text(f"Los puntos coinciden con las tareas completadas", size=12, color="#AAAAAA"),
+            ])
+        
+        self.integrity_log_text.controls.extend(controls)
+        
+        print(f"[RewardsView] Panel actualizado con {len(controls)} elementos")
+        
+        # Asegurar que el panel sea visible
+        self.integrity_panel.visible = True
+        
+        # Forzar actualización de la UI
+        try:
+            if self.page:
+                self.update()
+                self.page.update()
+                print(f"[RewardsView] UI actualizada exitosamente")
+        except Exception as e:
+            print(f"[RewardsView] Error actualizando UI: {e}")
     
     def update_points_display(self, points: float):
         """Actualiza la visualización de puntos"""

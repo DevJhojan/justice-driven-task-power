@@ -62,8 +62,12 @@ def _create_subtask_toggle_handler(
             progress_bar.value = new_percentage
             progress_text.value = format_completion_percentage(task)
 
+        # Force page update to reflect checkbox change immediately
         if page:
-            page.update()
+            try:
+                page.update()
+            except Exception as e:
+                print(f"[SubtasksSection] Error updating page: {e}")
 
         if on_subtask_toggle:
             on_subtask_toggle(task.id, received_subtask_id)
