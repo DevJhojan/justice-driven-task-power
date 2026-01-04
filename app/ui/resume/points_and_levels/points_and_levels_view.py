@@ -32,10 +32,27 @@ class PointsAndLevelsView(ft.Container):
         self.bgcolor = "#1a1a1a"
         self.padding = 20
         
+        # Mapeo de niveles a iconos
+        self.level_icons = {
+            "Nadie": "👤",
+            "Olvidado": "🕳️",
+            "Novato": "🌱",
+            "Aprendiz": "📘",
+            "Conocido": "👀",
+            "Respetado": "🛡️",
+            "Influyente": "📣",
+            "Maestro": "🧙",
+            "Legendario": "🗡️",
+            "Como Dios": "✨👑",
+        }
+        
         # Header delgado con nivel y puntos
+        self.level_icon = ft.Text("👤", size=32)
         self.level_text = ft.Text("Nadie", size=32, weight="bold", color="#FFD700")
         self.points_text = ft.Text("0.00", size=24, weight="bold", color="#4CAF50")
         self.tasks_completed_text = ft.Text("0 tareas completadas", size=14, color="#CCCCCC")
+        self.habits_completed_text = ft.Text("0 hábitos completados", size=14, color="#CCCCCC")
+        self.missions_completed_text = ft.Text("0 misiones completadas", size=14, color="#CCCCCC")
         
         # Botón de verificación de integridad
         self.verify_button = ft.IconButton(
@@ -46,60 +63,7 @@ class PointsAndLevelsView(ft.Container):
             on_click=self._on_verify_integrity_click,
         )
         
-        self.header_stats = ft.Container(
-            bgcolor="#2a2a2a",
-            border_radius=10,
-            padding=ft.padding.symmetric(horizontal=20, vertical=15),
-            border=ft.border.all(1, "#3a3a3a"),
-            content=ft.Column(
-                spacing=8,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                controls=[
-                    ft.Row(
-                        alignment=ft.MainAxisAlignment.CENTER,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        spacing=10,
-                        controls=[
-                            self.level_text,
-                            self.verify_button,
-                        ],
-                    ),
-                    self.points_text,
-                    self.tasks_completed_text,
-                ],
-            ),
-        )
-        
-        # Panel de verificación de integridad (inicialmente oculto)
-        self.integrity_log_text = ft.Column(spacing=5, scroll=ft.ScrollMode.AUTO)
-        self.integrity_panel = ft.Container(
-            visible=False,
-            bgcolor="#1f1f1f",
-            border_radius=10,
-            padding=15,
-            border=ft.border.all(1, "#4CAF50"),
-            content=ft.Column(
-                spacing=10,
-                controls=[
-                    ft.Row(
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                        controls=[
-                            ft.Text("🔍 Verificación de Integridad", size=16, weight="bold", color="#4CAF50"),
-                            ft.IconButton(
-                                icon=ft.Icons.CLOSE,
-                                icon_size=18,
-                                tooltip="Cerrar",
-                                on_click=self._close_integrity_panel,
-                            ),
-                        ],
-                    ),
-                    ft.Divider(height=1, color="#3a3a3a"),
-                    self.integrity_log_text,
-                ],
-            ),
-        )
-
-        # Panel de progreso hacia el siguiente nivel
+        # Elementos de la barra de progreso
         self.progress_title = ft.Text("Progreso al siguiente nivel", size=18, weight="bold", color="#FFF", text_align=ft.TextAlign.CENTER)
         self.next_level_text = ft.Text("Siguiente nivel: --", size=14, color="#DDD", text_align=ft.TextAlign.CENTER)
         self.progress_detail_text = ft.Text("Faltan 0.00 pts", size=12, color="#AAA", text_align=ft.TextAlign.CENTER)
@@ -136,27 +100,90 @@ class PointsAndLevelsView(ft.Container):
                 self.progress_total_points,
             ],
         )
-
-        self.progress_panel = ft.Container(
-            bgcolor="#242424",
-            border_radius=12,
-            padding=ft.padding.all(16),
+        
+        self.header_stats = ft.Container(
+            bgcolor="#2a2a2a",
+            border_radius=10,
+            padding=ft.padding.symmetric(horizontal=20, vertical=15),
             border=ft.border.all(1, "#3a3a3a"),
             expand=True,
             content=ft.Column(
-                spacing=10,
+                spacing=15,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
-                    self.progress_title,
-                    self.next_level_text,
-                    self.progress_bar_row,
-                    self.progress_points_row,
-                    self.progress_detail_text,
-                    self.levels_remaining_text,
+                    # Primera fila: Nivel | Barra de progreso | Botón actualizar
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        controls=[
+                            self.level_text,
+                            ft.Column(
+                                spacing=5,
+                                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                expand=True,
+                                controls=[
+                                    self.next_level_text,
+                                    self.progress_bar_row,
+                                    self.progress_points_row,
+                                ],
+                            ),
+                            self.verify_button,
+                        ],
+                    ),
+                    ft.Divider(height=1, color="#3a3a3a"),
+                    # Segunda fila: Puntos | Mensaje de puntos faltantes
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        controls=[
+                            self.points_text,
+                            self.levels_remaining_text,
+                        ],
+                    ),
+                    ft.Divider(height=1, color="#3a3a3a"),
+                    # Tercera fila: Tareas | Hábitos | Misiones
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_AROUND,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        controls=[
+                            self.tasks_completed_text,
+                            self.habits_completed_text,
+                            self.missions_completed_text,
+                        ],
+                    ),
                 ],
             ),
         )
         
+        # Panel de verificación de integridad (inicialmente oculto)
+        self.integrity_log_text = ft.Column(spacing=5, scroll=ft.ScrollMode.AUTO)
+        self.integrity_panel = ft.Container(
+            visible=False,
+            bgcolor="#1f1f1f",
+            border_radius=10,
+            padding=15,
+            border=ft.border.all(1, "#4CAF50"),
+            content=ft.Column(
+                spacing=10,
+                controls=[
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Text("🔍 Verificación de Integridad", size=16, weight="bold", color="#4CAF50"),
+                            ft.IconButton(
+                                icon=ft.Icons.CLOSE,
+                                icon_size=18,
+                                tooltip="Cerrar",
+                                on_click=self._close_integrity_panel,
+                            ),
+                        ],
+                    ),
+                    ft.Divider(height=1, color="#3a3a3a"),
+                    self.integrity_log_text,
+                ],
+            ),
+        )
+
         # Panel vacío
         self.panel_empty = ft.Container(
             bgcolor="#2a2a2a",
@@ -171,16 +198,8 @@ class PointsAndLevelsView(ft.Container):
             spacing=20,
             expand=True,
             controls=[
-                # Título y header de nivel/puntos en un Row
-                ft.Row(
-                    spacing=20,
-                    alignment=ft.MainAxisAlignment.START,
-                    vertical_alignment=ft.CrossAxisAlignment.START,
-                    controls=[
-                        self.progress_panel,
-                        self.header_stats,
-                    ],
-                ),
+                # Header de nivel/puntos con barra de progreso
+                self.header_stats,
                 
                 # Panel de verificación de integridad (debajo del header)
                 self.integrity_panel,
