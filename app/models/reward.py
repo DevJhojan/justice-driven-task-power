@@ -34,6 +34,7 @@ class Reward:
     color: str = "#FFD700"
     is_active: bool = True
     category: str = "badge"
+    claimed: bool = False
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
     
@@ -76,6 +77,7 @@ class Reward:
             "color": self.color,
             "is_active": self.is_active,
             "category": self.category,
+            "claimed": self.claimed,
             "created_at": created_at,
             "updated_at": updated_at,
         }
@@ -115,6 +117,7 @@ class Reward:
             color=data.get("color", "#FFD700"),
             is_active=data.get("is_active", True),
             category=data.get("category", "badge"),
+            claimed=data.get("claimed", False),
             created_at=created_at,
             updated_at=updated_at,
         )

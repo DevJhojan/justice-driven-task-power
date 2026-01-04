@@ -43,8 +43,11 @@ class ResumeView:
         # Evitar que ocupe todo el alto; deja espacio para recompensas debajo
         self.points_levels_view.expand = False
 
+        # Obtener los puntos actuales del usuario desde progress_service
+        user_points = self.progress_service.current_points
+        
         # Panel de recompensas con altura fija equivalente a ~6 filas y scroll
-        self.rewards_view = RewardsView(user_points=0.0)
+        self.rewards_view = RewardsView(user_points=user_points)
         rewards_panel = ft.Container(
             height=6 * 64,  # aproximadamente 6 filas visibles
             bgcolor="#101010",

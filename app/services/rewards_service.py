@@ -108,17 +108,17 @@ class RewardsService:
     
     def get_unlocked_rewards(self, user_points: float) -> List[Reward]:
         """
-        Obtiene las recompensas desbloqueadas por puntos
+        Obtiene las recompensas desbloqueadas por puntos que no han sido reclamadas
         
         Args:
             user_points: Puntos del usuario
             
         Returns:
-            Lista de recompensas desbloqueadas
+            Lista de recompensas desbloqueadas y no reclamadas
         """
         return [
             r for r in self.get_all_rewards(active_only=True)
-            if r.points_required <= user_points
+            if r.points_required <= user_points and not r.claimed
         ]
     
     def get_next_rewards(self, user_points: float, limit: int = 5) -> List[Reward]:
