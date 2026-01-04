@@ -160,8 +160,8 @@ class RewardsView(ft.Container):
 							expand=True,
 							controls=[
 								ft.Text(reward.icon or "🎁", size=24),
-								ft.Text(reward.title, size=14, weight="w600", color="#FFD700", expand=True),
-						        ft.Text(f"{reward.points_required:.2f} pts", size=12, color="#FFD700", weight="bold"),
+								ft.Text(reward.title, size=14, weight="w600", color="#FFFFFF", expand=True),
+						        ft.Text(f"Objetivo: {reward.points_required:.2f} pts", size=12, color="#FFD700", weight="bold"),
 							],
 						),
 					],
