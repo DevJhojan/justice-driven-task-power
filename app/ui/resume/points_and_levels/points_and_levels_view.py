@@ -110,7 +110,7 @@ class PointsAndLevelsView(ft.Container):
             weight="w600",
             text_align=ft.TextAlign.CENTER,
         )
-        self.progress_bar = ft.ProgressBar(value=0.0, bgcolor="#333", color="#4CAF50", height=10, width=280)
+        self.progress_bar = ft.ProgressBar(value=0.0, bgcolor="#222222", color="#4CAF50", height=12, width=280, min_height=12)
 
         self.progress_panel = ft.Container(
             bgcolor="#242424",
@@ -267,6 +267,9 @@ class PointsAndLevelsView(ft.Container):
                 ]
             )
         )
+        self.integrity_log_text.controls.append(
+            ft.Text("Panel actualizado exitosamente después de verificación y ya puedes cerrar el panel", size=12, color="#AAAAAA")
+        )
         self.integrity_panel.visible = True
         
         if self.page:
@@ -286,16 +289,31 @@ class PointsAndLevelsView(ft.Container):
     
     async def _run_verification_and_update_panel(self):
         """Ejecuta la verificación y actualiza el panel con los resultados"""
+        import asyncio
+        
         try:
-            # Ejecutar la verificación (esto retorna si hubo corrección)
-            result = await self.on_verify_integrity()
+            # Ejecutar la verificación con timeout de 5 segundos
+            try:
+                result = await asyncio.wait_for(self.on_verify_integrity(), timeout=5.0)
+                print(f"[PointsAndLevelsView] Verificación completada. Resultado: {result}")
+            except asyncio.TimeoutError:
+                print(f"[PointsAndLevelsView] ⚠️ Timeout en verificación (5s), cerrando panel de carga")
+                self.integrity_panel.visible = False
+                if self.page:
+                    self.page.update()
+                return
             
-            print(f"[PointsAndLevelsView] Verificación completada. Resultado: {result}")
+            # Pequeño delay para asegurar que show_integrity_result se completó
+            await asyncio.sleep(0.3)
             
-            # La actualización del panel ya se hace desde _async_verify_points_integrity
-            # Solo necesitamos asegurarnos de que la página se actualice
+            # Forzar actualización explícita del panel y del contenedor
             if self.page:
+                # Actualizar todos los controles internos
+                self.integrity_log_text.update()
+                self.integrity_panel.update()
+                self.update()
                 self.page.update()
+                print(f"[PointsAndLevelsView] Panel actualizado exitosamente después de verificación")
                 
         except Exception as e:
             print(f"[PointsAndLevelsView] Error ejecutando verificación: {e}")
@@ -306,6 +324,9 @@ class PointsAndLevelsView(ft.Container):
                 ft.Text(f"❌ Error: {str(e)}", size=13, color="#F44336")
             )
             if self.page:
+                self.integrity_log_text.update()
+                self.integrity_panel.update()
+                self.update()
                 self.page.update()
     
     def _close_integrity_panel(self, e):
