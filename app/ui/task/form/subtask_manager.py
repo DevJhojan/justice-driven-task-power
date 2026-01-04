@@ -4,7 +4,7 @@ Componente para gestionar subtareas dentro del formulario de tareas.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Callable
 import uuid
 
 import flet as ft
@@ -17,10 +17,11 @@ if TYPE_CHECKING:
 class SubtaskManager:
     """Gestor de subtareas para agregar/editar dentro del formulario principal."""
 
-    def __init__(self):
+    def __init__(self, on_subtask_changed: Callable = None):
         self.subtasks: list[Subtask] = []
         self.subtask_input: Optional[ft.TextField] = None
         self.subtasks_column: Optional[ft.Column] = None
+        self.on_subtask_changed = on_subtask_changed  # Callback para cuando cambia una subtarea
 
     def build(self) -> ft.Container:
         """Construye la interfaz de gestión de subtareas."""
@@ -115,6 +116,10 @@ class SubtaskManager:
         """Marca/desmarca una subtarea como completada."""
         subtask.toggle_completed()
         self._refresh_subtasks()
+        
+        # Llamar al callback si está disponible
+        if self.on_subtask_changed:
+            self.on_subtask_changed(subtask)
 
     def set_subtasks(self, subtasks: list):
         """Establece las subtareas (para edición)."""

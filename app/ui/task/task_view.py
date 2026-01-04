@@ -33,10 +33,10 @@ class TaskView:
 
 		# UI refs
 		self.list_column: Optional[ft.Column] = None
-		self.form: TaskForm = TaskForm(self._handle_save, self._handle_cancel)
+		self.form: TaskForm = TaskForm(self._handle_save, self._handle_cancel, self._on_subtask_changed)
 		self.form_card: Optional[ft.Card] = None
 		self.form_container: Optional[ft.Container] = None
-		self.task_card_view: TaskCardView = TaskCardView(self._edit_task, self._delete_task)
+		self.task_card_view: TaskCardView = TaskCardView(self._edit_task, self._delete_task, self._on_task_updated)
 
 	def build(self) -> ft.Container:
 		self.form_card = self.form.build()
@@ -95,6 +95,8 @@ class TaskView:
 			self.editing.description = description
 			self.editing.subtasks = subtasks
 			self.editing.updated_at = datetime.now()
+			# Actualizar estado basado en subtareas
+			self.editing.update_status_from_subtasks()
 		else:
 			task = Task(
 				id=str(uuid.uuid4()),
@@ -103,17 +105,21 @@ class TaskView:
 				status=TASK_STATUS_PENDING,
 				subtasks=subtasks,
 			)
+			# Actualizar estado basado en subtareas (si las hay)
+			task.update_status_from_subtasks()
 			self.tasks.insert(0, task)
 
 		self.editing = None
 		self._reset_form()
 		self._hide_form()
+		self._show_list()
 		self._refresh_list()
 
 	def _handle_cancel(self, _):
 		self.editing = None
 		self._reset_form()
 		self._hide_form()
+		self._show_list()
 		self._refresh_list()
 
 	def _start_new(self, _):
@@ -125,6 +131,7 @@ class TaskView:
 	def _edit_task(self, task: Task):
 		self.editing = task
 		self.form.set_values(task.title, task.description, task.subtasks)
+		self._hide_list()
 		self._show_form()
 		if self.page:
 			self.page.update()
@@ -156,6 +163,18 @@ class TaskView:
 			if self.page:
 				self.page.update()
 
+	def _hide_list(self):
+		if self.list_column:
+			self.list_column.visible = False
+			if self.page:
+				self.page.update()
+
+	def _show_list(self):
+		if self.list_column:
+			self.list_column.visible = True
+			if self.page:
+				self.page.update()
+
 	def _refresh_list(self):
 		if not self.list_column:
 			return
@@ -178,6 +197,17 @@ class TaskView:
 		self.page.snack_bar = ft.SnackBar(content=ft.Text(text))
 		self.page.snack_bar.open = True
 		self.page.update()
+
+	def _on_subtask_changed(self, subtask):
+		"""Callback cuando cambia una subtarea en el formulario."""
+		if self.editing:
+			# Actualizar estado de la tarea basado en sus subtareas
+			self.editing.update_status_from_subtasks()
+
+	def _on_task_updated(self, task: Task):
+		"""Callback cuando se actualiza una tarea (ej: checkbox toggle)."""
+		# Refrescar la lista para mostrar cambios de estado
+		self._refresh_list()
 
 
 # Permite vista rápida ejecutando directamente este archivo

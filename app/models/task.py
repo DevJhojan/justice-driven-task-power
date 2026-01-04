@@ -129,6 +129,36 @@ class Task:
         """Cancela la tarea"""
         self.update_status(TASK_STATUS_CANCELLED)
     
+    def update_status_from_subtasks(self):
+        """
+        Actualiza automáticamente el estado de la tarea basado en sus subtareas.
+        
+        Lógica:
+        - Sin subtareas: Se controla manualmente mediante checkbox
+        - Con subtareas:
+          * Ninguna completada → pendiente
+          * Al menos 1 completada → en progreso
+          * Todas completadas → completada
+        """
+        if not self.subtasks:
+            # Sin subtareas, mantener estado actual (controlado por checkbox)
+            return
+        
+        completed_count = sum(1 for st in self.subtasks if st.completed)
+        total_count = len(self.subtasks)
+        
+        if completed_count == 0:
+            # Ninguna subtarea completada
+            self.status = TASK_STATUS_PENDING
+        elif completed_count == total_count:
+            # Todas las subtareas completadas
+            self.status = TASK_STATUS_COMPLETED
+        else:
+            # Al menos una pero no todas
+            self.status = TASK_STATUS_IN_PROGRESS
+        
+        self.updated_at = datetime.now()
+    
     def to_dict(self) -> dict:
         """
         Convierte la tarea a diccionario

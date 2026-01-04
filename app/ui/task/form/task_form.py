@@ -11,9 +11,10 @@ from app.ui.task.form.subtask_manager import SubtaskManager
 
 
 class TaskForm:
-    def __init__(self, on_save: Callable, on_cancel: Callable):
+    def __init__(self, on_save: Callable, on_cancel: Callable, on_subtask_changed: Callable = None):
         self.on_save = on_save
         self.on_cancel = on_cancel
+        self.on_subtask_changed = on_subtask_changed
 
         self.title_field: Optional[ft.TextField] = None
         self.desc_field: Optional[ft.TextField] = None
@@ -29,7 +30,7 @@ class TaskForm:
             max_lines=4,
             expand=True,
         )
-        self.subtask_manager = SubtaskManager()
+        self.subtask_manager = SubtaskManager(on_subtask_changed=self.on_subtask_changed)
 
         save_btn = ft.ElevatedButton(
             "Guardar", icon=ft.Icons.SAVE, on_click=self.on_save
