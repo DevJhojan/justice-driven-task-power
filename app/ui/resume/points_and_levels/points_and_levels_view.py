@@ -110,7 +110,24 @@ class PointsAndLevelsView(ft.Container):
             weight="w600",
             text_align=ft.TextAlign.CENTER,
         )
-        self.progress_bar = ft.ProgressBar(value=0.0, bgcolor="#222222", color="#4CAF50", height=12, width=280, min_height=12)
+        
+        # Textos de puntos para la barra de progreso
+        self.progress_current_points = ft.Text("0.00", size=11, color="#AAA")
+        self.progress_total_points = ft.Text("0.00", size=11, color="#AAA")
+        
+        self.progress_bar = ft.ProgressBar(value=0.0, bgcolor="#222222", color="#4CAF50", height=12, bar_height=12, width=280, expand=True)
+        
+        # Row con la barra de progreso y los puntos a los lados
+        self.progress_bar_row = ft.Row(
+            alignment=ft.MainAxisAlignment.CENTER,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=10,
+            controls=[
+                self.progress_current_points,
+                self.progress_bar,
+                self.progress_total_points,
+            ],
+        )
 
         self.progress_panel = ft.Container(
             bgcolor="#242424",
@@ -124,7 +141,7 @@ class PointsAndLevelsView(ft.Container):
                 controls=[
                     self.progress_title,
                     self.next_level_text,
-                    self.progress_bar,
+                    self.progress_bar_row,
                     self.progress_detail_text,
                     self.levels_remaining_text,
                 ],
@@ -227,6 +244,11 @@ class PointsAndLevelsView(ft.Container):
 
         self.progress_bar.value = min(1.0, progress_percent / 100.0)
         self.next_level_text.value = f"Siguiente nivel: {next_level}"
+        
+        # Actualizar los textos de puntos en los extremos de la barra
+        self.progress_current_points.value = f"{points_in_current:.2f}"
+        self.progress_total_points.value = f"{total_for_next:.2f}"
+        
         if total_for_next == 0:
             self.progress_detail_text.value = "Ya alcanzaste el nivel máximo"
         else:
@@ -236,7 +258,7 @@ class PointsAndLevelsView(ft.Container):
         if total_for_next == 0:
             self.levels_remaining_text.value = "Estás en el nivel máximo"
         else:
-            self.levels_remaining_text.value = f"Faltan {points_remaining:.2f} puntos para el siguiente nivel"
+            self.levels_remaining_text.value = f"Faltan {points_remaining:.2f} para el nivel {next_level}"
 
         if self.page:
             try:
