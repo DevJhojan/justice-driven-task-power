@@ -56,7 +56,13 @@ class RewardsView(ft.Container):
         self.progress_title = ft.Text("Progreso al siguiente nivel", size=18, weight="bold", color="#FFF", text_align=ft.TextAlign.CENTER)
         self.next_level_text = ft.Text("Siguiente nivel: --", size=14, color="#DDD", text_align=ft.TextAlign.CENTER)
         self.progress_detail_text = ft.Text("Faltan 0.00 pts", size=12, color="#AAA", text_align=ft.TextAlign.CENTER)
-        self.levels_remaining_text = ft.Text("Faltan 0 niveles para el máximo", size=12, color="#AAA", text_align=ft.TextAlign.CENTER)
+        self.levels_remaining_text = ft.Text(
+            "Faltan 0 niveles para el máximo",
+            size=13,
+            color="#E0E0E0",
+            weight="w600",
+            text_align=ft.TextAlign.CENTER,
+        )
         self.progress_bar = ft.ProgressBar(value=0.0, bgcolor="#333", color="#4CAF50", height=10, width=280)
 
         self.progress_panel = ft.Container(
@@ -66,7 +72,7 @@ class RewardsView(ft.Container):
             border=ft.border.all(1, "#3a3a3a"),
             expand=True,
             content=ft.Column(
-                spacing=8,
+                spacing=10,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
                     self.progress_title,
@@ -176,12 +182,11 @@ class RewardsView(ft.Container):
         else:
             self.progress_detail_text.value = f"Progreso: {progress_percent:.1f}% • Faltan {points_remaining:.2f} pts"
 
-        if remaining_levels == 0:
+        # Mostrar puntos faltantes hacia el siguiente nivel
+        if total_for_next == 0:
             self.levels_remaining_text.value = "Estás en el nivel máximo"
-        elif remaining_levels == 1:
-            self.levels_remaining_text.value = "Falta 1 nivel para el máximo"
         else:
-            self.levels_remaining_text.value = f"Faltan {remaining_levels} niveles para el máximo"
+            self.levels_remaining_text.value = f"Faltan {points_remaining:.2f} puntos para el siguiente nivel"
 
         if self.page:
             try:
