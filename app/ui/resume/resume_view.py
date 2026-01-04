@@ -45,6 +45,7 @@ class ResumeView:
             progress_service=self.progress_service,
             user_id=self.user_id,
             on_verify_integrity=self.verify_integrity_callback,
+            on_points_change=self._on_points_change,
         )
         # Evitar que ocupe todo el alto; deja espacio para recompensas debajo
         self.points_levels_view.expand = False
@@ -87,3 +88,11 @@ class ResumeView:
     def get_progress_service(self):
         """Retorna el servicio de progreso para compartir con otras vistas"""
         return self.progress_service
+
+    def _on_points_change(self, points: float):
+        """Propaga los puntos actualizados al panel de recompensas."""
+        if self.rewards_view:
+            try:
+                self.rewards_view.set_user_points(points)
+            except Exception as e:
+                print(f"[ResumeView] Error al actualizar puntos en RewardsView: {e}")

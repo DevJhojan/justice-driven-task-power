@@ -4,7 +4,7 @@ Interfaz para mostrar nivel, puntos y progreso del usuario
 """
 
 import flet as ft
-from typing import Optional
+from typing import Optional, Callable
 from app.services.progress_service import ProgressService
 from app.services.database_service import DatabaseService
 from app.logic.system_points import LEVELS_ORDER, Level
@@ -14,12 +14,13 @@ from app.utils.task_helper import TASK_STATUS_COMPLETED
 class PointsAndLevelsView(ft.Container):
     """Vista principal de puntos y niveles con paneles de información"""
     
-    def __init__(self, progress_service: Optional[ProgressService] = None, user_id: str = "default_user", on_verify_integrity = None):
+    def __init__(self, progress_service: Optional[ProgressService] = None, user_id: str = "default_user", on_verify_integrity=None, on_points_change: Optional[Callable[[float], None]] = None):
         super().__init__()
         
         self.progress_service = progress_service if progress_service else ProgressService()
         self.user_id = user_id
         self.on_verify_integrity = on_verify_integrity  # Callback para verificar integridad
+        self.on_points_change = on_points_change  # Callback para propagar cambios de puntos
         self.database_service: Optional[DatabaseService] = None
         self.current_user_points = 0.0
         self.current_user_level = "Nadie"
@@ -246,6 +247,14 @@ class PointsAndLevelsView(ft.Container):
         # Asegurar siempre 2 decimales
         self.points_text.value = f"{float(points):.2f}"
         print(f"[PointsAndLevelsView] Actualizando puntos a: {self.points_text.value}")
+
+        # Propagar cambio de puntos a quien lo requiera (ej. RewardsView)
+        if self.on_points_change:
+            try:
+                self.on_points_change(self.current_user_points)
+            except Exception as e:
+                print(f"[PointsAndLevelsView] Error notificando cambio de puntos: {e}")
+
         if self.page:
             try:
                 self.update()

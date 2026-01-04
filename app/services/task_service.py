@@ -361,15 +361,16 @@ class TaskService:
         # Actualizar subtareas si se proporcionan
         if "subtasks" in task_data:
             subtasks_data = task_data["subtasks"]
-            # Eliminar subtareas antiguas
-            for subtask in task.subtasks:
-                if self.database_service:
-                    try:
-                        await self.database_service.delete('subtasks', subtask.id)
-                    except Exception as e:
-                        print(f"Error eliminando subtarea en BD: {e}")
-            
-            # Agregar nuevas subtareas
+
+            # Siempre eliminar todas las subtareas anteriores de la BD para este task_id
+            if self.database_service:
+                try:
+                    await self.database_service.execute("DELETE FROM subtasks WHERE task_id = ?", (task_id,))
+                    await self.database_service.commit()
+                except Exception as e:
+                    print(f"Error eliminando subtareas antiguas en BD: {e}")
+
+            # Reconstruir subtareas desde el payload recibido
             task.subtasks = []
             for subtask_data in subtasks_data:
                 if isinstance(subtask_data, dict):

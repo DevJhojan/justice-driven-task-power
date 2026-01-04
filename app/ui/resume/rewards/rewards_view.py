@@ -247,6 +247,11 @@ class RewardsView(ft.Container):
 		reward = self.rewards_service.get_reward(reward_id)
 		if reward:
 			reward.claimed = True
+			try:
+				# Persistir estado en BD
+				self.rewards_service.update_reward(reward_id, {"claimed": True})
+			except Exception:
+				pass
 			self.refresh_lists()
 			if self.page:
 				self.update()
