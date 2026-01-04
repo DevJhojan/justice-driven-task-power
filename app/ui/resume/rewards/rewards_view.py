@@ -7,6 +7,7 @@ import flet as ft
 from typing import Callable, Optional, List
 from app.models.reward import Reward
 from app.services.rewards_service import RewardsService
+from app.services.user_service import UserService
 from app.utils.helpers.formats import format_number
 
 
@@ -26,11 +27,11 @@ class RewardCard(ft.Container):
         self.on_delete = on_delete
         self.is_unlocked = is_unlocked
         
-        self.bgcolor = reward.color if is_unlocked else "#F5F5F5"
+        self.bgcolor = reward.color if is_unlocked else "#3a3a3a"
         self.border_radius = 10
         self.padding = 15
         self.margin = ft.margin.symmetric(vertical=8, horizontal=0)
-        self.border = ft.border.all(1, "#E0E0E0")
+        self.border = ft.border.all(1, "#444")
         
         # Contenido
         self.content = ft.Column(
@@ -52,12 +53,12 @@ class RewardCard(ft.Container):
                                     reward.title,
                                     size=16,
                                     weight="bold",
-                                    color="#000" if is_unlocked else "#999",
+                                    color="#000" if is_unlocked else "#CCC",
                                 ),
                                 ft.Text(
                                     f"{format_number(int(reward.points_required))} pts",
                                     size=12,
-                                    color="#666" if is_unlocked else "#BBB",
+                                    color="#333" if is_unlocked else "#888",
                                 ),
                             ],
                         ),
@@ -78,7 +79,7 @@ class RewardCard(ft.Container):
                 ft.Text(
                     reward.description,
                     size=13,
-                    color="#333" if is_unlocked else "#999",
+                    color="#000" if is_unlocked else "#BBB",
                     max_lines=2,
                 ),
                 
@@ -87,14 +88,14 @@ class RewardCard(ft.Container):
                     spacing=5,
                     controls=[
                         ft.Icon(
-                            name="ft.icons.LABEL",
+                            "label",
                             size=14,
-                            color="#666" if is_unlocked else "#BBB",
+                            color="#000" if is_unlocked else "#888",
                         ),
                         ft.Text(
                             reward.category,
                             size=12,
-                            color="#666" if is_unlocked else "#BBB",
+                            color="#000" if is_unlocked else "#888",
                         ),
                     ],
                 ),
@@ -104,13 +105,13 @@ class RewardCard(ft.Container):
                     spacing=5,
                     controls=[
                         ft.IconButton(
-                            icon=ft.icons.EDIT,
+                            icon="edit",
                             icon_size=18,
                             tooltip="Editar",
                             on_click=lambda _: on_edit(reward),
                         ),
                         ft.IconButton(
-                            icon=ft.icons.DELETE,
+                            icon="delete",
                             icon_size=18,
                             tooltip="Eliminar",
                             on_click=lambda _: on_delete(reward.id),
@@ -257,10 +258,12 @@ class RewardFormDialog(ft.AlertDialog):
 class RewardsView(ft.Container):
     """Vista principal de recompensas"""
     
-    def __init__(self):
+    def __init__(self, user_service: Optional[UserService] = None, user_id: str = "default_user"):
         super().__init__()
         
         self.rewards_service = RewardsService()
+        self.user_service = user_service
+        self.user_id = user_id
         self.current_user_points = 0.0
         self.current_user_level = "Nadie"
         
@@ -269,11 +272,15 @@ class RewardsView(ft.Container):
         
         # UI
         self.expand = True
-        self.bgcolor = "#FAFAFA"
+        self.bgcolor = "#1a1a1a"
         self.padding = 20
         
         # Lista de recompensas
         self.rewards_list = ft.Column(spacing=5)
+        
+        # Referencias a elementos de UI para actualizar puntos
+        self.points_text = ft.Text("0", size=24, weight="bold", color="#4CAF50")
+        self.level_text = ft.Text("Nadie", size=20, weight="bold", color="#FFD700")
         
         # Información del usuario
         self.user_info_row = ft.Row(
@@ -282,15 +289,15 @@ class RewardsView(ft.Container):
                 ft.Column(
                     spacing=5,
                     controls=[
-                        ft.Text("Puntos Actuales", size=12, color="#666"),
-                        ft.Text("0", size=24, weight="bold", color="#2196F3"),
+                        ft.Text("Puntos Actuales", size=12, color="#AAA"),
+                        self.points_text,
                     ],
                 ),
                 ft.Column(
                     spacing=5,
                     controls=[
-                        ft.Text("Nivel Actual", size=12, color="#666"),
-                        ft.Text("Nadie", size=20, weight="bold", color="#FFD700"),
+                        ft.Text("Nivel Actual", size=12, color="#AAA"),
+                        self.level_text,
                     ],
                 ),
             ],
@@ -298,7 +305,7 @@ class RewardsView(ft.Container):
         
         # Botón para agregar recompensa
         self.add_reward_btn = ft.FloatingActionButton(
-            icon=ft.icons.ADD,
+            icon="add",
             on_click=self._on_add_reward,
             tooltip="Agregar recompensa",
         )
@@ -311,7 +318,7 @@ class RewardsView(ft.Container):
             expand=True,
             controls=[
                 # Header
-                ft.Text("Recompensas", size=24, weight="bold"),
+                ft.Text("Recompensas", size=24, weight="bold", color="#FFF"),
                 
                 # Info del usuario
                 self.user_info_row,
@@ -344,12 +351,15 @@ class RewardsView(ft.Container):
                         expand=True,
                     ),
                     border_radius=10,
-                    bgcolor="#FFF",
+                    bgcolor="#2a2a2a",
                 ),
             ],
         )
         
-        # Renderizar recompensas
+        # NO renderizar recompensas aquí, se hará cuando se añada a la página
+    
+    def did_mount(self):
+        """Se llama cuando el control es añadido a la página"""
         self._render_rewards()
     
     def _initialize_default_rewards(self):
@@ -411,7 +421,10 @@ class RewardsView(ft.Container):
             )
             for reward in self.rewards_service.get_all_rewards()
         ]
-        self.update()
+        try:
+            self.update()
+        except:
+            pass  # Control no está en la página aún
     
     def _filter_rewards(self, filter_type: str):
         """Filtra recompensas"""
@@ -434,10 +447,13 @@ class RewardsView(ft.Container):
             )
             for reward in rewards
         ]
-        self.update()
+        if self.page:
+            self.update()
     
     def _on_add_reward(self, e):
         """Maneja la adición de recompensa"""
+        if not self.page:
+            return
         self.reward_form_dialog = RewardFormDialog(
             on_save=self._on_save_reward,
             reward=None,
@@ -448,6 +464,8 @@ class RewardsView(ft.Container):
     
     def _on_edit_reward(self, reward: Reward):
         """Maneja la edición de recompensa"""
+        if not self.page:
+            return
         self.reward_form_dialog = RewardFormDialog(
             on_save=self._on_save_reward,
             reward=reward,
@@ -469,17 +487,26 @@ class RewardsView(ft.Container):
     
     def _on_delete_reward(self, reward_id: str):
         """Elimina una recompensa"""
+        if not self.page:
+            return
+            
         def confirm_delete(e):
             self.rewards_service.delete_reward(reward_id)
             self._render_rewards()
             dlg.open = False
-            self.page.update()
+            if self.page:
+                self.page.update()
+        
+        def cancel_delete(e):
+            dlg.open = False
+            if self.page:
+                self.page.update()
         
         dlg = ft.AlertDialog(
             title=ft.Text("Eliminar Recompensa"),
             content=ft.Text("¿Está seguro que desea eliminar esta recompensa?"),
             actions=[
-                ft.TextButton("Cancelar", on_click=lambda _: (dlg.open := False, self.page.update())),
+                ft.TextButton("Cancelar", on_click=cancel_delete),
                 ft.TextButton("Eliminar", on_click=confirm_delete),
             ],
         )
@@ -492,12 +519,23 @@ class RewardsView(ft.Container):
         """Establece los puntos del usuario"""
         self.current_user_points = points
         # Actualizar UI
-        self.user_info_row.controls[0].controls[1].value = format_number(int(points))
+        self.points_text.value = format_number(int(points))
         self._render_rewards()
+        if self.page:
+            self.update()
     
     def set_user_level(self, level: str):
         """Establece el nivel del usuario"""
         self.current_user_level = level
         # Actualizar UI
-        self.user_info_row.controls[1].controls[1].value = level
-        self.update()
+        self.level_text.value = level
+        if self.page:
+            self.update()
+    
+    def refresh_from_user_service(self):
+        """Actualiza los puntos y nivel desde el UserService"""
+        if self.user_service:
+            stats = self.user_service.get_user_stats(self.user_id)
+            if stats:
+                self.set_user_points(stats.get("points", 0.0))
+                self.set_user_level(stats.get("level", "Nadie"))

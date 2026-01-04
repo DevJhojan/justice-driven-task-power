@@ -3,6 +3,7 @@ Vista de Resumen (Resume) de la aplicación
 """
 
 import flet as ft
+from app.ui.resume.rewards.rewards_view import RewardsView
 
 
 class ResumeView:
@@ -10,7 +11,7 @@ class ResumeView:
     
     def __init__(self):
         """Inicializa la vista de resumen"""
-        pass
+        self.rewards_view = None
     
     def build(self) -> ft.Container:
         """
@@ -19,34 +20,8 @@ class ResumeView:
         Returns:
             Container con el contenido de la vista de resumen
         """
-        return ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Icon(
-                        ft.Icons.DASHBOARD,
-                        size=80,
-                        color=ft.Colors.PURPLE_400,
-                    ),
-                    ft.Text(
-                        "Resumen",
-                        size=32,
-                        weight=ft.FontWeight.BOLD,
-                        text_align=ft.TextAlign.CENTER,
-                        color=ft.Colors.WHITE,
-                    ),
-                    ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
-                    ft.Text(
-                        "Estás en la sección de Resumen",
-                        size=18,
-                        text_align=ft.TextAlign.CENTER,
-                        color=ft.Colors.WHITE_70,
-                    ),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            padding=20,
-            expand=True,
-            bgcolor=None,
-        )
+        # Crear la vista de recompensas
+        self.rewards_view = RewardsView()
+        
+        return self.rewards_view
 

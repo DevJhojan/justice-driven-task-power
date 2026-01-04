@@ -15,9 +15,11 @@ from app.ui.task.form.task_form import TaskForm
 from app.ui.task.List.task_list import TaskList
 from app.models.task import Task
 from app.models.subtask import Subtask
-from app.utils.task_helper import TASK_STATUS_PENDING
+from app.utils.task_helper import TASK_STATUS_PENDING, TASK_STATUS_COMPLETED
 from app.services.database_service import DatabaseService
 from app.services.task_service import TaskService
+from app.services.user_service import UserService
+from app.logic.system_points import PointsSystem
 
 # Permite ejecución directa añadiendo la raíz del proyecto al path
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -36,6 +38,7 @@ class TaskView:
 		# Servicios
 		self.database_service: Optional[DatabaseService] = None
 		self.task_service: Optional[TaskService] = None
+		self.user_service: Optional[UserService] = None
 
 		# UI refs
 		self.form: TaskForm = TaskForm(self._handle_save, self._handle_cancel, self._on_subtask_changed)
@@ -192,7 +195,11 @@ class TaskView:
 
 	def _on_task_updated(self, task: Task):
 		"""Callback cuando se actualiza una tarea (ej: checkbox toggle)."""
-		# Ejecutar operación asincrónica
+		# Si la tarea está completada, añadir puntos
+		if task.status == TASK_STATUS_COMPLETED and self.user_service:
+			self.page.run_task(self._async_add_points_for_task, task)
+		
+		# Ejecutar operación asincrónica para actualizar
 		if self.page:
 			self.page.run_task(self._async_update_task, task)
 		self._refresh_list()
@@ -209,6 +216,10 @@ class TaskView:
 			
 			self.task_service = TaskService(self.database_service)
 			await self.task_service.initialize()
+			
+			# Inicializar servicio de usuario
+			self.user_service = UserService()
+			self.user_service.create_user(self.user_id, email="user@example.com")
 			
 			# Cargar tareas existentes
 			await self._async_load_tasks()
@@ -277,6 +288,15 @@ class TaskView:
 		except Exception as e:
 			self.form.show_error(f"Error eliminando tarea: {str(e)}")
 	
+	async def _async_add_points_for_task(self, task: Task):
+		"""Añade puntos al usuario por completar una tarea."""
+		try:
+			if self.user_service:
+				self.user_service.add_points_to_user(self.user_id, "task_completed")
+				print(f"✓ Puntos añadidos por completar tarea: {task.title}")
+		except Exception as e:
+			print(f"Error añadiendo puntos: {str(e)}")
+
 	async def _async_update_task(self, task: Task):
 		"""Actualiza una tarea en la base de datos."""
 		try:

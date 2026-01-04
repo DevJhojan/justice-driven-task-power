@@ -51,11 +51,11 @@ LEVELS_ORDER = [
 
 # Puntos por acciones (personalizables)
 POINTS_BY_ACTION = {
-    "task_completed": 10,
-    "subtask_completed": 5,
-    "habit_completed": 15,
-    "goal_achieved": 50,
-    "daily_streak": 20,
+    "task_completed": 0.05,
+    "subtask_completed": 0.02,
+    "habit_completed": 0.075,
+    "goal_achieved": 0.25,
+    "daily_streak": 0.1,
 }
 
 # Colores para cada nivel
