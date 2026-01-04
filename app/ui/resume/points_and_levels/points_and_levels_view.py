@@ -130,7 +130,8 @@ class PointsAndLevelsView(ft.Container):
             border_radius=10,
             padding=ft.padding.symmetric(horizontal=20, vertical=15),
             border=ft.border.all(1, "#3a3a3a"),
-            expand=True,
+            # Altura fija al alto natural de las 3 filas; ancho sigue siendo responsive
+            expand=False,
             content=ft.Column(
                 spacing=15,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
