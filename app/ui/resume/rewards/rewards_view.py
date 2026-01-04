@@ -139,15 +139,13 @@ class RewardsView(ft.Container):
 			pass
 
 	def _build_tiles(self, rewards: List[Reward], unlocked: bool) -> List[ft.Control]:
-		"""Crea tarjetas visuales para cada recompensa."""
+		"""Crea tarjetas visuales para cada recompensa con icono, título y puntos."""
 		if not rewards:
 			message = "Sin recompensas desbloqueadas" if unlocked else "Sin próximas recompensas"
 			return [ft.Text(message, size=12, color="#888888")]
 
 		tiles: List[ft.Control] = []
 		for reward in rewards:
-			status_text = "Desbloqueada" if unlocked else f"Faltan {max(0.0, reward.points_required - self.user_points):.2f} pts"
-			status_color = "#4CAF50" if unlocked else "#FFC107"
 			tile = ft.Container(
 				bgcolor="#222",
 				border_radius=10,
@@ -158,24 +156,12 @@ class RewardsView(ft.Container):
 					vertical_alignment=ft.CrossAxisAlignment.CENTER,
 					controls=[
 						ft.Row(
-							spacing=12,
+							spacing=10,
+							expand=True,
 							controls=[
-								ft.Text(reward.icon or "🎁", size=22),
-								ft.Column(
-									spacing=2,
-									controls=[
-										ft.Text(reward.title, size=15, weight="w600", color="#EEE"),
-										ft.Text(reward.description, size=12, color="#AAA"),
-									],
-								),
-							],
-						),
-						ft.Column(
-							spacing=2,
-							horizontal_alignment=ft.CrossAxisAlignment.END,
-							controls=[
-								ft.Text(status_text, size=12, color=status_color),
-								ft.Text(f"{reward.points_required:.2f} pts", size=11, color="#999"),
+								ft.Text(reward.icon or "🎁", size=24),
+								ft.Text(reward.title, size=14, weight="w600", color="#FFD700", expand=True),
+						        ft.Text(f"{reward.points_required:.2f} pts", size=12, color="#FFD700", weight="bold"),
 							],
 						),
 					],
