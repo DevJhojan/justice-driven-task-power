@@ -7,6 +7,7 @@ import flet as ft
 from typing import Optional, List
 from app.services.rewards_service import RewardsService
 from app.models.reward import Reward
+from app.ui.resume.rewards.rewards_form import RewardsForm
 
 
 class RewardsView(ft.Container):
@@ -25,11 +26,17 @@ class RewardsView(ft.Container):
 
 		self.unlocked_list = ft.Column(spacing=8)
 		self.locked_list = ft.Column(spacing=8)
+		self.showing_form = False
 
-		self.content = ft.Column(
+		self.form = RewardsForm(
+			rewards_service=self.rewards_service,
+			on_submit=self._on_form_submit,
+			on_cancel=self._cancel_form,
+		)
+
+		self.lists_column = ft.Column(
 			spacing=16,
 			controls=[
-				ft.Text("Recompensas", size=24, weight="bold", color="#FFD700"),
 				ft.Text("Según tus puntos actuales", size=12, color="#CCCCCC"),
 				ft.Divider(color="#333", height=1),
 				ft.Text("Desbloqueadas", size=16, weight="bold", color="#4CAF50"),
@@ -37,6 +44,36 @@ class RewardsView(ft.Container):
 				ft.Divider(color="#333", height=1),
 				ft.Text("Próximas", size=16, weight="bold", color="#FF9800"),
 				self.locked_list,
+			],
+		)
+
+		self.dynamic_container = ft.Container(content=self.lists_column)
+
+		self.add_button = ft.IconButton(
+			icon=ft.Icons.ADD,
+			icon_size=16,
+			width=32,
+			height=32,
+			tooltip="Agregar recompensa",
+			on_click=self._show_form,
+			style=ft.ButtonStyle(
+				shape=ft.RoundedRectangleBorder(radius=999),
+				bgcolor={"": "#2d2d2d"},
+			),
+		)
+
+		self.content = ft.Column(
+			spacing=16,
+			controls=[
+				ft.Row(
+					alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+					vertical_alignment=ft.CrossAxisAlignment.CENTER,
+					controls=[
+						ft.Text("Recompensas", size=24, weight="bold", color="#FFD700"),
+						self.add_button,
+					],
+				),
+				self.dynamic_container,
 			],
 		)
 
@@ -146,4 +183,25 @@ class RewardsView(ft.Container):
 			)
 			tiles.append(tile)
 		return tiles
+
+	def _show_form(self, _):
+		self.showing_form = True
+		self.form.reset_form()
+		self.dynamic_container.content = self.form
+		if self.page:
+			self.update()
+
+	def _on_form_submit(self, reward: Reward):
+		# Tras guardar, volver a la lista y refrescar contenido
+		self.showing_form = False
+		self.refresh_lists()
+		self.dynamic_container.content = self.lists_column
+		if self.page:
+			self.update()
+
+	def _cancel_form(self):
+		self.showing_form = False
+		self.dynamic_container.content = self.lists_column
+		if self.page:
+			self.update()
 
