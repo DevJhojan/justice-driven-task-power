@@ -103,6 +103,7 @@ class TaskService:
                 - user_id: ID del usuario (requerido)
                 - tags: Lista de etiquetas (opcional)
                 - notes: Notas (opcional)
+                - subtasks: Lista de subtareas (opcional)
         
         Returns:
             Instancia de Task creada
@@ -115,6 +116,9 @@ class TaskService:
         
         if not task_data.get("user_id"):
             raise ValueError("El user_id es requerido")
+        
+        # Extraer subtareas antes de crear la tarea
+        subtasks_data = task_data.get('subtasks', [])
         
         # Generar ID único
         task_id = f"task_{datetime.now().timestamp()}_{len(self._tasks)}"
@@ -141,14 +145,29 @@ class TaskService:
             try:
                 task_dict = task.to_dict()
                 # Remover subtasks del dict principal (se guardan por separado)
-                subtasks = task_dict.pop('subtasks', [])
+                task_dict.pop('subtasks', [])
                 await self.database_service.create('tasks', task_dict)
                 
                 # Guardar subtareas
-                for subtask in subtasks:
-                    subtask_dict = subtask.to_dict()
-                    subtask_dict['task_id'] = task_id
-                    await self.database_service.create('subtasks', subtask_dict)
+                print(f"DEBUG: Creando {len(subtasks_data)} subtareas para task_id: {task_id}")
+                for idx, subtask_data in enumerate(subtasks_data):
+                    try:
+                        # Asegurar que task_id esté establecido
+                        if isinstance(subtask_data, dict):
+                            subtask_dict = subtask_data.copy()
+                        else:
+                            subtask_dict = subtask_data.to_dict() if hasattr(subtask_data, 'to_dict') else subtask_data
+                        
+                        subtask_dict['task_id'] = task_id
+                        print(f"DEBUG: Subtarea {idx+1}: id={subtask_dict.get('id')}, title={subtask_dict.get('title')}, task_id={subtask_dict.get('task_id')}")
+                        
+                        await self.database_service.create('subtasks', subtask_dict)
+                        print(f"DEBUG: Subtarea {idx+1} guardada exitosamente")
+                    except Exception as e:
+                        print(f"Error guardando subtarea {idx+1}: {e}")
+                
+                print(f"DEBUG: Tarea {task_id} creada exitosamente con {len(subtasks_data)} subtareas")
+                
             except Exception as e:
                 # Si falla la BD, mantener en memoria
                 print(f"Error guardando tarea en BD: {e}")

@@ -77,6 +77,10 @@ class Subtask:
         Returns:
             Diccionario con los datos de la subtarea
         """
+        # Convertir timestamps a ISO format, manejando casos donde ya son strings
+        created_at = self.created_at if isinstance(self.created_at, str) else self.created_at.isoformat()
+        updated_at = self.updated_at if isinstance(self.updated_at, str) else self.updated_at.isoformat()
+        
         return {
             "id": self.id,
             "task_id": self.task_id,
@@ -84,8 +88,8 @@ class Subtask:
             "completed": self.completed,
             "urgent": self.urgent,
             "important": self.important,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "created_at": created_at,
+            "updated_at": updated_at,
             "notes": self.notes,
         }
     

@@ -166,6 +166,13 @@ class Task:
         Returns:
             Diccionario con los datos de la tarea
         """
+        # Convertir timestamps a ISO format, manejando casos donde ya son strings
+        created_at = self.created_at if isinstance(self.created_at, str) else self.created_at.isoformat()
+        updated_at = self.updated_at if isinstance(self.updated_at, str) else self.updated_at.isoformat()
+        due_date = None
+        if self.due_date:
+            due_date = self.due_date if isinstance(self.due_date, str) else self.due_date.isoformat()
+        
         return {
             "id": self.id,
             "title": self.title,
@@ -173,9 +180,9 @@ class Task:
             "status": self.status,
             "urgent": self.urgent,
             "important": self.important,
-            "due_date": self.due_date.isoformat() if self.due_date else None,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
+            "due_date": due_date,
+            "created_at": created_at,
+            "updated_at": updated_at,
             "subtasks": [subtask.to_dict() for subtask in self.subtasks],
             "user_id": self.user_id,
             "tags": self.tags,
