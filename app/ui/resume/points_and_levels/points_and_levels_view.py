@@ -295,7 +295,7 @@ class PointsAndLevelsView(ft.Container):
             # La actualización del panel ya se hace desde _async_verify_points_integrity
             # Solo necesitamos asegurarnos de que la página se actualice
             if self.page:
-                await self.page.update_async()
+                self.page.update()
                 
         except Exception as e:
             print(f"[PointsAndLevelsView] Error ejecutando verificación: {e}")
@@ -306,7 +306,7 @@ class PointsAndLevelsView(ft.Container):
                 ft.Text(f"❌ Error: {str(e)}", size=13, color="#F44336")
             )
             if self.page:
-                await self.page.update_async()
+                self.page.update()
     
     def _close_integrity_panel(self, e):
         """Cierra el panel de verificación de integridad"""
