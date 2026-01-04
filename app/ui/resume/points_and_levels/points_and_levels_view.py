@@ -46,6 +46,20 @@ class PointsAndLevelsView(ft.Container):
             "Como Dios": "✨👑",
         }
         
+        # Mapeo de niveles a descripciones
+        self.level_descriptions = {
+            "Nadie": "Inexistente, sin relevancia.",
+            "Olvidado": "Apenas reconocido, casi invisible.",
+            "Novato": "Empieza a dar sus primeros pasos.",
+            "Aprendiz": "Adquiere habilidades y cierta notoriedad.",
+            "Conocido": "Ya se habla de él en su entorno.",
+            "Respetado": "Gana prestigio y autoridad.",
+            "Influyente": "Sus acciones afectan a muchos.",
+            "Maestro": "Domina su campo, inspira a otros.",
+            "Legendario": "Trasciende generaciones, se convierte en mito.",
+            "Como Dios": "Nivel supremo, omnipotente.",
+        }
+        
         # Header delgado con nivel y puntos
         self.level_icon = ft.Text("👤", size=32)
         self.level_text = ft.Text("Nadie", size=32, weight="bold", color="#FFD700")
