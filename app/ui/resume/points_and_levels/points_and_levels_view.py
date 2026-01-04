@@ -115,16 +115,24 @@ class PointsAndLevelsView(ft.Container):
         self.progress_current_points = ft.Text("0.00", size=11, color="#AAA")
         self.progress_total_points = ft.Text("0.00", size=11, color="#AAA")
         
-        self.progress_bar = ft.ProgressBar(value=0.0, bgcolor="#222222", color="#F44336CC", height=16, bar_height=16, width=280, expand=True)
+        self.progress_bar = ft.ProgressBar(value=0.0, bgcolor="#222222", color="#F44336", height=16, bar_height=16, width=280, expand=True)
         
-        # Row con la barra de progreso y los puntos a los lados
+        # Row con solo la barra de progreso
         self.progress_bar_row = ft.Row(
             alignment=ft.MainAxisAlignment.CENTER,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=10,
             controls=[
-                self.progress_current_points,
                 self.progress_bar,
+            ],
+        )
+        
+        # Row con los puntos debajo de la barra
+        self.progress_points_row = ft.Row(
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[
+                self.progress_current_points,
                 self.progress_total_points,
             ],
         )
@@ -142,6 +150,7 @@ class PointsAndLevelsView(ft.Container):
                     self.progress_title,
                     self.next_level_text,
                     self.progress_bar_row,
+                    self.progress_points_row,
                     self.progress_detail_text,
                     self.levels_remaining_text,
                 ],
