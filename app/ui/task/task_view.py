@@ -28,8 +28,10 @@ if str(ROOT_DIR) not in sys.path:
 
 
 class TaskView:
-	def __init__(self, page: Optional[ft.Page] = None):
+	def __init__(self, page: Optional[ft.Page] = None, rewards_view=None, user_service: Optional[UserService] = None):
 		self.page = page
+		self.rewards_view = rewards_view  # Referencia a RewardsView para actualizar puntos
+		self.external_user_service = user_service  # UserService compartido desde ResumeView
 
 		self.tasks: List[Task] = []
 		self.editing: Optional[Task] = None
@@ -217,9 +219,15 @@ class TaskView:
 			self.task_service = TaskService(self.database_service)
 			await self.task_service.initialize()
 			
-			# Inicializar servicio de usuario
-			self.user_service = UserService()
-			self.user_service.create_user(self.user_id, email="user@example.com")
+			# Usar el UserService compartido si está disponible, sino crear uno nuevo
+			if self.external_user_service:
+				self.user_service = self.external_user_service
+			else:
+				self.user_service = UserService()
+			
+			# Asegurarse de que el usuario existe
+			if not self.user_service.get_user(self.user_id):
+				self.user_service.create_user(self.user_id, email="user@example.com")
 			
 			# Cargar tareas existentes
 			await self._async_load_tasks()
@@ -292,10 +300,39 @@ class TaskView:
 		"""Añade puntos al usuario por completar una tarea."""
 		try:
 			if self.user_service:
+				print(f"[TaskView] Antes de añadir puntos - User ID: {self.user_id}")
+				
+				# Añadir puntos
 				self.user_service.add_points_to_user(self.user_id, "task_completed")
+				print(f"[TaskView] Puntos añadidos por acción: task_completed")
+				
+				# Obtener estadísticas actualizadas
+				stats = self.user_service.get_user_stats(self.user_id)
+				print(f"[TaskView] Stats después de añadir puntos: {stats}")
+				
+				# Actualizar RewardsView si está disponible
+				if self.rewards_view and stats:
+					current_points = stats.get("points", 0.0)
+					current_level = stats.get("level", "Nadie")
+					
+					print(f"[TaskView] Actualizando RewardsView - Puntos: {current_points}, Nivel: {current_level}")
+					
+					# Actualizar los puntos y nivel en la vista
+					self.rewards_view.set_user_points(current_points)
+					self.rewards_view.set_user_level(current_level)
+					
+					# Forzar actualización de la página si está disponible
+					if self.page:
+						self.page.update()
+						print(f"[TaskView] Página actualizada")
+				else:
+					print(f"[TaskView] RewardsView no disponible o stats vacío")
+				
 				print(f"✓ Puntos añadidos por completar tarea: {task.title}")
 		except Exception as e:
-			print(f"Error añadiendo puntos: {str(e)}")
+			print(f"[TaskView] Error añadiendo puntos: {str(e)}")
+			import traceback
+			traceback.print_exc()
 
 	async def _async_update_task(self, task: Task):
 		"""Actualiza una tarea en la base de datos."""

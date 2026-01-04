@@ -84,9 +84,14 @@ class UserService:
         Returns:
             True si hubo cambio de nivel
         """
+        print(f"[UserService] add_points_to_user - user_id: {user_id}, action: {action}, amount: {amount}")
+        
         user = self.get_user(user_id)
         if not user:
+            print(f"[UserService] Usuario {user_id} no encontrado")
             return False
+        
+        print(f"[UserService] Usuario encontrado. Puntos antes: {user.points}")
         
         # Añadir puntos al nivel manager
         level_up = self.level_manager.add_points(user_id, action, amount)
@@ -95,6 +100,8 @@ class UserService:
         user_level_info = self.level_manager.get_user_level_info(user_id)
         user.points = user_level_info["current_points"]
         user.level = user_level_info["current_level"]
+        
+        print(f"[UserService] Puntos después: {user.points}, Nivel: {user.level}")
         
         return level_up
     

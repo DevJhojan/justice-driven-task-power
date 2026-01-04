@@ -52,8 +52,12 @@ class UserLevel:
         
         if amount is not None:
             self.current_points += amount
+            print(f"[UserLevel] Añadiendo {amount} puntos manualmente")
         else:
+            old_points = self.current_points
             self.current_points = PointsSystem.add_points(self.current_points, action)
+            points_added = self.current_points - old_points
+            print(f"[UserLevel] Acción '{action}': Puntos previos: {old_points}, Puntos añadidos: {points_added}, Puntos totales: {self.current_points}")
         
         self.current_level = PointsSystem.get_level_by_points(self.current_points)
         self.total_actions += 1
@@ -62,6 +66,7 @@ class UserLevel:
         if self.current_level != old_level:
             self.previous_level = old_level
             self.level_reached_at = datetime.now()
+            print(f"[UserLevel] ¡CAMBIO DE NIVEL! De {old_level.value} a {self.current_level.value}")
             return True
         
         return False
