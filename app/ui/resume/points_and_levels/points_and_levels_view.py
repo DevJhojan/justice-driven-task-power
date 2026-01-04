@@ -115,7 +115,7 @@ class PointsAndLevelsView(ft.Container):
         self.progress_current_points = ft.Text("0.00", size=11, color="#AAA")
         self.progress_total_points = ft.Text("0.00", size=11, color="#AAA")
         
-        self.progress_bar = ft.ProgressBar(value=0.0, bgcolor="#222222", color="#F44336", height=16, bar_height=16, width=280, expand=True)
+        self.progress_bar = ft.ProgressBar(value=0.0, bgcolor="#222222", color="#F44336CC", height=16, bar_height=16, width=280, expand=True)
         
         # Row con la barra de progreso y los puntos a los lados
         self.progress_bar_row = ft.Row(
