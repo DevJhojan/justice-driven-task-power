@@ -93,7 +93,17 @@ class PointsAndLevelsView(ft.Container):
         self.progress_current_points = ft.Text("0.00", size=11, color="#AAA")
         self.progress_total_points = ft.Text("0.00", size=11, color="#AAA")
         
-        self.progress_bar = ft.ProgressBar(value=0.0, bgcolor="#222222", color="#F44336", height=16, bar_height=16, width=280, expand=True)
+        # Descripción del nivel actual
+        self.level_description = ft.Text(
+            "Inexistente, sin relevancia.",
+            size=11,
+            color="#E0E0E0",
+            weight="bold",
+            text_align=ft.TextAlign.CENTER,
+            italic=True,
+        )
+        
+        self.progress_bar = ft.ProgressBar(value=0.0, bgcolor="#222222", color="#F44336", height=16, bar_height=16, width=220, expand=True)
         
         # Row con solo la barra de progreso
         self.progress_bar_row = ft.Row(
@@ -130,7 +140,20 @@ class PointsAndLevelsView(ft.Container):
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         controls=[
-                            self.level_text,
+                            ft.Column(
+                                spacing=5,
+                                horizontal_alignment=ft.CrossAxisAlignment.START,
+                                controls=[
+                                    ft.Row(
+                                        spacing=10,
+                                        controls=[
+                                            self.level_icon,
+                                            self.level_text,
+                                        ],
+                                    ),
+                                    self.level_description,
+                                ],
+                            ),
                             ft.Column(
                                 spacing=5,
                                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -247,6 +270,10 @@ class PointsAndLevelsView(ft.Container):
         """Establece el nivel del usuario"""
         self.current_user_level = level
         self.level_text.value = level
+        # Actualizar el icono del nivel
+        self.level_icon.value = self.level_icons.get(level, "👤")
+        # Actualizar la descripción del nivel
+        self.level_description.value = self.level_descriptions.get(level, "")
         print(f"[PointsAndLevelsView] Actualizando nivel a: {level}")
         if self.page:
             try:
