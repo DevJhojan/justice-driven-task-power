@@ -16,7 +16,7 @@ from unittest.mock import Mock, MagicMock
 from datetime import datetime, timedelta
 from app.models.task import Task
 from app.models.subtask import Subtask
-from app.ui.task.task_list import create_task_list, TaskList
+from app.ui.task.List.task_list import create_task_list, TaskList
 
 
 # ============================================================================

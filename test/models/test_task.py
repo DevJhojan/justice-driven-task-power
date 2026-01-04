@@ -156,6 +156,33 @@ class TestTask:
         task = Task(id="test_1", title="Test", user_id="user_1")
         task.cancel()
         assert task.status == TASK_STATUS_CANCELLED
+
+    def test_update_status_from_subtasks_without_subtasks_keeps_status(self):
+        """No cambia el estado cuando no hay subtareas."""
+        task = Task(id="t", title="Test", user_id="u", status=TASK_STATUS_COMPLETED)
+
+        task.update_status_from_subtasks()
+
+        assert task.status == TASK_STATUS_COMPLETED
+
+    def test_update_status_from_subtasks_updates_by_progress(self):
+        """Cambia el estado según el progreso de las subtareas."""
+        task = Task(id="t", title="Test", user_id="u")
+        st1 = Subtask(id="s1", task_id="t", title="A", completed=False)
+        st2 = Subtask(id="s2", task_id="t", title="B", completed=False)
+        task.add_subtask(st1)
+        task.add_subtask(st2)
+
+        task.update_status_from_subtasks()
+        assert task.status == TASK_STATUS_PENDING
+
+        st1.toggle_completed()
+        task.update_status_from_subtasks()
+        assert task.status == TASK_STATUS_IN_PROGRESS
+
+        st2.toggle_completed()
+        task.update_status_from_subtasks()
+        assert task.status == TASK_STATUS_COMPLETED
     
     def test_to_dict(self):
         """Test conversión a diccionario"""
