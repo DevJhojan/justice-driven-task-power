@@ -1,4 +1,4 @@
-"""
+﻿"""
 Vista sencilla de recompensas para el resumen.
 Muestra recompensas desbloqueadas y próximas según los puntos del usuario.
 """
@@ -102,7 +102,6 @@ class RewardsView(ft.Container):
 			],
 		)
 
-		self._ensure_seed_data()
 		self.refresh_lists()
 
 	def did_mount(self):
@@ -156,39 +155,6 @@ class RewardsView(ft.Container):
 				ft.Text("Recompensas que ya has reclamado", size=12, color="#CCCCCC"),
 				self.claimed_list,
 			]
-
-	def _ensure_seed_data(self):
-		"""Carga algunas recompensas de ejemplo si no hay ninguna."""
-		if self.rewards_service.get_all_rewards():
-			return
-		defaults = [
-			{
-				"title": "Insignia Novato",
-				"description": "Completa tu primera tarea",
-				"points_required": 1.0,
-				"icon": "🎖️",
-				"color": "#4CAF50",
-				"is_active": True,
-			},
-			{
-				"title": "Racha de Productividad",
-				"description": "Completa 5 tareas",
-				"points_required": 5.0,
-				"icon": "🔥",
-				"color": "#FF9800",
-				"is_active": True,
-			},
-			{
-				"title": "Maestro del Tiempo",
-				"description": "Completa 10 tareas a tiempo",
-				"points_required": 10.0,
-				"icon": "⏱️",
-				"color": "#2196F3",
-				"is_active": True,
-			},
-		]
-		for data in defaults:
-			self.rewards_service.create_reward(data)
 
 	def refresh_lists(self):
 		"""Reconstruye las listas de recompensas desbloqueadas, próximas y reclamadas."""
@@ -284,4 +250,5 @@ class RewardsView(ft.Container):
 			self.refresh_lists()
 			if self.page:
 				self.update()
+
 

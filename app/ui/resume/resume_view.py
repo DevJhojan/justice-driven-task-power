@@ -3,9 +3,11 @@ Vista de Resumen (Resume) de la aplicación
 """
 
 import flet as ft
+import asyncio
 from app.ui.resume.points_and_levels.points_and_levels_view import PointsAndLevelsView
 from app.ui.resume.rewards.rewards_view import RewardsView
 from app.services.progress_service import ProgressService
+from app.services.rewards_service import RewardsService
 
 
 class ResumeView:
@@ -16,9 +18,13 @@ class ResumeView:
         self.points_levels_view = None
         self.rewards_view = None
         self.progress_service = ProgressService()  # Sistema de progreso sin usuarios
+        self.rewards_service = RewardsService()  # Servicio de recompensas
         self.user_id = "default_user"
         self.verify_integrity_callback = None  # Callback para verificar integridad
-        print(f"[ResumeView] Vista de resumen inicializada con ProgressService")
+        print(f"[ResumeView] Vista de resumen inicializada")
+        
+        # Inicializar el servicio de recompensas de forma asíncrona
+        asyncio.create_task(self.rewards_service.initialize())
     
     def set_verify_integrity_callback(self, callback):
         """Establece el callback para verificar integridad de puntos"""
@@ -47,7 +53,10 @@ class ResumeView:
         user_points = self.progress_service.current_points
         
         # Panel de recompensas con altura fija equivalente a ~6 filas y scroll
-        self.rewards_view = RewardsView(user_points=user_points)
+        self.rewards_view = RewardsView(
+            rewards_service=self.rewards_service,
+            user_points=user_points
+        )
         rewards_panel = ft.Container(
             height=6 * 64,  # aproximadamente 6 filas visibles
             bgcolor="#101010",

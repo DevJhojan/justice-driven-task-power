@@ -1,23 +1,127 @@
 """
 Servicio de Recompensas
-Gestiona las operaciones CRUD de recompensas
+Gestiona las operaciones CRUD de recompensas con persistencia en BD
 """
 
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import asyncio
 from app.models.reward import Reward
+from app.services.database_service import DatabaseService
 
 
 class RewardsService:
-    """Servicio para gestionar recompensas"""
+    """Servicio para gestionar recompensas con persistencia en BD"""
     
-    def __init__(self):
-        """Inicializa el servicio"""
+    def __init__(self, database_service: Optional[DatabaseService] = None):
+        """
+        Inicializa el servicio
+        
+        Args:
+            database_service: Servicio de base de datos (opcional)
+        """
         self.rewards: Dict[str, Reward] = {}
+        self.database_service = database_service or DatabaseService()
+        self._initialized = False
+    
+    async def initialize(self):
+        """Inicializa la BD y carga las recompensas existentes"""
+        if self._initialized:
+            return
+        
+        try:
+            await self.database_service.connect()
+            
+            # Crear tabla si no existe
+            await self.database_service.execute("""
+                CREATE TABLE IF NOT EXISTS rewards (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    points_required REAL NOT NULL,
+                    icon TEXT,
+                    color TEXT,
+                    is_active INTEGER DEFAULT 1,
+                    category TEXT,
+                    claimed INTEGER DEFAULT 0,
+                    created_at TEXT,
+                    updated_at TEXT
+                )
+            """)
+            await self.database_service.commit()
+            
+            # Cargar recompensas desde BD
+            await self._load_from_db()
+            
+            # Agregar recompensas por defecto si no hay ninguna
+            await self._ensure_default_rewards()
+            
+            self._initialized = True
+            print("[RewardsService] BD inicializada y cargada")
+        except Exception as e:
+            print(f"[RewardsService] Error al inicializar: {e}")
+    
+    async def _load_from_db(self):
+        """Carga todas las recompensas desde la base de datos"""
+        try:
+            rewards = await self.database_service.get_all("rewards")
+            self.rewards.clear()
+            for reward_dict in rewards:
+                reward = Reward.from_dict(reward_dict)
+                self.rewards[reward.id] = reward
+            print(f"[RewardsService] Cargadas {len(self.rewards)} recompensas desde BD")
+        except Exception as e:
+            print(f"[RewardsService] Error al cargar desde BD: {e}")
+    
+    async def _ensure_default_rewards(self):
+        """Agrega las recompensas por defecto si no existen"""
+        if len(self.rewards) > 0:
+            return
+        
+        defaults = [
+            {
+                "title": "Insignia Novato",
+                "description": "Completa tu primera tarea",
+                "points_required": 1.0,
+                "icon": "🎖️",
+                "color": "#4CAF50",
+                "is_active": True,
+                "category": "badge",
+            },
+            {
+                "title": "Racha de Productividad",
+                "description": "Completa 5 tareas",
+                "points_required": 5.0,
+                "icon": "🔥",
+                "color": "#FF9800",
+                "is_active": True,
+                "category": "achievement",
+            },
+            {
+                "title": "Maestro del Tiempo",
+                "description": "Completa 10 tareas a tiempo",
+                "points_required": 10.0,
+                "icon": "⏱️",
+                "color": "#2196F3",
+                "is_active": True,
+                "category": "milestone",
+            },
+        ]
+        
+        for data in defaults:
+            reward = Reward.from_dict(data)
+            self.rewards[reward.id] = reward
+            try:
+                db_data = reward.to_dict()
+                await self.database_service.create("rewards", db_data)
+            except Exception as e:
+                print(f"[RewardsService] Error al guardar recompensa por defecto: {e}")
+        
+        print(f"[RewardsService] Agregadas {len(defaults)} recompensas por defecto")
     
     def create_reward(self, reward_data: Dict[str, Any]) -> Reward:
         """
-        Crea una nueva recompensa
+        Crea una nueva recompensa (versión síncrona)
         
         Args:
             reward_data: Diccionario con datos de la recompensa
@@ -27,7 +131,23 @@ class RewardsService:
         """
         reward = Reward.from_dict(reward_data)
         self.rewards[reward.id] = reward
+        
+        try:
+            # Guardar en BD de forma asíncrona
+            asyncio.create_task(self._save_to_db(reward))
+        except Exception as e:
+            print(f"[RewardsService] Error al agendar guardado en BD: {e}")
+        
         return reward
+    
+    async def _save_to_db(self, reward: Reward):
+        """Guarda una recompensa en BD de forma asíncrona"""
+        try:
+            db_data = reward.to_dict()
+            await self.database_service.create("rewards", db_data)
+            print(f"[RewardsService] Recompensa '{reward.title}' guardada en BD")
+        except Exception as e:
+            print(f"[RewardsService] Error al guardar en BD: {e}")
     
     def get_reward(self, reward_id: str) -> Optional[Reward]:
         """
@@ -89,7 +209,23 @@ class RewardsService:
             return None
         
         reward.update(**reward_data)
+        
+        try:
+            # Actualizar en BD de forma asíncrona
+            asyncio.create_task(self._update_in_db(reward_id, reward))
+        except Exception as e:
+            print(f"[RewardsService] Error al agendar actualización en BD: {e}")
+        
         return reward
+    
+    async def _update_in_db(self, reward_id: str, reward: Reward):
+        """Actualiza una recompensa en BD de forma asíncrona"""
+        try:
+            db_data = reward.to_dict()
+            await self.database_service.update("rewards", reward_id, db_data)
+            print(f"[RewardsService] Recompensa '{reward.title}' actualizada en BD")
+        except Exception as e:
+            print(f"[RewardsService] Error al actualizar en BD: {e}")
     
     def delete_reward(self, reward_id: str) -> bool:
         """
@@ -103,8 +239,23 @@ class RewardsService:
         """
         if reward_id in self.rewards:
             del self.rewards[reward_id]
+            
+            try:
+                # Eliminar de BD de forma asíncrona
+                asyncio.create_task(self._delete_from_db(reward_id))
+            except Exception as e:
+                print(f"[RewardsService] Error al agendar eliminación en BD: {e}")
+            
             return True
         return False
+    
+    async def _delete_from_db(self, reward_id: str):
+        """Elimina una recompensa de BD de forma asíncrona"""
+        try:
+            await self.database_service.delete("rewards", reward_id)
+            print(f"[RewardsService] Recompensa eliminada de BD")
+        except Exception as e:
+            print(f"[RewardsService] Error al eliminar de BD: {e}")
     
     def get_unlocked_rewards(self, user_points: float) -> List[Reward]:
         """
