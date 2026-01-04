@@ -222,15 +222,6 @@ class PointsAndLevelsView(ft.Container):
             ),
         )
 
-        # Panel vacío
-        self.panel_empty = ft.Container(
-            bgcolor="#2a2a2a",
-            border_radius=15,
-            padding=30,
-            border=ft.border.all(2, "#3a3a3a"),
-            expand=True,
-        )
-        
         # Contenido principal
         self.content = ft.Column(
             spacing=20,
@@ -241,12 +232,6 @@ class PointsAndLevelsView(ft.Container):
                 
                 # Panel de verificación de integridad (debajo del header)
                 self.integrity_panel,
-                
-                # Panel principal vacío
-                ft.Container(
-                    expand=True,
-                    content=self.panel_empty,
-                ),
             ],
         )
     
