@@ -1,6 +1,6 @@
 """
-Vista de Recompensas (Rewards View)
-Interfaz para mostrar nivel, puntos y recompensas
+Vista de Puntos y Niveles (Points and Levels View)
+Interfaz para mostrar nivel, puntos y progreso del usuario
 """
 
 import flet as ft
@@ -11,8 +11,8 @@ from app.logic.system_points import LEVELS_ORDER, Level
 from app.utils.task_helper import TASK_STATUS_COMPLETED
 
 
-class RewardsView(ft.Container):
-    """Vista principal de recompensas con paneles de información"""
+class PointsAndLevelsView(ft.Container):
+    """Vista principal de puntos y niveles con paneles de información"""
     
     def __init__(self, progress_service: Optional[ProgressService] = None, user_id: str = "default_user", on_verify_integrity = None):
         super().__init__()
@@ -177,23 +177,23 @@ class RewardsView(ft.Container):
         self.current_user_points = float(points)
         # Asegurar siempre 2 decimales
         self.points_text.value = f"{float(points):.2f}"
-        print(f"[RewardsView] Actualizando puntos a: {self.points_text.value}")
+        print(f"[PointsAndLevelsView] Actualizando puntos a: {self.points_text.value}")
         if self.page:
             try:
                 self.update()
             except Exception as e:
-                print(f"[RewardsView] Error actualizando UI: {e}")
+                print(f"[PointsAndLevelsView] Error actualizando UI: {e}")
     
     def set_user_level(self, level: str):
         """Establece el nivel del usuario"""
         self.current_user_level = level
         self.level_text.value = level
-        print(f"[RewardsView] Actualizando nivel a: {level}")
+        print(f"[PointsAndLevelsView] Actualizando nivel a: {level}")
         if self.page:
             try:
                 self.update()
             except Exception as e:
-                print(f"[RewardsView] Error actualizando UI: {e}")
+                print(f"[PointsAndLevelsView] Error actualizando UI: {e}")
 
     def set_tasks_completed(self, count: int):
         """Actualiza el contador de tareas completadas"""
@@ -202,7 +202,7 @@ class RewardsView(ft.Container):
             try:
                 self.update()
             except Exception as e:
-                print(f"[RewardsView] Error actualizando tareas completadas: {e}")
+                print(f"[PointsAndLevelsView] Error actualizando tareas completadas: {e}")
 
     def update_progress_from_stats(self, stats: dict):
         """Actualiza barra y textos de progreso usando stats completas"""
@@ -242,7 +242,7 @@ class RewardsView(ft.Container):
             try:
                 self.update()
             except Exception as e:
-                print(f"[RewardsView] Error actualizando progreso: {e}")
+                print(f"[PointsAndLevelsView] Error actualizando progreso: {e}")
     
     async def refresh_from_progress_service(self):
         """Actualiza los puntos y nivel desde el ProgressService"""
@@ -251,11 +251,11 @@ class RewardsView(ft.Container):
         self.set_user_level(stats.get("level", "Nadie"))
         self.update_progress_from_stats(stats)
         await self._load_completed_tasks_count()
-        print(f"[RewardsView] Stats cargados desde ProgressService")
+        print(f"[PointsAndLevelsView] Stats cargados desde ProgressService")
     
     def _on_verify_integrity_click(self, e):
         """Handler para el botón de verificar integridad"""
-        print(f"[RewardsView] 🔄 Botón de integridad presionado")
+        print(f"[PointsAndLevelsView] 🔄 Botón de integridad presionado")
         
         # Limpiar logs anteriores y mostrar indicador de carga
         self.integrity_log_text.controls.clear()
@@ -290,7 +290,7 @@ class RewardsView(ft.Container):
             # Ejecutar la verificación (esto retorna si hubo corrección)
             result = await self.on_verify_integrity()
             
-            print(f"[RewardsView] Verificación completada. Resultado: {result}")
+            print(f"[PointsAndLevelsView] Verificación completada. Resultado: {result}")
             
             # La actualización del panel ya se hace desde _async_verify_points_integrity
             # Solo necesitamos asegurarnos de que la página se actualice
@@ -298,7 +298,7 @@ class RewardsView(ft.Container):
                 await self.page.update_async()
                 
         except Exception as e:
-            print(f"[RewardsView] Error ejecutando verificación: {e}")
+            print(f"[PointsAndLevelsView] Error ejecutando verificación: {e}")
             import traceback
             traceback.print_exc()
             self.integrity_log_text.controls.clear()
@@ -316,7 +316,7 @@ class RewardsView(ft.Container):
     
     def show_integrity_result(self, current_points, expected_points, completed_tasks, completed_subtasks, had_correction):
         """Muestra el resultado de la verificación en el panel"""
-        print(f"[RewardsView] Mostrando resultado de integridad en el panel")
+        print(f"[PointsAndLevelsView] Mostrando resultado de integridad en el panel")
         
         self.integrity_log_text.controls.clear()
         
@@ -347,7 +347,7 @@ class RewardsView(ft.Container):
         
         self.integrity_log_text.controls.extend(controls)
         
-        print(f"[RewardsView] Panel actualizado con {len(controls)} elementos")
+        print(f"[PointsAndLevelsView] Panel actualizado con {len(controls)} elementos")
         
         # Asegurar que el panel sea visible
         self.integrity_panel.visible = True
@@ -357,9 +357,9 @@ class RewardsView(ft.Container):
             if self.page:
                 self.update()
                 self.page.update()
-                print(f"[RewardsView] UI actualizada exitosamente")
+                print(f"[PointsAndLevelsView] UI actualizada exitosamente")
         except Exception as e:
-            print(f"[RewardsView] Error actualizando UI: {e}")
+            print(f"[PointsAndLevelsView] Error actualizando UI: {e}")
     
     def update_points_display(self, points: float):
         """Actualiza la visualización de puntos"""
@@ -378,4 +378,4 @@ class RewardsView(ft.Container):
             )
             self.set_tasks_completed(count)
         except Exception as e:
-            print(f"[RewardsView] Error cargando tareas completadas: {e}")
+            print(f"[PointsAndLevelsView] Error cargando tareas completadas: {e}")

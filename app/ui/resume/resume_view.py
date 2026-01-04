@@ -3,7 +3,7 @@ Vista de Resumen (Resume) de la aplicación
 """
 
 import flet as ft
-from app.ui.resume.rewards.rewards_view import RewardsView
+from app.ui.resume.points_and_levels.points_and_levels_view import PointsAndLevelsView
 from app.services.progress_service import ProgressService
 
 
@@ -32,8 +32,8 @@ class ResumeView:
         Returns:
             Container con el contenido de la vista de resumen
         """
-        # Crear la vista de recompensas con el progress_service
-        self.rewards_view = RewardsView(
+        # Crear la vista de puntos y niveles con el progress_service
+        self.rewards_view = PointsAndLevelsView(
             progress_service=self.progress_service,
             user_id=self.user_id,
             on_verify_integrity=self.verify_integrity_callback,

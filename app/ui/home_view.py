@@ -32,7 +32,7 @@ class HomeView:
         # Guardar referencia a la página
         self.page_ref = page
         
-        # Crear ResumeView primero para obtener la referencia a RewardsView
+        # Crear ResumeView primero para obtener la referencia a PointsAndLevelsView
         resume_view = ResumeView()
         task_view = TaskView(page, rewards_view=resume_view.rewards_view)
         

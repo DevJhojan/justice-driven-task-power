@@ -379,12 +379,12 @@ class TaskCardView:
             stats = await self.progress_service.add_points("subtask_completed")
             print(f"[TaskCardView] Stats actualizados: Puntos={stats['points']:.2f}, Nivel={stats['level']}")
             
-            # Actualizar RewardsView si está disponible
+            # Actualizar PointsAndLevelsView si está disponible
             if self.rewards_view:
                 current_points = stats.get("points", 0.0)
                 current_level = stats.get("level", "Nadie")
                 
-                print(f"[TaskCardView] Actualizando RewardsView - Puntos: {current_points:.2f}, Nivel: {current_level}")
+                print(f"[TaskCardView] Actualizando PointsAndLevelsView - Puntos: {current_points:.2f}, Nivel: {current_level}")
                 self.rewards_view.set_user_points(current_points)
                 self.rewards_view.set_user_level(current_level)
                 self.rewards_view.update_progress_from_stats(stats)

@@ -29,7 +29,7 @@ if str(ROOT_DIR) not in sys.path:
 class TaskView:
 	def __init__(self, page: Optional[ft.Page] = None, rewards_view=None):
 		self.page = page
-		self.rewards_view = rewards_view  # Referencia a RewardsView para actualizar puntos
+		self.rewards_view = rewards_view  # Referencia a PointsAndLevelsView para actualizar puntos
 
 		self.tasks: List[Task] = []
 		self.editing: Optional[Task] = None
@@ -301,12 +301,12 @@ class TaskView:
 			stats = await self.progress_service.add_points("task_completed")
 			print(f"[TaskView] Stats actualizados: Puntos={stats['points']:.2f}, Nivel={stats['level']}")
 			
-			# Actualizar RewardsView si está disponible
+			# Actualizar PointsAndLevelsView si está disponible
 			if self.rewards_view:
 				current_points = stats.get("points", 0.0)
 				current_level = stats.get("level", "Nadie")
 				
-				print(f"[TaskView] Actualizando RewardsView - Puntos: {current_points:.2f}, Nivel: {current_level}")
+				print(f"[TaskView] Actualizando PointsAndLevelsView - Puntos: {current_points:.2f}, Nivel: {current_level}")
 				self.rewards_view.set_user_points(current_points)
 				self.rewards_view.set_user_level(current_level)
 				self.rewards_view.update_progress_from_stats(stats)
@@ -395,7 +395,7 @@ class TaskView:
 				print(f"  ✅ Puntos corregidos: {stats['points']:.2f}")
 				print(f"  📊 Nivel actualizado: {stats['level']}")
 				
-				# Actualizar RewardsView
+				# Actualizar PointsAndLevelsView
 				if self.rewards_view:
 					self.rewards_view.set_user_points(stats.get("points", 0.0))
 					self.rewards_view.set_user_level(stats.get("level", "Nadie"))
@@ -407,7 +407,7 @@ class TaskView:
 			
 			print(f"{'='*70}\n")
 			
-			# Mostrar resultado en el panel de RewardsView
+			# Mostrar resultado en el panel de PointsAndLevelsView
 			if self.rewards_view:
 				self.rewards_view.show_integrity_result(
 					current_points=current_points,
@@ -462,13 +462,13 @@ class TaskView:
 				else:
 					print(f"[TaskView] ℹ️  No hay subtareas completadas para sumar")
 			
-			# Actualizar RewardsView con los stats finales
+			# Actualizar PointsAndLevelsView con los stats finales
 			if self.rewards_view:
 				stats = await self.progress_service.load_stats()
 				self.rewards_view.set_user_points(stats.get("points", 0.0))
 				self.rewards_view.set_user_level(stats.get("level", "Nadie"))
 				self.rewards_view.update_progress_from_stats(stats)
-				print(f"[TaskView] 🔄 RewardsView actualizado - Puntos totales: {stats['points']:.2f}\n")
+				print(f"[TaskView] 🔄 PointsAndLevelsView actualizado - Puntos totales: {stats['points']:.2f}\n")
 			
 		except Exception as e:
 			print(f"[TaskView] ❌ Error sincronizando puntos de subtareas: {e}")
