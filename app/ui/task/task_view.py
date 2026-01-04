@@ -12,10 +12,12 @@ import flet as ft
 import sys
 from pathlib import Path
 from app.ui.task.form.task_form import TaskForm
-from app.ui.task.card.task_card_view import TaskCardView
+from app.ui.task.List.task_list import TaskList
 from app.models.task import Task
 from app.models.subtask import Subtask
 from app.utils.task_helper import TASK_STATUS_PENDING
+from app.services.database_service import DatabaseService
+from app.services.task_service import TaskService
 
 # Permite ejecución directa añadiendo la raíz del proyecto al path
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -29,19 +31,23 @@ class TaskView:
 
 		self.tasks: List[Task] = []
 		self.editing: Optional[Task] = None
-		self.next_id: int = 1
+		self.user_id: str = "default_user"  # ID del usuario actual
+
+		# Servicios
+		self.database_service: Optional[DatabaseService] = None
+		self.task_service: Optional[TaskService] = None
 
 		# UI refs
-		self.list_column: Optional[ft.Column] = None
 		self.form: TaskForm = TaskForm(self._handle_save, self._handle_cancel, self._on_subtask_changed)
 		self.form_card: Optional[ft.Card] = None
 		self.form_container: Optional[ft.Container] = None
-		self.task_card_view: TaskCardView = TaskCardView(self._edit_task, self._delete_task, self._on_task_updated)
+		self.task_list: TaskList = TaskList(self._edit_task, self._delete_task, self._on_task_updated)
 
 	def build(self) -> ft.Container:
 		self.form_card = self.form.build()
+		self.form.set_page(self.page)
 		self.form_container = ft.Container(content=self.form_card, visible=False)
-		self.list_column = ft.Column(spacing=8, expand=True)
+		list_column = self.task_list.build()
 
 		add_button = ft.FloatingActionButton(
 			icon=ft.Icons.ADD,
@@ -61,7 +67,7 @@ class TaskView:
 				),
 				self.form_container,
 				ft.Divider(height=16, color=ft.Colors.TRANSPARENT),
-				self.list_column,
+				list_column,
 			],
 			spacing=12,
 			scroll=ft.ScrollMode.AUTO,
@@ -74,7 +80,10 @@ class TaskView:
 			expand=True,
 		)
 
-		self._refresh_list()
+		# Inicializar servicios y cargar tareas
+		if self.page:
+			self.page.run_task(self._initialize_services)
+		
 		return host
 
 	# ------------------------------------------------------------------
@@ -84,36 +93,23 @@ class TaskView:
 		title = (self.form.title_field.value or "").strip()
 		description = (self.form.desc_field.value or "").strip()
 		if not title:
-			self._show_message("El título es obligatorio")
+			self.form.show_error("El título es obligatorio")
 			return
 
 		# Obtener subtareas del formulario
 		subtasks = self.form.subtask_manager.get_subtasks() if self.form.subtask_manager else []
 
-		if self.editing:
-			self.editing.title = title
-			self.editing.description = description
-			self.editing.subtasks = subtasks
-			self.editing.updated_at = datetime.now()
-			# Actualizar estado basado en subtareas
-			self.editing.update_status_from_subtasks()
-		else:
-			task = Task(
-				id=str(uuid.uuid4()),
-				title=title,
-				description=description,
-				status=TASK_STATUS_PENDING,
-				subtasks=subtasks,
-			)
-			# Actualizar estado basado en subtareas (si las hay)
-			task.update_status_from_subtasks()
-			self.tasks.insert(0, task)
+		# Validar que si hay subtareas, deben ser mínimo 2
+		if subtasks and len(subtasks) < 2:
+			self.form.show_error("Debe agregar mínimo 2 subtareas para la tarea")
+			return
 
-		self.editing = None
-		self._reset_form()
-		self._hide_form()
-		self._show_list()
-		self._refresh_list()
+		# Limpiar errores si todo es válido
+		self.form.clear_error()
+
+		# Ejecutar operación asincrónica
+		if self.page:
+			self.page.run_task(self._async_save_task, title, description, subtasks)
 
 	def _handle_cancel(self, _):
 		self.editing = None
@@ -141,6 +137,9 @@ class TaskView:
 		if self.editing and self.editing.id == task.id:
 			self.editing = None
 			self._reset_form()
+		# Ejecutar operación asincrónica
+		if self.page:
+			self.page.run_task(self._async_delete_task, task.id)
 		self._refresh_list()
 
 	# ------------------------------------------------------------------
@@ -164,30 +163,17 @@ class TaskView:
 				self.page.update()
 
 	def _hide_list(self):
-		if self.list_column:
-			self.list_column.visible = False
-			if self.page:
-				self.page.update()
+		self.task_list.hide()
+		if self.page:
+			self.page.update()
 
 	def _show_list(self):
-		if self.list_column:
-			self.list_column.visible = True
-			if self.page:
-				self.page.update()
+		self.task_list.show()
+		if self.page:
+			self.page.update()
 
 	def _refresh_list(self):
-		if not self.list_column:
-			return
-		self.list_column.controls.clear()
-
-		if not self.tasks:
-			self.list_column.controls.append(
-				ft.Text("No hay tareas", color=ft.Colors.GREY_600)
-			)
-		else:
-			for task in self.tasks:
-				self.list_column.controls.append(self.task_card_view.build(task))
-
+		self.task_list.render(self.tasks)
 		if self.page:
 			self.page.update()
 
@@ -206,8 +192,97 @@ class TaskView:
 
 	def _on_task_updated(self, task: Task):
 		"""Callback cuando se actualiza una tarea (ej: checkbox toggle)."""
-		# Refrescar la lista para mostrar cambios de estado
+		# Ejecutar operación asincrónica
+		if self.page:
+			self.page.run_task(self._async_update_task, task)
 		self._refresh_list()
+
+
+	# ------------------------------------------------------------------
+	# Operaciones Asincrónicas
+	# ------------------------------------------------------------------
+	async def _initialize_services(self):
+		"""Inicializa los servicios de base de datos y tareas."""
+		try:
+			self.database_service = DatabaseService()
+			await self.database_service.initialize()
+			
+			self.task_service = TaskService(self.database_service)
+			await self.task_service.initialize()
+			
+			# Cargar tareas existentes
+			await self._async_load_tasks()
+		except Exception as e:
+			self.form.show_error(f"Error inicializando servicios: {str(e)}")
+	
+	async def _async_load_tasks(self):
+		"""Carga las tareas de la base de datos."""
+		try:
+			all_tasks = await self.task_service.get_all_tasks(user_id=self.user_id)
+			self.tasks = all_tasks
+			self._refresh_list()
+		except Exception as e:
+			self.form.show_error(f"Error cargando tareas: {str(e)}")
+	
+	async def _async_save_task(self, title: str, description: str, subtasks: List[Subtask]):
+		"""Guarda una tarea en la base de datos."""
+		try:
+			if self.editing:
+				# Actualizar tarea existente
+				self.editing.title = title
+				self.editing.description = description
+				# Asignar task_id a las subtareas
+				for subtask in subtasks:
+					subtask.task_id = self.editing.id
+				self.editing.subtasks = subtasks
+				self.editing.updated_at = datetime.now()
+				self.editing.update_status_from_subtasks()
+				
+				await self.task_service.update_task(
+					self.editing.id,
+					self.editing.to_dict()
+				)
+			else:
+				# Crear nueva tarea
+				task = Task(
+					id=str(uuid.uuid4()),
+					title=title,
+					description=description,
+					status=TASK_STATUS_PENDING,
+					subtasks=[],  # Iniciar vacío
+					user_id=self.user_id,
+				)
+				
+				# Asignar task_id a las subtareas
+				for subtask in subtasks:
+					subtask.task_id = task.id
+				task.subtasks = subtasks
+				task.update_status_from_subtasks()
+				
+				await self.task_service.create_task(task.to_dict())
+				self.tasks.insert(0, task)
+			
+			self.editing = None
+			self._reset_form()
+			self._hide_form()
+			self._show_list()
+			self._refresh_list()
+		except Exception as e:
+			self.form.show_error(f"Error guardando tarea: {str(e)}")
+	
+	async def _async_delete_task(self, task_id: str):
+		"""Elimina una tarea de la base de datos."""
+		try:
+			await self.task_service.delete_task(task_id)
+		except Exception as e:
+			self.form.show_error(f"Error eliminando tarea: {str(e)}")
+	
+	async def _async_update_task(self, task: Task):
+		"""Actualiza una tarea en la base de datos."""
+		try:
+			await self.task_service.update_task(task.id, task.to_dict())
+		except Exception as e:
+			self.form.show_error(f"Error actualizando tarea: {str(e)}")
 
 
 # Permite vista rápida ejecutando directamente este archivo

@@ -143,6 +143,12 @@ class TaskService:
                 # Remover subtasks del dict principal (se guardan por separado)
                 subtasks = task_dict.pop('subtasks', [])
                 await self.database_service.create('tasks', task_dict)
+                
+                # Guardar subtareas
+                for subtask in subtasks:
+                    subtask_dict = subtask.to_dict()
+                    subtask_dict['task_id'] = task_id
+                    await self.database_service.create('subtasks', subtask_dict)
             except Exception as e:
                 # Si falla la BD, mantener en memoria
                 print(f"Error guardando tarea en BD: {e}")
@@ -333,6 +339,33 @@ class TaskService:
         if "notes" in task_data:
             task.notes = task_data["notes"]
         
+        # Actualizar subtareas si se proporcionan
+        if "subtasks" in task_data:
+            subtasks_data = task_data["subtasks"]
+            # Eliminar subtareas antiguas
+            for subtask in task.subtasks:
+                if self.database_service:
+                    try:
+                        await self.database_service.delete('subtasks', subtask.id)
+                    except Exception as e:
+                        print(f"Error eliminando subtarea en BD: {e}")
+            
+            # Agregar nuevas subtareas
+            task.subtasks = []
+            for subtask_data in subtasks_data:
+                if isinstance(subtask_data, dict):
+                    subtask = Subtask(**subtask_data)
+                else:
+                    subtask = subtask_data
+                subtask.task_id = task_id
+                task.subtasks.append(subtask)
+                
+                if self.database_service:
+                    try:
+                        await self.database_service.create('subtasks', subtask.to_dict())
+                    except Exception as e:
+                        print(f"Error guardando subtarea en BD: {e}")
+        
         # Actualizar timestamp
         task.updated_at = datetime.now()
         
@@ -359,6 +392,8 @@ class TaskService:
                     update_data["tags"] = task.tags
                 if "notes" in task_data:
                     update_data["notes"] = task.notes
+                
+                update_data["updated_at"] = task.updated_at.isoformat()
                 
                 await self.database_service.update('tasks', task_id, update_data)
             except Exception as e:
