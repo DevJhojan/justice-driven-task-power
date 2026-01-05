@@ -14,6 +14,7 @@ def create_habit_card(
 	on_complete: Callable[[str], None],
 	on_edit: Callable[[Habit], None],
 	on_delete: Callable[[str], None],
+	on_show_graphs: Callable[[Habit], None],
 	frequency_labels: Optional[Dict[str, str]] = None,
 ) -> ft.Container:
 	"""Construye una card de hábito con acciones de completar/editar/eliminar."""
@@ -49,7 +50,7 @@ def create_habit_card(
 			ft.IconButton(
 				icon=ft.Icons.BAR_CHART,
 				icon_color=ft.Colors.WHITE,
-				on_click=lambda e: None,
+				on_click=lambda e, h=habit: on_show_graphs(h),
 				tooltip="Gráficos",
 			),
 			ft.Icon(ft.Icons.TRENDING_UP, size=16, color=ft.Colors.RED_400),

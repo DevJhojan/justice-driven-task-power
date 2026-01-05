@@ -10,6 +10,7 @@ from typing import Optional, Callable
 from app.services.habits_service import HabitsService
 from app.ui.habits.habits_form import HabitsForm
 from app.ui.habits.habits_list import HabitsList
+from app.ui.habits.habit_grafics import HabitGraphics
 
 
 class HabitsView:
@@ -25,6 +26,8 @@ class HabitsView:
         self.habits_service = HabitsService()
         self.on_update = on_update
         self.showing_form = False
+        self.showing_graphs = False
+        self.graph_habit = None
         self.editing_habit_id: Optional[str] = None
 
         # UI Components
@@ -35,6 +38,7 @@ class HabitsView:
             on_complete=self._complete_habit,
             on_edit=self._start_edit,
             on_delete=self._delete_habit,
+            on_show_graphs=self._show_graphs,
         )
         self.main_column = None
     
@@ -99,6 +103,31 @@ class HabitsView:
     def _delete_habit(self, habit_id: str):
         """Elimina un hábito"""
         asyncio.create_task(self._async_delete_habit(habit_id))
+
+    def _show_graphs(self, habit):
+        """Muestra gráficos del hábito en un diálogo modal"""
+        if not self.main_column or not self.main_column.page:
+            return
+        page = self.main_column.page
+
+        graph_content = HabitGraphics(habit).build()
+        dialog = ft.AlertDialog(
+            modal=True,
+            content=graph_content,
+            actions=[
+                ft.TextButton("Cerrar", on_click=lambda e: self._close_dialog())
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        page.dialog = dialog
+        dialog.open = True
+        page.update()
+
+    def _close_dialog(self):
+        if self.main_column and self.main_column.page and self.main_column.page.dialog:
+            dlg = self.main_column.page.dialog
+            dlg.open = False
+            self.main_column.page.update()
     
     async def _async_delete_habit(self, habit_id: str):
         """Elimina un hábito de forma asíncrona"""
@@ -118,16 +147,32 @@ class HabitsView:
         if not self.showing_form:
             self._toggle_form()
     
+    def _show_graphs(self, habit):
+        """Muestra vista de gráficos del hábito en la misma página"""
+        self.graph_habit = habit
+        self.showing_graphs = True
+        self.showing_form = False
+        self._update_view()
+
+    def _hide_graphs(self):
+        self.showing_graphs = False
+        self.graph_habit = None
+        self._update_view()
+
     def _toggle_form(self):
         """Alterna entre mostrar/ocultar el formulario"""
         self.showing_form = not self.showing_form
+        if self.showing_form:
+            self.showing_graphs = False
         self._update_view()
     
     def _update_view(self):
         """Actualiza la vista según el estado"""
         if self.main_column:
             self.main_column.controls = []
-            if self.showing_form:
+            if self.showing_graphs and self.graph_habit:
+                self.main_column.controls.append(self._build_graphs_view())
+            elif self.showing_form:
                 self.main_column.controls.append(self._build_form())
             else:
                 self.main_column.controls.append(self.habits_list.build())
@@ -141,6 +186,41 @@ class HabitsView:
     def _build_form(self) -> ft.Container:
         """Construye el formulario de crear hábito"""
         return self.form.build()
+
+    def _build_graphs_view(self) -> ft.Container:
+        """Construye la vista de gráficos para el hábito seleccionado"""
+        if not self.graph_habit:
+            return ft.Container()
+        graph_content = HabitGraphics(self.graph_habit).build()
+        return ft.Container(
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.IconButton(
+                                icon=ft.Icons.ARROW_BACK,
+                                icon_color=ft.Colors.WHITE,
+                                on_click=lambda e: self._hide_graphs(),
+                            ),
+                            ft.Text(
+                                "Gráficas del hábito",
+                                size=20,
+                                weight=ft.FontWeight.BOLD,
+                                color=ft.Colors.WHITE,
+                            ),
+                        ],
+                        spacing=12,
+                        alignment=ft.MainAxisAlignment.START,
+                    ),
+                    ft.Divider(color=ft.Colors.WHITE_10),
+                    graph_content,
+                ],
+                spacing=16,
+                expand=True,
+            ),
+            padding=20,
+            expand=True,
+        )
     
     def build(self) -> ft.Container:
         """

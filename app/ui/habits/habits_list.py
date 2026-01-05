@@ -20,12 +20,14 @@ class HabitsList:
         on_complete: Callable[[str], None],
         on_edit: Callable[[Habit], None],
         on_delete: Callable[[str], None],
+        on_show_graphs: Callable[[Habit], None],
     ):
         self.habits_service = habits_service
         self.on_add = on_add
         self.on_complete = on_complete
         self.on_edit = on_edit
         self.on_delete = on_delete
+        self.on_show_graphs = on_show_graphs
 
         self.list_container: Optional[ft.Container] = None
 
@@ -120,6 +122,7 @@ class HabitsList:
                     on_complete=self.on_complete,
                     on_edit=self.on_edit,
                     on_delete=self.on_delete,
+                    on_show_graphs=self.on_show_graphs,
                 )
             )
 
