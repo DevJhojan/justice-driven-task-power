@@ -16,7 +16,12 @@ class GoalsView(ft.Container):
         self.showing_form = False
         self.form_container = ft.Container(visible=False)
         self.list_container = ft.Container()
-        self.add_btn = ft.FloatingActionButton(icon=ft.Icons.ADD.value, on_click=self._show_add_form)
+        self.add_btn = ft.IconButton(
+            icon=ft.Icons.ADD.value,
+            tooltip="Agregar meta",
+            on_click=self._show_add_form,
+            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+        )
 
         self.goals_list = GoalsList(
             self.goals,
@@ -26,11 +31,17 @@ class GoalsView(ft.Container):
         )
         self.list_container.content = self.goals_list
 
-        self.content = ft.Stack([
+        # Encabezado con título y botón
+        self.header = ft.Row([
+            ft.Text("Metas", size=24, weight=ft.FontWeight.BOLD, color=ft.Colors.BLUE_400, expand=True),
+            self.add_btn,
+        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN, vertical_alignment=ft.CrossAxisAlignment.CENTER)
+
+        self.content = ft.Column([
+            self.header,
             self.list_container,
             self.form_container,
-            self.add_btn,
-        ])
+        ], expand=True)
         self.expand = True
 
     def build(self, page=None):
