@@ -30,8 +30,11 @@ class GoalsCard(ft.Card):
         self.edit_btn = ft.IconButton(ft.Icons.EDIT.value, tooltip="Editar", on_click=lambda _: self.on_edit(goal), icon_color="#FF5252", bgcolor="#1a1a1a")
         self.delete_btn = ft.IconButton(ft.Icons.DELETE.value, tooltip="Eliminar", on_click=lambda _: self.on_delete(goal), icon_color="#FF1744", bgcolor="#1a1a1a")
 
-        # Determinar si la meta está cumplida
-        self.is_completed = goal.progress >= goal.target if goal.target > 0 else False
+        # Determinar si la meta está cumplida según el tipo
+        if self.goal_class == "incremental":
+            self.is_completed = goal.target > 0 and goal.progress >= goal.target
+        else:
+            self.is_completed = goal.target > 0 and goal.progress <= goal.target
 
         # Botón para actualizar progreso (deshabilitado si está cumplida)
         if self.goal_class == "reductual":

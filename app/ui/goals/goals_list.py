@@ -40,11 +40,27 @@ class GoalsList(ft.Column):
     def refresh(self):
         # Mantener la barra de filtro arriba
         self.controls = [self.filter_bar]
-        # Filtrar metas según el estado seleccionado
-        if self.filter_state == "in_progress":
-            filtered_goals = [g for g in self.goals if not (g.target > 0 and g.progress >= g.target)]
-        else:
-            filtered_goals = [g for g in self.goals if g.target > 0 and g.progress >= g.target]
+        filtered_goals = []
+        for g in self.goals:
+            goal_class = getattr(g, "goal_class", "incremental")
+            if self.filter_state == "in_progress":
+                if goal_class == "incremental":
+                    # Incremental: meta NO cumplida si progreso < objetivo
+                    if not (g.target > 0 and g.progress >= g.target):
+                        filtered_goals.append(g)
+                else:  # reductual
+                    # Reductual: meta NO cumplida si progreso > objetivo
+                    if not (g.target > 0 and g.progress <= g.target):
+                        filtered_goals.append(g)
+            else:  # completed
+                if goal_class == "incremental":
+                    # Incremental: meta cumplida si progreso >= objetivo
+                    if g.target > 0 and g.progress >= g.target:
+                        filtered_goals.append(g)
+                else:  # reductual
+                    # Reductual: meta cumplida si progreso <= objetivo
+                    if g.target > 0 and g.progress <= g.target:
+                        filtered_goals.append(g)
         for goal in filtered_goals:
             card = GoalsCard(
                 goal,
