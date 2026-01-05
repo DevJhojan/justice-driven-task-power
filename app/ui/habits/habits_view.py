@@ -202,10 +202,19 @@ class HabitsView:
         self._refresh_list()
     
     def _complete_habit(self, habit_id: str):
-        """Marca un hábito como completado"""
+        """Marca/desmarca un hábito como completado"""
         if habit_id in self.habits:
             habit = self.habits[habit_id]
-            habit.complete_today()
+            
+            # Si ya fue completado hoy, desmarcarlo
+            if habit.was_completed_today():
+                # Desmarcar: restar 1 a la racha (mínimo 0)
+                habit.streak = max(0, habit.streak - 1)
+                habit.last_completed = None
+            else:
+                # Marcar como completado
+                habit.complete_today()
+            
             asyncio.create_task(self._update_in_db(habit))
             self._refresh_list()
             if self.on_update:
@@ -299,15 +308,15 @@ class HabitsView:
                                 ft.Row(
                                     [
                                         ft.Icon(
-                                            ft.Icons.FIRE_TRUCK,
+                                            ft.Icons.WHATSHOT,
                                             size=20,
-                                            color=ft.Colors.ORANGE_400,
+                                            color=ft.Colors.RED_400,
                                         ),
                                         ft.Text(
                                             str(habit.streak),
                                             size=16,
                                             weight=ft.FontWeight.BOLD,
-                                            color=ft.Colors.ORANGE_400,
+                                            color=ft.Colors.RED_400,
                                         ),
                                     ],
                                     spacing=4,
@@ -335,7 +344,7 @@ class HabitsView:
                                 ),
                                 ft.IconButton(
                                     icon=ft.Icons.CHECK_CIRCLE if completed_today else ft.Icons.CIRCLE_OUTLINED,
-                                    icon_color=ft.Colors.GREEN_400 if completed_today else ft.Colors.WHITE_60,
+                                    icon_color=ft.Colors.RED_500 if completed_today else ft.Colors.WHITE_60,
                                     on_click=lambda e, hid=habit.id: self._complete_habit(hid),
                                 ),
                                 ft.IconButton(
@@ -385,7 +394,7 @@ class HabitsView:
                                 "Guardar",
                                 on_click=lambda e: self._create_habit(),
                                 style=ft.ButtonStyle(
-                                    bgcolor=ft.Colors.GREEN_400,
+                                    bgcolor=ft.Colors.RED_400,
                                     color=ft.Colors.WHITE,
                                 ),
                             ),
@@ -400,7 +409,7 @@ class HabitsView:
             expand=True,
         )
     
-    def _build_habits_list(self) -> ft.Container:
+    def _build_habits_list(self) -> ft.Column:
         """Construye la lista de hábitos"""
         self.habits_list_container = ft.Container(
             content=ft.Column(
@@ -411,30 +420,36 @@ class HabitsView:
             expand=True,
         )
         
+        # Header fijo en la parte superior
+        header = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Text(
+                        "Mis Hábitos",
+                        size=24,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.WHITE,
+                    ),
+                    ft.IconButton(
+                        icon=ft.Icons.ADD_CIRCLE,
+                        icon_size=28,
+                        icon_color=ft.Colors.RED_400,
+                        on_click=lambda e: self._toggle_form(),
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            padding=ft.padding.only(bottom=16),
+            border_radius=0,
+        )
+        
         return ft.Column(
             [
-                ft.Row(
-                    [
-                        ft.Text(
-                            "Mis Hábitos",
-                            size=24,
-                            weight=ft.FontWeight.BOLD,
-                            color=ft.Colors.WHITE,
-                        ),
-                        ft.IconButton(
-                            icon=ft.Icons.ADD_CIRCLE,
-                            icon_size=28,
-                            icon_color=ft.Colors.GREEN_400,
-                            on_click=lambda e: self._toggle_form(),
-                        ),
-                    ],
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    expand=True,
-                ),
+                header,
                 self.habits_list_container,
             ],
             expand=True,
-            spacing=16,
+            spacing=0,
         )
     
     def build(self) -> ft.Container:
