@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Callable, TYPE_CHECKING
 
 import flet as ft
+from app.logic.system_points import POINTS_BY_ACTION
 
 if TYPE_CHECKING:
     from app.models.task import Task
@@ -85,6 +86,7 @@ class TaskCardView:
                         ft.Row(
                             controls=[
                                 title_row,
+                                self._build_points_badge(task),
                                 status_badge,
                                 action_buttons,
                             ],
@@ -255,6 +257,27 @@ class TaskCardView:
             bgcolor=status_color,
             padding=ft.padding.symmetric(horizontal=12, vertical=6),
             border_radius=12,
+        )
+
+    def _build_points_badge(self, task: Task) -> ft.Container:
+        """Muestra cuántos puntos otorga esta tarea (tarea + subtareas)."""
+        base_points = POINTS_BY_ACTION.get("task_completed", 0.0)
+        subtask_points = 0.0
+        if task.subtasks:
+            subtask_points = len(task.subtasks) * POINTS_BY_ACTION.get("subtask_completed", 0.0)
+        total_points = base_points + subtask_points
+
+        return ft.Container(
+            content=ft.Text(
+                f"{total_points:.2f} pts",
+                size=12,
+                weight=ft.FontWeight.W_600,
+                color=ft.Colors.WHITE,
+            ),
+            bgcolor=ft.Colors.BLUE_GREY_700,
+            padding=ft.padding.symmetric(horizontal=10, vertical=6),
+            border_radius=12,
+            tooltip="Puntos que otorga esta tarea (incluye subtareas)",
         )
     
     def _get_status_color(self, status: str) -> str:
