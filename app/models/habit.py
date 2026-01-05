@@ -15,7 +15,8 @@ class Habit:
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     title: str = ""
     description: str = ""
-    frequency: str = "daily"  # daily o weekly
+    frequency: str = "daily"  # daily, weekly, monthly, semiannual, annual
+    frequency_times: int = 1  # número de veces por periodo
     streak: int = 0
     last_completed: Optional[str] = None  # ISO format datetime
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -27,7 +28,16 @@ class Habit:
     @classmethod
     def from_dict(cls, data: dict) -> "Habit":
         """Crea un hábito desde un diccionario"""
-        return cls(**data)
+        return cls(
+            id=data.get("id", str(uuid.uuid4())),
+            title=data.get("title", ""),
+            description=data.get("description", ""),
+            frequency=data.get("frequency", "daily"),
+            frequency_times=int(data.get("frequency_times", 1) or 1),
+            streak=int(data.get("streak", 0) or 0),
+            last_completed=data.get("last_completed"),
+            created_at=data.get("created_at", datetime.now().isoformat()),
+        )
     
     def complete_today(self) -> None:
         """Marca el hábito como completado hoy"""

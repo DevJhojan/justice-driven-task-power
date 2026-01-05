@@ -50,6 +50,7 @@ class HabitsView:
                 title=values.get("title", ""),
                 description=values.get("description", ""),
                 frequency=values.get("frequency", "daily"),
+                frequency_times=values.get("frequency_times", 1),
             )
             self.form.reset()
             self.editing_habit_id = None
@@ -66,6 +67,7 @@ class HabitsView:
                 title=values.get("title", ""),
                 description=values.get("description", ""),
                 frequency=values.get("frequency", "daily"),
+                frequency_times=values.get("frequency_times", 1),
             )
             self.form.reset()
             self.editing_habit_id = None
@@ -106,7 +108,7 @@ class HabitsView:
     def _start_edit(self, habit):
         """Inicia la edición de un hábito"""
         self.editing_habit_id = habit.id
-        self.form.set_values(habit.title, habit.description, habit.frequency)
+        self.form.set_values(habit.title, habit.description, habit.frequency, habit.frequency_times)
         if not self.showing_form:
             self._toggle_form()
     
@@ -171,6 +173,16 @@ class HabitsView:
         
         for habit in habits:
             completed_today = habit.was_completed_today()
+            frequency_labels = {
+                "daily": "Diario",
+                "weekly": "Semanal",
+                "monthly": "Mensual",
+                "semiannual": "Semestral",
+                "annual": "Anual",
+            }
+            freq_text = frequency_labels.get(habit.frequency, habit.frequency.capitalize())
+            if habit.frequency != "daily":
+                freq_text = f"{freq_text}: {habit.frequency_times} veces"
             
             card = ft.Container(
                 content=ft.Column(
@@ -190,6 +202,11 @@ class HabitsView:
                                             size=12,
                                             color=ft.Colors.WHITE_70,
                                         ) if habit.description else ft.Container(),
+                                        ft.Text(
+                                            f"Frecuencia: {freq_text}",
+                                            size=12,
+                                            color=ft.Colors.WHITE_70,
+                                        ),
                                     ],
                                     expand=True,
                                     spacing=4,

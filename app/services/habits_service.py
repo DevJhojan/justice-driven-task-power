@@ -31,12 +31,22 @@ class HabitsService:
                     title TEXT NOT NULL,
                     description TEXT,
                     frequency TEXT DEFAULT 'daily',
+                    frequency_times INTEGER DEFAULT 1,
                     streak INTEGER DEFAULT 0,
                     last_completed TEXT,
                     created_at TEXT
                 )
                 """
             )
+            # Intentar agregar columna nueva si la tabla ya existía
+            try:
+                await self.database_service.execute(
+                    "ALTER TABLE habits ADD COLUMN frequency_times INTEGER DEFAULT 1"
+                )
+                await self.database_service.commit()
+            except Exception:
+                # Si ya existe la columna, ignorar el error
+                pass
             await self.database_service.commit()
             print("[HabitsService] Tabla de hábitos creada/verificada")
             
@@ -57,14 +67,21 @@ class HabitsService:
         except Exception as e:
             print(f"[HabitsService] Error cargando hábitos: {e}")
     
-    async def create_habit(self, title: str, description: str, frequency: str = "daily") -> Habit:
+    async def create_habit(
+        self,
+        title: str,
+        description: str,
+        frequency: str = "daily",
+        frequency_times: int = 1,
+    ) -> Habit:
         """
         Crea un nuevo hábito
         
         Args:
             title: Título del hábito
             description: Descripción del hábito
-            frequency: Frecuencia (daily o weekly)
+            frequency: Frecuencia (daily, weekly, monthly, semiannual, annual)
+            frequency_times: Veces por periodo (ej: por semana, por mes)
         
         Returns:
             Hábito creado
@@ -74,6 +91,7 @@ class HabitsService:
                 title=title,
                 description=description,
                 frequency=frequency,
+                frequency_times=frequency_times,
             )
             
             self.habits[habit.id] = habit
@@ -118,8 +136,15 @@ class HabitsService:
             print(f"[HabitsService] Error completando hábito: {e}")
             raise
 
-    async def update_habit(self, habit_id: str, title: str, description: str, frequency: str = "daily") -> Optional[Habit]:
-        """Actualiza título, descripción y frecuencia de un hábito"""
+    async def update_habit(
+        self,
+        habit_id: str,
+        title: str,
+        description: str,
+        frequency: str = "daily",
+        frequency_times: int = 1,
+    ) -> Optional[Habit]:
+        """Actualiza título, descripción, frecuencia y cantidad de un hábito"""
         try:
             habit = self.habits.get(habit_id)
             if not habit:
@@ -128,6 +153,7 @@ class HabitsService:
             habit.title = title
             habit.description = description
             habit.frequency = frequency
+            habit.frequency_times = frequency_times
             await self._update_in_db(habit)
             return habit
         except Exception as e:
@@ -184,14 +210,15 @@ class HabitsService:
         try:
             await self.database_service.execute(
                 """
-                INSERT INTO habits (id, title, description, frequency, streak, last_completed, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO habits (id, title, description, frequency, frequency_times, streak, last_completed, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     habit.id,
                     habit.title,
                     habit.description,
                     habit.frequency,
+                    habit.frequency_times,
                     habit.streak,
                     habit.last_completed,
                     habit.created_at,
@@ -208,13 +235,14 @@ class HabitsService:
             await self.database_service.execute(
                 """
                 UPDATE habits
-                SET title = ?, description = ?, frequency = ?, streak = ?, last_completed = ?
+                SET title = ?, description = ?, frequency = ?, frequency_times = ?, streak = ?, last_completed = ?
                 WHERE id = ?
                 """,
                 (
                     habit.title,
                     habit.description,
                     habit.frequency,
+                    habit.frequency_times,
                     habit.streak,
                     habit.last_completed,
                     habit.id,
