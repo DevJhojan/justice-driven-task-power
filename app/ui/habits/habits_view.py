@@ -6,10 +6,10 @@ Sistema completo de hábitos con persistencia en BD, racha diaria y CRUD
 import flet as ft
 import asyncio
 from datetime import datetime
-from typing import Dict, List, Optional, Callable
+from typing import List, Optional, Callable
 
-from app.models.habit import Habit
 from app.services.habits_service import HabitsService
+from app.ui.habits.habits_form import HabitsForm
 
 
 class HabitsView:
@@ -25,43 +25,29 @@ class HabitsView:
         self.habits_service = HabitsService()
         self.on_update = on_update
         self.showing_form = False
-        
+
         # UI Components
-        self.title_input = ft.TextField(label="Título del hábito", expand=True)
-        self.description_input = ft.TextField(label="Descripción", expand=True, multiline=True, min_lines=2)
-        self.frequency_dropdown = ft.Dropdown(
-            label="Frecuencia",
-            options=[
-                ft.dropdown.Option("daily", "Diario"),
-                ft.dropdown.Option("weekly", "Semanal"),
-            ],
-            value="daily",
-        )
-        self.form_container = None
+        self.form: HabitsForm = HabitsForm(on_save=self._handle_save, on_cancel=lambda e: self._toggle_form())
         self.habits_list_container = None
         self.main_column = None
     
-    def _create_habit(self):
-        """Crea un nuevo hábito"""
-        if not self.title_input.value or self.title_input.value.strip() == "":
+    def _handle_save(self, _):
+        """Valida y crea un hábito usando el servicio"""
+        values = self.form.get_values()
+        title = values.get("title", "")
+        if not title:
             return
-        
-        asyncio.create_task(self._async_create_habit())
-    
-    async def _async_create_habit(self):
+        asyncio.create_task(self._async_create_habit(values))
+
+    async def _async_create_habit(self, values: dict):
         """Crea un hábito de forma asíncrona"""
         try:
-            habit = await self.habits_service.create_habit(
-                title=self.title_input.value,
-                description=self.description_input.value or "",
-                frequency=self.frequency_dropdown.value or "daily",
+            await self.habits_service.create_habit(
+                title=values.get("title", ""),
+                description=values.get("description", ""),
+                frequency=values.get("frequency", "daily"),
             )
-            
-            # Limpiar inputs
-            self.title_input.value = ""
-            self.description_input.value = ""
-            self.frequency_dropdown.value = "daily"
-            
+            self.form.reset()
             self._toggle_form()
             self._refresh_list()
         except Exception as e:
@@ -241,45 +227,7 @@ class HabitsView:
     
     def _build_form(self) -> ft.Container:
         """Construye el formulario de crear hábito"""
-        return ft.Container(
-            content=ft.Column(
-                [
-                    ft.Text(
-                        "Nuevo Hábito",
-                        size=24,
-                        weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.WHITE,
-                    ),
-                    self.title_input,
-                    self.description_input,
-                    self.frequency_dropdown,
-                    ft.Row(
-                        [
-                            ft.TextButton(
-                                "Cancelar",
-                                on_click=lambda e: self._toggle_form(),
-                                style=ft.ButtonStyle(
-                                    color=ft.Colors.WHITE_70,
-                                ),
-                            ),
-                            ft.FilledButton(
-                                "Guardar",
-                                on_click=lambda e: self._create_habit(),
-                                style=ft.ButtonStyle(
-                                    bgcolor=ft.Colors.RED_400,
-                                    color=ft.Colors.WHITE,
-                                ),
-                            ),
-                        ],
-                        spacing=8,
-                    ),
-                ],
-                spacing=16,
-                scroll=ft.ScrollMode.AUTO,
-            ),
-            padding=20,
-            expand=True,
-        )
+        return self.form.build()
     
     def _build_habits_list(self) -> ft.Column:
         """Construye la lista de hábitos"""
