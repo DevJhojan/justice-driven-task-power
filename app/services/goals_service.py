@@ -2,34 +2,53 @@
 Servicio de Metas (GoalsService)
 Gestiona operaciones CRUD y persistencia en memoria (puedes adaptar a BD)
 """
-from typing import List, Optional, Dict
+import asyncio
+from typing import List, Optional
 from app.models.goal import Goal
+from app.services.database_service import DatabaseService, TableSchema
+
+GOALS_TABLE = "goals"
+
+GOALS_SCHEMA = TableSchema(
+    table_name=GOALS_TABLE,
+    columns={
+        "id": "TEXT PRIMARY KEY",
+        "title": "TEXT NOT NULL",
+        "description": "TEXT",
+        "goal_type": "TEXT",
+        "unit_type": "TEXT",
+        "custom_unit": "TEXT",
+        "target": "REAL",
+        "progress": "REAL",
+        "created_at": "TEXT",
+        "updated_at": "TEXT",
+    },
+    primary_key="id",
+    indexes=["goal_type", "unit_type"]
+)
 
 class GoalsService:
-    def __init__(self):
-        self.goals: Dict[str, Goal] = {}
+    def __init__(self, db_service: DatabaseService = None):
+        self.db = db_service or DatabaseService()
+        self.db.register_table_schema(GOALS_SCHEMA)
+        # La inicialización debe hacerse de forma asíncrona fuera del constructor
 
-    def create_goal(self, **kwargs) -> Goal:
+    async def create_goal(self, **kwargs) -> Goal:
         goal = Goal.from_dict(kwargs)
-        self.goals[goal.id] = goal
+        await self.db.create(GOALS_TABLE, goal.to_dict())
         return goal
 
-    def get_goal(self, goal_id: str) -> Optional[Goal]:
-        return self.goals.get(goal_id)
+    async def get_goal(self, goal_id: str) -> Optional[Goal]:
+        data = await self.db.get(GOALS_TABLE, goal_id)
+        return Goal.from_dict(data) if data else None
 
-    def list_goals(self) -> List[Goal]:
-        return list(self.goals.values())
+    async def list_goals(self) -> List[Goal]:
+        rows = await self.db.get_all(GOALS_TABLE, order_by="created_at DESC")
+        return [Goal.from_dict(row) for row in rows]
 
-    def update_goal(self, goal_id: str, **kwargs) -> Optional[Goal]:
-        goal = self.get_goal(goal_id)
-        if not goal:
-            return None
-        goal.update(**kwargs)
-        self.goals[goal.id] = goal
-        return goal
+    async def update_goal(self, goal_id: str, **kwargs) -> Optional[Goal]:
+        updated = await self.db.update(GOALS_TABLE, goal_id, kwargs)
+        return Goal.from_dict(updated) if updated else None
 
-    def delete_goal(self, goal_id: str) -> bool:
-        if goal_id in self.goals:
-            del self.goals[goal_id]
-            return True
-        return False
+    async def delete_goal(self, goal_id: str) -> bool:
+        return await self.db.delete(GOALS_TABLE, goal_id)

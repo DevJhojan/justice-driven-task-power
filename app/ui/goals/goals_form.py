@@ -39,6 +39,14 @@ class GoalsForm(ft.Container):
             options=[ft.dropdown.Option(t) for t in GOAL_TYPES],
             value=GOAL_TYPES[0],
         )
+        self.goal_class_input = ft.Dropdown(
+            label="Clase de objetivo",
+            options=[
+                ft.dropdown.Option("incremental", "Objetivo Incremental"),
+                ft.dropdown.Option("reductual", "Objetivo Reductual"),
+            ],
+            value="incremental",
+        )
         self.unit_type_input = ft.Dropdown(
             label="Tipo de unidad",
             options=[ft.dropdown.Option(u) for u in UNIT_TYPES],
@@ -58,6 +66,7 @@ class GoalsForm(ft.Container):
             self.title_input,
             self.desc_input,
             self.goal_type_input,
+            self.goal_class_input,
             self.unit_type_input,
             self.custom_unit_input,
             self.target_input,
@@ -75,18 +84,19 @@ class GoalsForm(ft.Container):
         self.title_input.value = goal.title
         self.desc_input.value = goal.description
         self.goal_type_input.value = goal.goal_type
+        self.goal_class_input.value = getattr(goal, "goal_class", "incremental")
         self.unit_type_input.value = goal.unit_type
         self.custom_unit_input.value = goal.custom_unit
         self.custom_unit_input.visible = goal.unit_type == "otro"
         self.target_input.value = str(goal.target)
         self.progress_input.value = str(goal.progress)
-        # self.update() eliminado para evitar error antes de estar en la página
 
     def get_values(self) -> dict:
         return {
             "title": (self.title_input.value or "").strip(),
             "description": self.desc_input.value or "",
             "goal_type": self.goal_type_input.value or GOAL_TYPES[0],
+            "goal_class": self.goal_class_input.value or "incremental",
             "unit_type": self.custom_unit_input.value.strip() if self.unit_type_input.value == "otro" else self.unit_type_input.value or UNIT_TYPES[0],
             "custom_unit": self.custom_unit_input.value.strip() if self.unit_type_input.value == "otro" else "",
             "target": float(self.target_input.value or 0),

@@ -40,7 +40,16 @@ class Goal:
 
     @classmethod
     def from_dict(cls, data):
-        return cls(
+        def parse_dt(val):
+            if isinstance(val, datetime):
+                return val
+            if isinstance(val, str):
+                try:
+                    return datetime.fromisoformat(val)
+                except Exception:
+                    return datetime.now()
+            return datetime.now()
+        obj = cls(
             id=data.get("id", str(uuid.uuid4())),
             title=data.get("title", ""),
             description=data.get("description", ""),
@@ -49,6 +58,9 @@ class Goal:
             custom_unit=data.get("custom_unit", ""),
             target=float(data.get("target", 0.0)),
             progress=float(data.get("progress", 0.0)),
-            created_at=datetime.fromisoformat(data["created_at"]) if "created_at" in data else datetime.now(),
-            updated_at=datetime.fromisoformat(data["updated_at"]) if "updated_at" in data else datetime.now(),
+            created_at=parse_dt(data["created_at"]) if "created_at" in data else datetime.now(),
+            updated_at=parse_dt(data["updated_at"]) if "updated_at" in data else datetime.now(),
         )
+        # goal_class puede no estar en el dataclass, pero lo agregamos dinámicamente
+        setattr(obj, "goal_class", data.get("goal_class", "incremental"))
+        return obj

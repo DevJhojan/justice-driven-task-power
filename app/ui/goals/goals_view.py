@@ -11,7 +11,7 @@ class GoalsView(ft.Container):
     def __init__(self, goals_service: GoalsService = None):
         super().__init__()
         self.goals_service = goals_service or GoalsService()
-        self.goals = self.goals_service.list_goals()
+        self.goals = []
         self.selected_goal = None
         self.showing_form = False
         self.form_container = ft.Container(visible=False)
@@ -45,9 +45,12 @@ class GoalsView(ft.Container):
         self.expand = True
 
     def build(self, page=None):
-        """
-        Devuelve el propio contenedor para integración con HomeView
-        """
+        import asyncio
+        async def load_goals():
+            await self.goals_service.db.initialize()
+            self.goals = await self.goals_service.list_goals()
+            self.goals_list.set_goals(self.goals)
+        asyncio.create_task(load_goals())
         return self
 
     def _show_add_form(self, _):
@@ -80,26 +83,41 @@ class GoalsView(ft.Container):
         self.update()
 
     def _add_goal(self, values):
-        goal = self.goals_service.create_goal(**values)
-        self.goals = self.goals_service.list_goals()
-        self.goals_list.set_goals(self.goals)
-        self._hide_form()
+        import asyncio
+        async def save():
+            await self.goals_service.create_goal(**values)
+            self.goals = await self.goals_service.list_goals()
+            self.goals_list.set_goals(self.goals)
+            self._hide_form()
+        asyncio.create_task(save())
 
     def _edit_goal(self, values):
-        self.goals_service.update_goal(self.selected_goal.id, **values)
-        self.goals = self.goals_service.list_goals()
-        self.goals_list.set_goals(self.goals)
-        self._hide_form()
+        import asyncio
+        async def edit():
+            await self.goals_service.update_goal(self.selected_goal.id, **values)
+            self.goals = await self.goals_service.list_goals()
+            self.goals_list.set_goals(self.goals)
+            self._hide_form()
+        asyncio.create_task(edit())
 
     def _delete_goal(self, goal: Goal):
-        self.goals_service.delete_goal(goal.id)
-        self.goals = self.goals_service.list_goals()
-        self.goals_list.set_goals(self.goals)
-        self.update()
+        import asyncio
+        async def delete():
+            await self.goals_service.delete_goal(goal.id)
+            self.goals = await self.goals_service.list_goals()
+            self.goals_list.set_goals(self.goals)
+            self.update()
+        asyncio.create_task(delete())
 
-    def _update_progress(self, goal: Goal):
-        # Simple: suma 1 a progreso, puedes personalizar
-        self.goals_service.update_goal(goal.id, progress=goal.progress + 1)
-        self.goals = self.goals_service.list_goals()
-        self.goals_list.set_goals(self.goals)
-        self.update()
+    def _update_progress(self, goal: Goal, action="incremental"):
+        import asyncio
+        async def update():
+            if getattr(goal, "goal_class", "incremental") == "reductual" or action == "reductual":
+                new_progress = max(goal.progress - 1, goal.target)
+            else:
+                new_progress = goal.progress + 1
+            await self.goals_service.update_goal(goal.id, progress=new_progress)
+            self.goals = await self.goals_service.list_goals()
+            self.goals_list.set_goals(self.goals)
+            self.update()
+        asyncio.create_task(update())
