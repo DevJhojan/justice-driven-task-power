@@ -44,6 +44,23 @@ def create_habit_card(
 		)
 	)
 
+	metrics = ft.Row(
+		[
+			ft.IconButton(
+				icon=ft.Icons.BAR_CHART,
+				icon_color=ft.Colors.WHITE,
+				on_click=lambda e: None,
+				tooltip="Gráficos",
+			),
+			ft.Icon(ft.Icons.TRENDING_UP, size=16, color=ft.Colors.RED_400),
+			ft.Text(f"Racha: {habit.streak}", size=12, color=ft.Colors.WHITE),
+			ft.Icon(ft.Icons.SCHEDULE, size=16, color=ft.Colors.WHITE_70),
+			ft.Text(freq_text, size=12, color=ft.Colors.WHITE_70),
+		],
+		spacing=6,
+		vertical_alignment=ft.CrossAxisAlignment.CENTER,
+	)
+
 	return ft.Container(
 		content=ft.Column(
 			[
@@ -98,23 +115,31 @@ def create_habit_card(
 				ft.Row(
 					[
 						last_completed_text,
-						ft.IconButton(
-							icon=ft.Icons.CHECK_CIRCLE if completed_today else ft.Icons.CIRCLE_OUTLINED,
-							icon_color=ft.Colors.RED_500 if completed_today else ft.Colors.WHITE_60,
-							on_click=lambda e, hid=habit.id: on_complete(hid),
+						ft.Row(
+							[
+								ft.IconButton(
+									icon=ft.Icons.CHECK_CIRCLE if completed_today else ft.Icons.CIRCLE_OUTLINED,
+									icon_color=ft.Colors.RED_500 if completed_today else ft.Colors.WHITE_60,
+									on_click=lambda e, hid=habit.id: on_complete(hid),
+								),
+								ft.IconButton(
+									icon=ft.Icons.EDIT,
+									icon_color=ft.Colors.WHITE,
+									on_click=lambda e, h=habit: on_edit(h),
+								),
+								ft.IconButton(
+									icon=ft.Icons.DELETE_OUTLINE,
+									icon_color=ft.Colors.RED_400,
+									on_click=lambda e, hid=habit.id: on_delete(hid),
+								),
+							],
+							spacing=8,
+							vertical_alignment=ft.CrossAxisAlignment.CENTER,
 						),
-						ft.IconButton(
-							icon=ft.Icons.EDIT,
-							icon_color=ft.Colors.WHITE,
-							on_click=lambda e, h=habit: on_edit(h),
-						),
-						ft.IconButton(
-							icon=ft.Icons.DELETE_OUTLINE,
-							icon_color=ft.Colors.RED_400,
-							on_click=lambda e, hid=habit.id: on_delete(hid),
-						),
+						metrics,
 					],
-					spacing=8,
+					alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+					vertical_alignment=ft.CrossAxisAlignment.CENTER,
 				),
 			],
 			spacing=8,
