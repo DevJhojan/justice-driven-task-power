@@ -7,6 +7,7 @@ import flet as ft
 from typing import Optional, Callable
 from app.services.progress_service import ProgressService
 from app.services.database_service import DatabaseService
+from app.services.habits_service import HabitsService
 from app.logic.system_points import LEVELS_ORDER, Level
 from app.utils.task_helper import TASK_STATUS_COMPLETED
 
@@ -285,6 +286,15 @@ class PointsAndLevelsView(ft.Container):
             except Exception as e:
                 print(f"[PointsAndLevelsView] Error actualizando tareas completadas: {e}")
 
+    def set_habits_completed(self, count: int):
+        """Actualiza el contador de hábitos completados (eventos, usando racha)"""
+        self.habits_completed_text.value = f"{int(count)} hábitos completados"
+        if self.page:
+            try:
+                self.update()
+            except Exception as e:
+                print(f"[PointsAndLevelsView] Error actualizando hábitos completados: {e}")
+
     def update_progress_from_stats(self, stats: dict):
         """Actualiza barra y textos de progreso usando stats completas"""
         progress_percent = float(stats.get("progress_percent", 0.0))
@@ -337,6 +347,7 @@ class PointsAndLevelsView(ft.Container):
         self.set_user_level(stats.get("level", "Nadie"))
         self.update_progress_from_stats(stats)
         await self._load_completed_tasks_count()
+        await self._load_completed_habits_count()
         print(f"[PointsAndLevelsView] Stats cargados desde ProgressService")
     
     def _on_verify_integrity_click(self, e):
@@ -421,7 +432,17 @@ class PointsAndLevelsView(ft.Container):
         if self.page:
             self.page.update()
     
-    def show_integrity_result(self, current_points, expected_points, completed_tasks, completed_subtasks, had_correction):
+    def show_integrity_result(
+        self,
+        current_points,
+        expected_points,
+        completed_tasks,
+        completed_subtasks,
+        had_correction,
+        completed_habits: int = 0,
+        habit_points: float = 0.0,
+        difference: float = 0.0,
+    ):
         """Muestra el resultado de la verificación en el panel"""
         print(f"[PointsAndLevelsView] Mostrando resultado de integridad en el panel")
         
@@ -432,26 +453,20 @@ class PointsAndLevelsView(ft.Container):
             ft.Text(f"📊 Puntos actuales en BD: {current_points:.2f}", size=13, color="#EEEEEE"),
             ft.Text(f"📋 Tareas completadas: {completed_tasks} × 0.05 = {completed_tasks * 0.05:.2f} puntos", size=13, color="#CCCCCC"),
             ft.Text(f"✓ Subtareas completadas: {completed_subtasks} × 0.02 = {completed_subtasks * 0.02:.2f} puntos", size=13, color="#CCCCCC"),
+            ft.Text(f"🔁 Hábitos completados (estimados): {completed_habits} → {habit_points:.2f} puntos", size=13, color="#CCCCCC"),
             ft.Text(f"🎯 Total esperado: {expected_points:.2f} puntos", size=13, color="#4CAF50", weight="bold"),
         ]
         
-        difference = abs(current_points - expected_points)
+        abs_diff = abs(difference)
         
         if had_correction:
             controls.extend([
                 ft.Divider(height=1, color="#555"),
                 ft.Text(f"⚠️  INCONSISTENCIA DETECTADA", size=13, color="#FF9800", weight="bold"),
-                ft.Text(f"📉 Diferencia: {difference:.2f} puntos", size=13, color="#FF9800"),
-                ft.Text(f"🔧 Puntos corregidos automáticamente", size=13, color="#4CAF50"),
-                ft.Text(f"✅ Nuevos puntos: {expected_points:.2f}", size=14, color="#4CAF50", weight="bold"),
-            ])
-        else:
-            controls.extend([
-                ft.Divider(height=1, color="#555"),
-                ft.Text(f"✅ Integridad verificada correctamente", size=13, color="#4CAF50", weight="bold"),
-                ft.Text(f"Los puntos coinciden con las tareas completadas", size=12, color="#AAAAAA"),
-            ])
-        
+                ft.Text(f"📉 Diferencia: {abs_diff:.2f} puntos", size=13, color="#FF9800"),
+                 ft.Text(f"🔧 Puntos ajustados al valor esperado", size=13, color="#4CAF50"),
+                 ft.Text(f"✅ Nuevos puntos: {expected_points:.2f}", size=14, color="#4CAF50", weight="bold"),
+             ])
         self.integrity_log_text.controls.extend(controls)
         
         print(f"[PointsAndLevelsView] Panel actualizado con {len(controls)} elementos")
@@ -475,9 +490,7 @@ class PointsAndLevelsView(ft.Container):
     async def _load_completed_tasks_count(self):
         """Carga desde BD cuántas tareas se completaron y actualiza el header"""
         try:
-            if self.database_service is None:
-                self.database_service = DatabaseService()
-                await self.database_service.initialize()
+            await self._ensure_database_service()
 
             count = await self.database_service.count(
                 table_name="tasks",
@@ -486,3 +499,23 @@ class PointsAndLevelsView(ft.Container):
             self.set_tasks_completed(count)
         except Exception as e:
             print(f"[PointsAndLevelsView] Error cargando tareas completadas: {e}")
+
+    async def _load_completed_habits_count(self):
+        """Carga hábitos y calcula cuántas finalizaciones hay registradas"""
+        try:
+            await self._ensure_database_service()
+            habits_service = HabitsService(self.database_service)
+            await habits_service.initialize()
+            completions = await habits_service.get_completion_records()
+            self.set_habits_completed(len(completions))
+        except Exception as e:
+            print(f"[PointsAndLevelsView] Error cargando hábitos completados: {e}")
+
+    async def _ensure_database_service(self):
+        """Inicializa DatabaseService en caso de no existir"""
+        if self.database_service is None:
+            self.database_service = DatabaseService()
+        try:
+            await self.database_service.initialize()
+        except Exception as e:
+            print(f"[PointsAndLevelsView] Error inicializando DatabaseService: {e}")

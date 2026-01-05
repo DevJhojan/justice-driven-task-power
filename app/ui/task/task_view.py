@@ -18,6 +18,8 @@ from app.models.subtask import Subtask
 from app.utils.task_helper import TASK_STATUS_PENDING, TASK_STATUS_COMPLETED
 from app.services.database_service import DatabaseService
 from app.services.task_service import TaskService
+from app.logic.system_points import POINTS_BY_ACTION
+from app.services.habits_service import HabitsService
 from app.services.progress_service import ProgressService
 
 # Permite ejecución directa añadiendo la raíz del proyecto al path
@@ -346,6 +348,21 @@ class TaskView:
 		except Exception as e:
 			print(f"[TaskView] Error actualizando tareas completadas: {e}")
 
+	def _get_points_action_for_habit(self, habit):
+		"""Obtiene la acción de puntos asociada a la frecuencia del hábito"""
+		mapping = {
+			"daily": "habit_daily_completed",
+			"weekly": "habit_weekly_completed",
+			"monthly": "habit_monthly_completed",
+			"semiannual": "habit_semiannual_completed",
+			"annual": "habit_annual_completed",
+		}
+		if isinstance(habit, str):
+			frequency = habit
+		else:
+			frequency = getattr(habit, "frequency", "")
+		return mapping.get(frequency, "habit_daily_completed")
+
 	async def _async_verify_points_integrity(self):
 		"""Verifica la integridad de los puntos y corrige si hay inconsistencias"""
 		try:
@@ -362,45 +379,59 @@ class TaskView:
 			expected_points = 0.0
 			completed_tasks = 0
 			completed_subtasks = 0
+			habit_completions = 0
+			habit_points_estimated = 0.0
 			
 			for task in self.tasks:
 				if task.status == TASK_STATUS_COMPLETED:
 					completed_tasks += 1
-					expected_points += 0.05  # POINTS_BY_ACTION["task_completed"]
+					expected_points += POINTS_BY_ACTION["task_completed"]
 				
 				if task.subtasks:
 					for subtask in task.subtasks:
 						if subtask.completed:
 							completed_subtasks += 1
-							expected_points += 0.02  # POINTS_BY_ACTION["subtask_completed"]
+							expected_points += POINTS_BY_ACTION["subtask_completed"]
+
+			# Calcular puntos por hábitos basados en historial de completados
+			try:
+				habits_service = HabitsService(self.database_service)
+				await habits_service.initialize()
+				records = await habits_service.get_completion_records()
+				habit_completions = len(records)
+				for record in records:
+					freq = record.get("frequency", "daily")
+					action = self._get_points_action_for_habit(freq)
+					points_per_completion = POINTS_BY_ACTION.get(action, 0.0)
+					habit_points_estimated += points_per_completion
+			except Exception as e:
+				print(f"  ⚠️  Error al calcular puntos por hábitos: {e}")
 			
-			print(f"  📋 Tareas completadas: {completed_tasks} x 0.05 = {completed_tasks * 0.05:.2f} puntos")
-			print(f"  ✓ Subtareas completadas: {completed_subtasks} x 0.02 = {completed_subtasks * 0.02:.2f} puntos")
+			task_and_subtask_points = completed_tasks * POINTS_BY_ACTION["task_completed"] + completed_subtasks * POINTS_BY_ACTION["subtask_completed"]
+			expected_points = task_and_subtask_points + habit_points_estimated
+			
+			print(f"  📋 Tareas completadas: {completed_tasks} x {POINTS_BY_ACTION['task_completed']:.2f} = {completed_tasks * POINTS_BY_ACTION['task_completed']:.2f} puntos")
+			print(f"  ✓ Subtareas completadas: {completed_subtasks} x {POINTS_BY_ACTION['subtask_completed']:.2f} = {completed_subtasks * POINTS_BY_ACTION['subtask_completed']:.2f} puntos")
+			print(f"  🔁 Hábitos completados (historial): {habit_completions} → {habit_points_estimated:.2f} puntos")
 			print(f"  🎯 Total esperado: {expected_points:.2f} puntos")
 			
-			# Verificar si hay diferencia
-			difference = abs(current_points - expected_points)
+			# Verificar si hay diferencia y corregir en ambos sentidos
+			difference = expected_points - current_points
 			had_correction = False
-			
-			if difference > 0.001:  # Tolerancia de precisión flotante
+			if abs(difference) > 0.001:  # Tolerancia de precisión flotante
+				action = "aumentando" if difference > 0 else "reduciendo"
 				print(f"  ⚠️  INCONSISTENCIA DETECTADA")
-				print(f"  📉 Diferencia: {difference:.2f} puntos")
-				print(f"  🔧 Corrigiendo puntos...")
-				
-				# Corregir los puntos usando set_points
+				print(f"  📉 Diferencia: {difference:.2f} puntos ({action})")
+				print(f"  🔧 Ajustando puntos al esperado...")
 				await self.progress_service.set_points(expected_points)
-				
-				# Recargar stats corregidos
 				stats = await self.progress_service.load_stats()
-				print(f"  ✅ Puntos corregidos: {stats['points']:.2f}")
+				print(f"  ✅ Puntos ajustados: {stats['points']:.2f}")
 				print(f"  📊 Nivel actualizado: {stats['level']}")
-				
-				# Actualizar PointsAndLevelsView
 				if self.rewards_view:
 					self.rewards_view.set_user_points(stats.get("points", 0.0))
 					self.rewards_view.set_user_level(stats.get("level", "Nadie"))
 					self.rewards_view.update_progress_from_stats(stats)
-				
+					self.rewards_view.set_habits_completed(habit_completions)
 				had_correction = True
 			else:
 				print(f"  ✅ Integridad verificada - Los puntos son correctos")
@@ -409,12 +440,16 @@ class TaskView:
 			
 			# Mostrar resultado en el panel de PointsAndLevelsView
 			if self.rewards_view:
+				self.rewards_view.set_habits_completed(habit_completions)
 				self.rewards_view.show_integrity_result(
 					current_points=current_points,
 					expected_points=expected_points,
 					completed_tasks=completed_tasks,
 					completed_subtasks=completed_subtasks,
-					had_correction=had_correction
+					had_correction=had_correction,
+					completed_habits=habit_completions,
+					habit_points=habit_points_estimated,
+					difference=difference,
 				)
 			
 			return had_correction

@@ -4,6 +4,8 @@ Gestiona la lógica de negocio y persistencia de hábitos en BD
 """
 
 from typing import Dict, List, Optional
+import uuid
+from datetime import datetime
 from app.models.habit import Habit
 from app.services.database_service import DatabaseService
 
@@ -47,6 +49,19 @@ class HabitsService:
             except Exception:
                 # Si ya existe la columna, ignorar el error
                 pass
+            # Crear tabla de historial de completados de hábitos
+            await self.database_service.execute(
+                """
+                CREATE TABLE IF NOT EXISTS habit_completions (
+                    id TEXT PRIMARY KEY,
+                    habit_id TEXT NOT NULL,
+                    frequency TEXT NOT NULL,
+                    completed_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            await self.database_service.commit()
             await self.database_service.commit()
             print("[HabitsService] Tabla de hábitos creada/verificada")
             
@@ -124,10 +139,12 @@ class HabitsService:
                 # Desmarcar: restar 1 a la racha (mínimo 0)
                 habit.streak = max(0, habit.streak - 1)
                 habit.last_completed = None
+                await self._remove_today_completion_record(habit_id)
                 was_completed = False
             else:
                 # Marcar como completado
                 habit.complete_today()
+                await self._add_completion_record(habit)
                 was_completed = True
             
             await self._update_in_db(habit)
@@ -203,6 +220,15 @@ class HabitsService:
             Hábito o None si no existe
         """
         return self.habits.get(habit_id)
+
+    async def get_completion_records(self) -> List[Dict]:
+        """Retorna todos los registros de completado de hábitos"""
+        records = await self.database_service.get_all("habit_completions")
+        return records or []
+
+    async def count_completion_records(self) -> int:
+        """Cuenta cuántos completados de hábitos existen"""
+        return await self.database_service.count("habit_completions")
     
     # Métodos privados de persistencia
     async def _save_to_db(self, habit: Habit):
@@ -261,3 +287,41 @@ class HabitsService:
         except Exception as e:
             print(f"[HabitsService] Error eliminando hábito: {e}")
             raise
+
+    async def _add_completion_record(self, habit: Habit):
+        """Agrega un registro de completado para el hábito"""
+        try:
+            today_iso = datetime.now().date().isoformat()
+            # Evitar duplicados para el mismo día
+            await self.database_service.execute(
+                "DELETE FROM habit_completions WHERE habit_id = ? AND completed_at = ?",
+                (habit.id, today_iso),
+            )
+            await self.database_service.execute(
+                """
+                INSERT INTO habit_completions (id, habit_id, frequency, completed_at, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid.uuid4()),
+                    habit.id,
+                    habit.frequency,
+                    today_iso,
+                    datetime.now().isoformat(),
+                ),
+            )
+            await self.database_service.commit()
+        except Exception as e:
+            print(f"[HabitsService] Error registrando completado de hábito: {e}")
+
+    async def _remove_today_completion_record(self, habit_id: str):
+        """Elimina el registro de completado de hoy para el hábito (si existe)"""
+        try:
+            today_iso = datetime.now().date().isoformat()
+            await self.database_service.execute(
+                "DELETE FROM habit_completions WHERE habit_id = ? AND completed_at = ?",
+                (habit_id, today_iso),
+            )
+            await self.database_service.commit()
+        except Exception as e:
+            print(f"[HabitsService] Error eliminando registro de completado: {e}")

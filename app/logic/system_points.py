@@ -53,7 +53,11 @@ LEVELS_ORDER = [
 POINTS_BY_ACTION = {
     "task_completed": 0.05,
     "subtask_completed": 0.02,
-    "habit_completed": 0.01,
+    "habit_daily_completed": 0.01,
+    "habit_weekly_completed": 0.02,
+    "habit_monthly_completed": 0.04,
+    "habit_semiannual_completed": 0.06,
+    "habit_annual_completed": 0.12,
     "goal_achieved": 0.50,
     "daily_streak": 0.10,
 }

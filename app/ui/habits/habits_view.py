@@ -8,6 +8,7 @@ import asyncio
 from typing import Optional, Callable
 
 from app.services.habits_service import HabitsService
+from app.services.progress_service import ProgressService
 from app.ui.habits.habits_form import HabitsForm
 from app.ui.habits.habits_list import HabitsList
 from app.ui.habits.habit_grafics import HabitGraphics
@@ -24,6 +25,7 @@ class HabitsView:
             on_update: Callback opcional al actualizar hábitos
         """
         self.habits_service = HabitsService()
+        self.progress_service = ProgressService()
         self.on_update = on_update
         self.showing_form = False
         self.showing_graphs = False
@@ -93,7 +95,10 @@ class HabitsView:
     async def _async_complete_habit(self, habit_id: str):
         """Marca/desmarca un hábito como completado de forma asíncrona"""
         try:
-            await self.habits_service.complete_habit(habit_id)
+            was_completed = await self.habits_service.complete_habit(habit_id)
+            if was_completed:
+                action = self._get_points_action_for_habit(habit_id)
+                await self.progress_service.add_points(action)
             self._refresh_list()
             if self.on_update:
                 self.on_update()
@@ -104,31 +109,6 @@ class HabitsView:
         """Elimina un hábito"""
         asyncio.create_task(self._async_delete_habit(habit_id))
 
-    def _show_graphs(self, habit):
-        """Muestra gráficos del hábito en un diálogo modal"""
-        if not self.main_column or not self.main_column.page:
-            return
-        page = self.main_column.page
-
-        graph_content = HabitGraphics(habit).build()
-        dialog = ft.AlertDialog(
-            modal=True,
-            content=graph_content,
-            actions=[
-                ft.TextButton("Cerrar", on_click=lambda e: self._close_dialog())
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        page.dialog = dialog
-        dialog.open = True
-        page.update()
-
-    def _close_dialog(self):
-        if self.main_column and self.main_column.page and self.main_column.page.dialog:
-            dlg = self.main_column.page.dialog
-            dlg.open = False
-            self.main_column.page.update()
-    
     async def _async_delete_habit(self, habit_id: str):
         """Elimina un hábito de forma asíncrona"""
         try:
@@ -158,6 +138,19 @@ class HabitsView:
         self.showing_graphs = False
         self.graph_habit = None
         self._update_view()
+
+    def _get_points_action_for_habit(self, habit_id: str) -> str:
+        habit = self.habits_service.get_habit(habit_id)
+        if not habit:
+            return "habit_daily_completed"
+        mapping = {
+            "daily": "habit_daily_completed",
+            "weekly": "habit_weekly_completed",
+            "monthly": "habit_monthly_completed",
+            "semiannual": "habit_semiannual_completed",
+            "annual": "habit_annual_completed",
+        }
+        return mapping.get(habit.frequency, "habit_daily_completed")
 
     def _toggle_form(self):
         """Alterna entre mostrar/ocultar el formulario"""
