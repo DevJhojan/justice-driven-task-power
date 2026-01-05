@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "justice-driven-task-power"
+version = "1.0.0"
+description = "Aplicativo para organizar tareas, hábitos y metas de forma visual y motivadora."
+authors = ["DevJhojan <tu-email@ejemplo.com>"]
+
+[project]
+name = "justice-driven-task-power"
+version = "1.0.0"
+description = "Aplicación para gestionar tareas, hábitos y metas con gamificación."
+readme = "README.md"
+
+[project.urls]
+homepage = "https://github.com/DevJhojan/justice-driven-task-power"
+
+[app]
+summary = "Organiza tus tareas, hábitos y metas. Marca tu progreso y celebra tus logros."
+features = [
+    "Gestión de tareas diarias",
+    "Seguimiento de hábitos",
+    "Metas incrementales y reductuales",
+    "Sistema de puntos y niveles",
+    "Interfaz visual y motivadora",
+    "Tema oscuro con matices rojos"
+]
