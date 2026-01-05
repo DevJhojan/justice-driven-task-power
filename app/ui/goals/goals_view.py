@@ -111,12 +111,19 @@ class GoalsView(ft.Container):
 
     def _update_progress(self, goal: Goal, action="incremental"):
         import asyncio
+        from app.models.user import User
+        from app.services.user_service import UserService
         async def update():
             if getattr(goal, "goal_class", "incremental") == "reductual" or action == "reductual":
                 new_progress = max(goal.progress - 1, goal.target)
             else:
                 new_progress = goal.progress + 1
             await self.goals_service.update_goal(goal.id, progress=new_progress)
+            # Sumar puntos al usuario
+            # Aquí se asume un usuario único, puedes adaptar para multiusuario
+            user = User(username="default")
+            user_service = UserService(user)
+            user_service.add_points_for_goal(getattr(goal, "goal_class", "incremental"))
             self.goals = await self.goals_service.list_goals()
             self.goals_list.set_goals(self.goals)
             self.update()
