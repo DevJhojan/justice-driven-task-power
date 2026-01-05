@@ -125,7 +125,8 @@ class SettingsView:
             ("📆", "Hábito mensual", "0.04 pts"),
             ("🌓", "Hábito semestral", "0.06 pts"),
             ("📈", "Hábito anual", "0.12 pts"),
-            ("🏁", "Meta lograda", "0.50 pts"),
+            ("🏁", "Meta incrmental lograda", "0.25 pts"),
+            ("🏆", "Meta reductual lograda", "0.25 pts"),
         ]
 
         rows = []
