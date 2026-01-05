@@ -22,6 +22,7 @@ def main(page: ft.Page):
     page.window.height = 600
     page.window.min_width = 400
     page.window.min_height = 500
+    page.window.maximized = True
     # Icono de la app (usar recurso local)
     icon_path = (Path(__file__).parent.parent / "assets" / "task_logo.ico").resolve()
     page.window.icon = str(icon_path)
