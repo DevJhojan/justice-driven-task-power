@@ -23,6 +23,12 @@ class RewardsService:
         self.rewards: Dict[str, Reward] = {}
         self.database_service = database_service or DatabaseService()
         self._initialized = False
+        self._valid_categories = {
+            "Recompensas pequeñas",
+            "Recompensas medianas",
+            "Recompensas grandes",
+            "Recompensas épicas",
+        }
     
     async def initialize(self):
         """Inicializa la BD y carga las recompensas existentes"""
@@ -52,6 +58,9 @@ class RewardsService:
             
             # Cargar recompensas desde BD
             await self._load_from_db()
+
+            # Migrar recompensas existentes a las categorías actuales
+            await self._migrate_rewards_data()
             
             # Agregar recompensas por defecto si no hay ninguna
             await self._ensure_default_rewards()
@@ -86,7 +95,7 @@ class RewardsService:
                 "icon": "🎖️",
                 "color": "#4CAF50",
                 "is_active": True,
-                "category": "badge",
+                "category": "Recompensas pequeñas",
             },
             {
                 "title": "Racha de Productividad",
@@ -95,7 +104,7 @@ class RewardsService:
                 "icon": "🔥",
                 "color": "#FF9800",
                 "is_active": True,
-                "category": "achievement",
+                "category": "Recompensas medianas",
             },
             {
                 "title": "Maestro del Tiempo",
@@ -104,7 +113,7 @@ class RewardsService:
                 "icon": "⏱️",
                 "color": "#2196F3",
                 "is_active": True,
-                "category": "milestone",
+                "category": "Recompensas grandes",
             },
         ]
         
@@ -217,6 +226,37 @@ class RewardsService:
             print(f"[RewardsService] Error al agendar actualización en BD: {e}")
         
         return reward
+
+    async def _migrate_rewards_data(self):
+        """Normaliza recompensas existentes a las categorías actuales y persiste cambios."""
+        if not self.rewards:
+            return
+
+        legacy_map = {
+            "badge": "Recompensas pequeñas",
+            "achievement": "Recompensas medianas",
+            "milestone": "Recompensas grandes",
+            None: "Recompensas pequeñas",
+            "": "Recompensas pequeñas",
+        }
+
+        updated = 0
+        for reward in list(self.rewards.values()):
+            new_category = legacy_map.get(reward.category, reward.category)
+            if new_category not in self._valid_categories:
+                new_category = "Recompensas pequeñas"
+
+            if new_category != reward.category:
+                reward.update(category=new_category)
+                self.rewards[reward.id] = reward
+                try:
+                    await self.database_service.update("rewards", reward.id, reward.to_dict())
+                    updated += 1
+                except Exception as e:
+                    print(f"[RewardsService] Error al migrar recompensa '{reward.title}': {e}")
+
+        if updated:
+            print(f"[RewardsService] Migradas {updated} recompensas a las nuevas categorías")
     
     async def _update_in_db(self, reward_id: str, reward: Reward):
         """Actualiza una recompensa en BD de forma asíncrona"""

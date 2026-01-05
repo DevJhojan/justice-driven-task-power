@@ -94,24 +94,9 @@ class SettingsView:
                         controls=level_controls,
                     ),
                     ft.Divider(height=1, color="#3a3a3a"),
-                    ft.Container(
-                        padding=10,
-                        bgcolor="#1f1f1f",
-                        border_radius=8,
-                        content=ft.Column(
-                            spacing=8,
-                            controls=[
-                                ft.Text("📝 Información del Sistema", size=13, weight="bold", color="#4CAF50"),
-                                ft.Text(
-                                    "Completa tareas y subtareas para ganar puntos. "
-                                    "Cada tarea completada te otorga 0.05 puntos y cada subtarea 0.02 puntos. "
-                                    "Acumula puntos para avanzar de nivel y desbloquear logros.",
-                                    size=12,
-                                    color="#CCCCCC",
-                                ),
-                            ],
-                        ),
-                    ),
+                    self._build_points_panel(),
+                    ft.Divider(height=1, color="#3a3a3a"),
+                    self._build_rewards_panel(),
                 ],
             ),
         )
@@ -120,6 +105,7 @@ class SettingsView:
             content=ft.Column(
                 controls=[
                     levels_panel,
+                    ft.Divider(height=1, color="#3a3a3a"),
                 ],
                 spacing=20,
                 scroll=ft.ScrollMode.AUTO,
@@ -127,5 +113,96 @@ class SettingsView:
             padding=20,
             expand=True,
             bgcolor="#0d0d0d",
+        )
+
+    def _build_points_panel(self) -> ft.Container:
+        """Panel que explica los puntos por acción de forma simple y con íconos."""
+        items = [
+            ("✅", "Tarea completada", "0.05 pts"),
+            ("🧩", "Subtarea completada", "0.02 pts"),
+            ("🔁", "Hábito diario", "0.01 pts"),
+            ("📅", "Hábito semanal", "0.02 pts"),
+            ("📆", "Hábito mensual", "0.04 pts"),
+            ("🌓", "Hábito semestral", "0.06 pts"),
+            ("📈", "Hábito anual", "0.12 pts"),
+            ("🏁", "Meta lograda", "0.50 pts"),
+        ]
+
+        rows = []
+        for icon, label, points in items:
+            rows.append(
+                ft.Row(
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    controls=[
+                        ft.Row(
+                            spacing=8,
+                            controls=[
+                                ft.Text(icon, size=16),
+                                ft.Text(label, size=13, color="#EEEEEE"),
+                            ],
+                        ),
+                        ft.Text(points, size=13, weight="bold", color="#4CAF50"),
+                    ],
+                )
+            )
+
+        return ft.Container(
+            padding=15,
+            bgcolor="#1f1f1f",
+            border_radius=8,
+            border=ft.border.all(1, "#3a3a3a"),
+            content=ft.Column(
+                spacing=10,
+                controls=[
+                    ft.Text("📝 Puntos por acción", size=16, weight="bold", color="#4CAF50"),
+                    ft.Text("Resumen simple de lo que otorga puntos.", size=12, color="#AAAAAA"),
+                    ft.Divider(height=1, color="#333"),
+                    *rows,
+                ],
+            ),
+        )
+
+    def _build_rewards_panel(self) -> ft.Container:
+        """Panel que explica las categorías de recompensas de forma breve."""
+        items = [
+            ("🎁", "Recompensas pequeñas", "Canjea puntos bajos por boosts o ayudas rápidas."),
+            ("🏅", "Recompensas medianas", "Bonos, personalizaciones y mejoras prácticas."),
+            ("🏆", "Recompensas grandes", "Beneficios premium o desbloqueos especiales."),
+            ("💎", "Recompensas épicas", "Objetos o privilegios de alto impacto."),
+        ]
+
+        rows = []
+        for icon, label, desc in items:
+            rows.append(
+                ft.Row(
+                    spacing=10,
+                    alignment=ft.MainAxisAlignment.START,
+                    controls=[
+                        ft.Text(icon, size=18),
+                        ft.Column(
+                            spacing=2,
+                            controls=[
+                                ft.Text(label, size=13, weight="bold", color="#FFD700"),
+                                ft.Text(desc, size=12, color="#CCCCCC"),
+                            ],
+                        ),
+                    ],
+                )
+            )
+
+        return ft.Container(
+            padding=15,
+            bgcolor="#1a1a1a",
+            border_radius=8,
+            border=ft.border.all(1, "#3a3a3a"),
+            content=ft.Column(
+                spacing=10,
+                controls=[
+                    ft.Text("🎯 Categorías de recompensas", size=16, weight="bold", color="#4CAF50"),
+                    ft.Text("Guía rápida de qué puedes canjear según tus puntos.", size=12, color="#AAAAAA"),
+                    ft.Divider(height=1, color="#333"),
+                    *rows,
+                ],
+            ),
         )
 

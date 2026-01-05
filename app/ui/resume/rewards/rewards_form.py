@@ -17,6 +17,7 @@ class RewardsForm(ft.Container):
 		self.rewards_service = rewards_service or RewardsService()
 		self.on_submit = on_submit
 		self.on_cancel = on_cancel
+		self.editing_reward_id: Optional[str] = None
 
 		self.expand = True
 		self.padding = 16
@@ -40,13 +41,15 @@ class RewardsForm(ft.Container):
 		self._icon_panel.visible = False
 		self.color_input = ft.TextField(label="Color (hex)", hint_text="#FFD700", value="#FFD700")
 		self.category_dropdown = ft.Dropdown(
-			label="Categoría",
-			value="badge",
+			label="Categoría de recompensa",
+			value="Recompensas pequeñas",
 			options=[
-				ft.dropdown.Option("badge"),
-				ft.dropdown.Option("achievement"),
-				ft.dropdown.Option("milestone"),
+				ft.dropdown.Option("Recompensas pequeñas"),
+				ft.dropdown.Option("Recompensas medianas"),
+				ft.dropdown.Option("Recompensas grandes"),
+				ft.dropdown.Option("Recompensas épicas"),
 			],
+			helper_text="Selecciona el tipo: 🎁 pequeñas, 🏅 medianas, 🏆 grandes, 💎 épicas",
 		)
 		self.active_switch = ft.Switch(label="Activa", value=True)
 
@@ -103,7 +106,8 @@ class RewardsForm(ft.Container):
 		self.icon_button.content.controls[-1].value = self.icon_value
 		self._icon_panel.visible = False
 		self.color_input.value = "#FFD700"
-		self.category_dropdown.value = "badge"
+		self.editing_reward_id = None
+		self.category_dropdown.value = "Recompensas pequeñas"
 		self.active_switch.value = True
 		self.error_text.value = ""
 		try:
@@ -120,7 +124,7 @@ class RewardsForm(ft.Container):
 		desc = (self.desc_input.value or "").strip()
 		icon = self.icon_value
 		color = (self.color_input.value or "#FFD700").strip() or "#FFD700"
-		category = self.category_dropdown.value or "badge"
+		category = self.category_dropdown.value or "Recompensas pequeñas"
 		is_active = bool(self.active_switch.value)
 
 		try:
@@ -148,7 +152,14 @@ class RewardsForm(ft.Container):
 			"category": category,
 		}
 
-		reward = self.rewards_service.create_reward(payload)
+		if self.editing_reward_id:
+			try:
+				self.rewards_service.update_reward(self.editing_reward_id, payload)
+			except Exception:
+				pass
+			reward = self.rewards_service.get_reward(self.editing_reward_id) or Reward(**payload)
+		else:
+			reward = self.rewards_service.create_reward(payload)
 
 		if self.on_submit:
 			try:
@@ -187,7 +198,7 @@ class RewardsForm(ft.Container):
 			pass
 
 	def _build_icon_panel(self) -> ft.Container:
-		icons = ["🎁", "🎖️", "🔥", "⭐", "🏅", "💎", "🏆", "🚀", "⏱️", "🧠"]
+		icons = ["🎁", "🎖️", "🔥", "⭐", "💎", "🏆", "🚀", "⏱️", "🧠"]
 		buttons = []
 		for ico in icons:
 			btn = ft.TextButton(
@@ -218,5 +229,23 @@ class RewardsForm(ft.Container):
 			self.update()
 		except RuntimeError:
 			pass
+		except Exception:
+			pass
+
+	def load_reward(self, reward: Reward):
+		"""Carga una recompensa existente para edición."""
+		self.editing_reward_id = getattr(reward, "id", None)
+		self.title_input.value = reward.title or ""
+		self.desc_input.value = reward.description or ""
+		self.points_input.value = f"{getattr(reward, 'points_required', 0):.2f}"
+		self.icon_value = reward.icon or "🎁"
+		self.icon_button.content.controls[-1].value = self.icon_value
+		self.color_input.value = reward.color or "#FFD700"
+		self.category_dropdown.value = reward.category or "Recompensas pequeñas"
+		self.active_switch.value = bool(getattr(reward, "is_active", True))
+		self._icon_panel.visible = False
+		self.error_text.value = ""
+		try:
+			self.update()
 		except Exception:
 			pass

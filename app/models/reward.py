@@ -24,7 +24,7 @@ class Reward:
         is_active: Si la recompensa está activa
         created_at: Fecha de creación
         updated_at: Fecha de última actualización
-        category: Categoría de la recompensa (badge, achievement, etc)
+        category: Categoría de la recompensa (Recompensas pequeñas/medianas/grandes/épicas)
     """
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     title: str = ""
@@ -33,7 +33,7 @@ class Reward:
     icon: str = "🎁"
     color: str = "#FFD700"
     is_active: bool = True
-    category: str = "badge"
+    category: str = "Recompensas pequeñas"
     claimed: bool = False
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
@@ -116,7 +116,7 @@ class Reward:
             icon=data.get("icon", "🎁"),
             color=data.get("color", "#FFD700"),
             is_active=data.get("is_active", True),
-            category=data.get("category", "badge"),
+            category=data.get("category", "Recompensas pequeñas"),
             claimed=data.get("claimed", False),
             created_at=created_at,
             updated_at=updated_at,

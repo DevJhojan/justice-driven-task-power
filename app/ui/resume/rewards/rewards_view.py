@@ -19,6 +19,7 @@ class RewardsView(ft.Container):
 		self.rewards_service = rewards_service or RewardsService()
 		self.user_points = float(user_points)
 		self.current_filter = "desbloqueadas"  # próximas, desbloqueadas, reclamadas
+		self.editing_reward: Optional[Reward] = None
 
 		self.expand = True
 		self.bgcolor = "#1a1a1a"
@@ -77,7 +78,7 @@ class RewardsView(ft.Container):
 			width=32,
 			height=32,
 			tooltip="Agregar recompensa",
-			on_click=self._show_form,
+			on_click=lambda _: self._show_form(None),
 			style=ft.ButtonStyle(
 				shape=ft.RoundedRectangleBorder(radius=999),
 				bgcolor={"": "#2d2d2d"},
@@ -180,28 +181,35 @@ class RewardsView(ft.Container):
 			pass
 
 	def _build_tiles(self, rewards: List[Reward], unlocked: bool, show_claim: bool = True) -> List[ft.Control]:
-		"""Crea tarjetas visuales para cada recompensa con icono, título, puntos y botón reclamar."""
+		"""Crea tarjetas visuales para cada recompensa con icono, título, puntos y acciones."""
 		if not rewards:
 			message = "Sin recompensas desbloqueadas" if unlocked else "Sin recompensas disponibles"
 			return [ft.Text(message, size=12, color="#888888")]
 
 		tiles: List[ft.Control] = []
 		for reward in rewards:
-			controls = [
-				ft.Row(
-					spacing=10,
-					expand=True,
-					controls=[
-						ft.Text(reward.icon or "🎁", size=24),
-						ft.Text(reward.title, size=14, weight="w600", color="#FFFFFF", expand=True),
-						ft.Text(f"{reward.points_required:.2f} pts", size=12, color="#FFD700", weight="bold"),
-					],
-				),
-			]
-			
-			# Agregar botón reclamar solo para recompensas desbloqueadas y si show_claim=True
+			info_row = ft.Row(
+				spacing=10,
+				expand=True,
+				controls=[
+					ft.Text(reward.icon or "🎁", size=24),
+					ft.Text(reward.title, size=14, weight="w600", color="#FFFFFF", expand=True),
+					ft.Text(f"{reward.points_required:.2f} pts", size=12, color="#FFD700", weight="bold"),
+				],
+			)
+
+			actions_row = ft.Row(spacing=8)
+			actions_row.controls.append(
+				ft.IconButton(
+					icon=ft.Icons.EDIT,
+					icon_size=18,
+					icon_color="#FFB74D",
+					tooltip="Editar recompensa",
+					on_click=lambda e, r=reward: self._show_form(r),
+				)
+			)
 			if unlocked and show_claim:
-				controls.append(
+				actions_row.controls.append(
 					ft.IconButton(
 						icon=ft.Icons.CARD_GIFTCARD,
 						icon_size=18,
@@ -210,7 +218,11 @@ class RewardsView(ft.Container):
 						on_click=lambda e, reward_id=reward.id: self._claim_reward(reward_id),
 					)
 				)
-			
+
+			controls = [info_row]
+			if actions_row.controls:
+				controls.append(actions_row)
+
 			tile = ft.Container(
 				bgcolor="#222",
 				border_radius=10,
@@ -221,9 +233,13 @@ class RewardsView(ft.Container):
 			tiles.append(tile)
 		return tiles
 
-	def _show_form(self, _):
+	def _show_form(self, reward: Optional[Reward] = None):
 		self.showing_form = True
-		self.form.reset_form()
+		self.editing_reward = reward
+		if reward:
+			self.form.load_reward(reward)
+		else:
+			self.form.reset_form()
 		self.dynamic_container.content = self.form
 		if self.page:
 			self.update()
@@ -231,6 +247,7 @@ class RewardsView(ft.Container):
 	def _on_form_submit(self, reward: Reward):
 		# Tras guardar, volver a la lista y refrescar contenido
 		self.showing_form = False
+		self.editing_reward = None
 		self.refresh_lists()
 		self.dynamic_container.content = self.lists_column
 		if self.page:
@@ -238,6 +255,7 @@ class RewardsView(ft.Container):
 
 	def _cancel_form(self):
 		self.showing_form = False
+		self.editing_reward = None
 		self.dynamic_container.content = self.lists_column
 		if self.page:
 			self.update()
