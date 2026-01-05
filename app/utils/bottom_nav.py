@@ -121,9 +121,6 @@ class BottomNav:
             destinations=destinations,
             bgcolor="#18181b",
             indicator_color="#FF1744",
-            overlay_color="#2a2a2a",
-            surface_tint_color="#FF5252",
-            shadow_color="#FF1744",
         )
     
     def _handle_navigation(self, e):
