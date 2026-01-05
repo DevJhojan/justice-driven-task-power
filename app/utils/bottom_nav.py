@@ -114,11 +114,16 @@ class BottomNav:
                 )
             )
         
-        # Crear la barra de navegación
+        # Crear la barra de navegación con tema oscuro y matices rojos
         self.nav_bar = ft.NavigationBar(
             selected_index=0,
             on_change=self._handle_navigation,
             destinations=destinations,
+            bgcolor="#18181b",
+            indicator_color="#FF1744",
+            overlay_color="#2a2a2a",
+            surface_tint_color="#FF5252",
+            shadow_color="#FF1744",
         )
     
     def _handle_navigation(self, e):
@@ -157,20 +162,20 @@ class BottomNav:
         self.screen_container = ft.Container(
             content=current_screen,
             expand=True,
+            bgcolor="#18181b",
         )
-        
+
         return ft.Container(
             content=ft.Column(
                 controls=[
-                    # Contenedor para la pantalla actual - ocupa todo el espacio disponible
                     self.screen_container,
-                    # Barra de navegación inferior - solo ocupa su espacio natural
                     self.nav_bar,
                 ],
                 spacing=0,
                 expand=True,
             ),
             expand=True,
+            bgcolor="#18181b",
         )
     
     def refresh_screen(self, page: ft.Page):
