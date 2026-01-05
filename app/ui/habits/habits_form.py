@@ -79,3 +79,8 @@ class HabitsForm:
 		self.description_input.value = ""
 		self.frequency_dropdown.value = "daily"
 
+	def set_values(self, title: str = "", description: str = "", frequency: str = "daily"):
+		self.title_input.value = title or ""
+		self.description_input.value = description or ""
+		self.frequency_dropdown.value = frequency or "daily"
+

@@ -25,6 +25,7 @@ class HabitsView:
         self.habits_service = HabitsService()
         self.on_update = on_update
         self.showing_form = False
+        self.editing_habit_id: Optional[str] = None
 
         # UI Components
         self.form: HabitsForm = HabitsForm(on_save=self._handle_save, on_cancel=lambda e: self._toggle_form())
@@ -32,12 +33,15 @@ class HabitsView:
         self.main_column = None
     
     def _handle_save(self, _):
-        """Valida y crea un hábito usando el servicio"""
+        """Valida y crea/edita un hábito usando el servicio"""
         values = self.form.get_values()
         title = values.get("title", "")
         if not title:
             return
-        asyncio.create_task(self._async_create_habit(values))
+        if self.editing_habit_id:
+            asyncio.create_task(self._async_update_habit(self.editing_habit_id, values))
+        else:
+            asyncio.create_task(self._async_create_habit(values))
 
     async def _async_create_habit(self, values: dict):
         """Crea un hábito de forma asíncrona"""
@@ -48,10 +52,27 @@ class HabitsView:
                 frequency=values.get("frequency", "daily"),
             )
             self.form.reset()
+            self.editing_habit_id = None
             self._toggle_form()
             self._refresh_list()
         except Exception as e:
             print(f"[HabitsView] Error creando hábito: {e}")
+
+    async def _async_update_habit(self, habit_id: str, values: dict):
+        """Actualiza un hábito existente"""
+        try:
+            await self.habits_service.update_habit(
+                habit_id,
+                title=values.get("title", ""),
+                description=values.get("description", ""),
+                frequency=values.get("frequency", "daily"),
+            )
+            self.form.reset()
+            self.editing_habit_id = None
+            self._toggle_form()
+            self._refresh_list()
+        except Exception as e:
+            print(f"[HabitsView] Error actualizando hábito: {e}")
     
     def _complete_habit(self, habit_id: str):
         """Marca/desmarca un hábito como completado"""
@@ -75,9 +96,19 @@ class HabitsView:
         """Elimina un hábito de forma asíncrona"""
         try:
             await self.habits_service.delete_habit(habit_id)
+            if self.editing_habit_id == habit_id:
+                self.editing_habit_id = None
+                self.form.reset()
             self._refresh_list()
         except Exception as e:
             print(f"[HabitsView] Error eliminando hábito: {e}")
+
+    def _start_edit(self, habit):
+        """Inicia la edición de un hábito"""
+        self.editing_habit_id = habit.id
+        self.form.set_values(habit.title, habit.description, habit.frequency)
+        if not self.showing_form:
+            self._toggle_form()
     
     def _toggle_form(self):
         """Alterna entre mostrar/ocultar el formulario"""
@@ -204,6 +235,11 @@ class HabitsView:
                                     icon=ft.Icons.CHECK_CIRCLE if completed_today else ft.Icons.CIRCLE_OUTLINED,
                                     icon_color=ft.Colors.RED_500 if completed_today else ft.Colors.WHITE_60,
                                     on_click=lambda e, hid=habit.id: self._complete_habit(hid),
+                                ),
+                                ft.IconButton(
+                                    icon=ft.Icons.EDIT,
+                                    icon_color=ft.Colors.WHITE,
+                                    on_click=lambda e, h=habit: self._start_edit(h),
                                 ),
                                 ft.IconButton(
                                     icon=ft.Icons.DELETE_OUTLINE,

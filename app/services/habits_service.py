@@ -117,6 +117,22 @@ class HabitsService:
         except Exception as e:
             print(f"[HabitsService] Error completando hábito: {e}")
             raise
+
+    async def update_habit(self, habit_id: str, title: str, description: str, frequency: str = "daily") -> Optional[Habit]:
+        """Actualiza título, descripción y frecuencia de un hábito"""
+        try:
+            habit = self.habits.get(habit_id)
+            if not habit:
+                print(f"[HabitsService] Hábito no encontrado: {habit_id}")
+                return None
+            habit.title = title
+            habit.description = description
+            habit.frequency = frequency
+            await self._update_in_db(habit)
+            return habit
+        except Exception as e:
+            print(f"[HabitsService] Error actualizando hábito: {e}")
+            raise
     
     async def delete_habit(self, habit_id: str) -> bool:
         """
