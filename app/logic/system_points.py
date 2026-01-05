@@ -58,8 +58,8 @@ POINTS_BY_ACTION = {
     "habit_monthly_completed": 0.04,
     "habit_semiannual_completed": 0.06,
     "habit_annual_completed": 0.12,
-    "goal_achieved": 0.50,
-    "daily_streak": 0.10,
+    "goal_increment_completed": 0.25,
+    "goal_decrement_completed": 0.25,
 }
 
 # Colores para cada nivel
