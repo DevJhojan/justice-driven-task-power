@@ -5,11 +5,11 @@ Sistema completo de hábitos con persistencia en BD, racha diaria y CRUD
 
 import flet as ft
 import asyncio
-from datetime import datetime
-from typing import List, Optional, Callable
+from typing import Optional, Callable
 
 from app.services.habits_service import HabitsService
 from app.ui.habits.habits_form import HabitsForm
+from app.ui.habits.habits_list import HabitsList
 
 
 class HabitsView:
@@ -29,7 +29,13 @@ class HabitsView:
 
         # UI Components
         self.form: HabitsForm = HabitsForm(on_save=self._handle_save, on_cancel=lambda e: self._toggle_form())
-        self.habits_list_container = None
+        self.habits_list = HabitsList(
+            habits_service=self.habits_service,
+            on_add=lambda e: self._toggle_form(),
+            on_complete=self._complete_habit,
+            on_edit=self._start_edit,
+            on_delete=self._delete_habit,
+        )
         self.main_column = None
     
     def _handle_save(self, _):
@@ -124,206 +130,17 @@ class HabitsView:
             if self.showing_form:
                 self.main_column.controls.append(self._build_form())
             else:
-                self.main_column.controls.append(self._build_habits_list())
+                self.main_column.controls.append(self.habits_list.build())
             self.main_column.update()
     
     def _refresh_list(self):
         """Refresca la lista de hábitos"""
-        if self.habits_list_container and not self.showing_form:
-            self.habits_list_container.content = ft.Column(
-                controls=self._build_habit_cards(),
-                scroll=ft.ScrollMode.AUTO,
-                expand=True,
-            )
-            # Solo actualizar si el control está en la página
-            try:
-                if self.habits_list_container.page:
-                    self.habits_list_container.update()
-            except Exception as e:
-                # Si aún no está en la página, se actualizará cuando se agregue
-                pass
-    
-    def _build_habit_cards(self) -> List[ft.Container]:
-        """Construye las tarjetas de hábitos"""
-        cards = []
-        habits = self.habits_service.get_all_habits()
-        
-        if not habits:
-            return [
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Icon(
-                                ft.Icons.LIGHTBULB_OUTLINE,
-                                size=40,
-                                color=ft.Colors.GREY_400,
-                            ),
-                            ft.Text(
-                                "Sin hábitos aún",
-                                color=ft.Colors.WHITE_70,
-                                size=16,
-                            ),
-                        ],
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    alignment=ft.Alignment.CENTER,
-                    padding=40,
-                )
-            ]
-        
-        for habit in habits:
-            completed_today = habit.was_completed_today()
-            frequency_labels = {
-                "daily": "Diario",
-                "weekly": "Semanal",
-                "monthly": "Mensual",
-                "semiannual": "Semestral",
-                "annual": "Anual",
-            }
-            freq_text = frequency_labels.get(habit.frequency, habit.frequency.capitalize())
-            if habit.frequency != "daily":
-                freq_text = f"{freq_text}: {habit.frequency_times} veces"
-            
-            card = ft.Container(
-                content=ft.Column(
-                    [
-                        ft.Row(
-                            [
-                                ft.Column(
-                                    [
-                                        ft.Text(
-                                            habit.title,
-                                            size=16,
-                                            weight=ft.FontWeight.BOLD,
-                                            color=ft.Colors.WHITE,
-                                        ),
-                                        ft.Text(
-                                            habit.description[:50] if habit.description else "",
-                                            size=12,
-                                            color=ft.Colors.WHITE_70,
-                                        ) if habit.description else ft.Container(),
-                                        ft.Text(
-                                            f"Frecuencia: {freq_text}",
-                                            size=12,
-                                            color=ft.Colors.WHITE_70,
-                                        ),
-                                    ],
-                                    expand=True,
-                                    spacing=4,
-                                ),
-                                ft.Row(
-                                    [
-                                        ft.Icon(
-                                            ft.Icons.WHATSHOT,
-                                            size=20,
-                                            color=ft.Colors.RED_400,
-                                        ),
-                                        ft.Text(
-                                            str(habit.streak),
-                                            size=16,
-                                            weight=ft.FontWeight.BOLD,
-                                            color=ft.Colors.RED_400,
-                                        ),
-                                    ],
-                                    spacing=4,
-                                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                                ),
-                            ],
-                            spacing=16,
-                            expand=True,
-                        ),
-                        ft.Divider(height=1, color=ft.Colors.WHITE_10),
-                        ft.Row(
-                            [
-                                (
-                                    ft.Text(
-                                        f"Última vez: {datetime.fromisoformat(habit.last_completed).strftime('%d/%m %H:%M')}",
-                                        size=12,
-                                        color=ft.Colors.WHITE_60,
-                                    )
-                                    if habit.last_completed
-                                    else ft.Text(
-                                        "No completado aún",
-                                        size=12,
-                                        color=ft.Colors.WHITE_60,
-                                    )
-                                ),
-                                ft.IconButton(
-                                    icon=ft.Icons.CHECK_CIRCLE if completed_today else ft.Icons.CIRCLE_OUTLINED,
-                                    icon_color=ft.Colors.RED_500 if completed_today else ft.Colors.WHITE_60,
-                                    on_click=lambda e, hid=habit.id: self._complete_habit(hid),
-                                ),
-                                ft.IconButton(
-                                    icon=ft.Icons.EDIT,
-                                    icon_color=ft.Colors.WHITE,
-                                    on_click=lambda e, h=habit: self._start_edit(h),
-                                ),
-                                ft.IconButton(
-                                    icon=ft.Icons.DELETE_OUTLINE,
-                                    icon_color=ft.Colors.RED_400,
-                                    on_click=lambda e, hid=habit.id: self._delete_habit(hid),
-                                ),
-                            ],
-                            spacing=8,
-                        ),
-                    ],
-                    spacing=8,
-                ),
-                bgcolor=ft.Colors.WHITE_10,
-                border_radius=8,
-                padding=16,
-                margin=ft.margin.only(bottom=12),
-            )
-            cards.append(card)
-        
-        return cards
+        if self.habits_list and not self.showing_form:
+            self.habits_list.refresh()
     
     def _build_form(self) -> ft.Container:
         """Construye el formulario de crear hábito"""
         return self.form.build()
-    
-    def _build_habits_list(self) -> ft.Column:
-        """Construye la lista de hábitos"""
-        self.habits_list_container = ft.Container(
-            content=ft.Column(
-                controls=self._build_habit_cards(),
-                scroll=ft.ScrollMode.AUTO,
-                expand=True,
-            ),
-            expand=True,
-        )
-        
-        # Header fijo en la parte superior
-        header = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Text(
-                        "Mis Hábitos",
-                        size=24,
-                        weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.WHITE,
-                    ),
-                    ft.IconButton(
-                        icon=ft.Icons.ADD_CIRCLE,
-                        icon_size=28,
-                        icon_color=ft.Colors.RED_400,
-                        on_click=lambda e: self._toggle_form(),
-                    ),
-                ],
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            ),
-            padding=ft.padding.only(bottom=16),
-            border_radius=0,
-        )
-        
-        return ft.Column(
-            [
-                header,
-                self.habits_list_container,
-            ],
-            expand=True,
-            spacing=0,
-        )
     
     def build(self) -> ft.Container:
         """
@@ -333,7 +150,7 @@ class HabitsView:
             Container con el contenido de la vista de hábitos
         """
         self.main_column = ft.Column(
-            controls=[self._build_habits_list()],
+            controls=[self.habits_list.build()],
             expand=True,
         )
         
