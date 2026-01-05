@@ -38,6 +38,8 @@ env/
 *.sqlite3
 
 # Google OAuth tokens (no subir credenciales de usuario)
+build.sh
+build_android_apk.sh
 token.pickle
 *.pickle
 
