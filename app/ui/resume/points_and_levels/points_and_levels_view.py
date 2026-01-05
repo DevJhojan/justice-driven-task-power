@@ -13,6 +13,24 @@ from app.utils.task_helper import TASK_STATUS_COMPLETED
 
 
 class PointsAndLevelsView(ft.Container):
+    async def _load_completed_goals_count(self):
+        """Carga desde BD cuántas metas se completaron y actualiza el header"""
+        try:
+            await self._ensure_database_service()
+            # Considera meta completada si progress >= target
+            query = f"SELECT COUNT(*) FROM goals WHERE progress >= target"
+            result = await self.database_service.execute(query)
+            count = 0
+            if result and hasattr(result, 'fetchone'):
+                row = await result.fetchone()
+                if row:
+                    count = row[0]
+                elif result and isinstance(result, list):
+                    count = result[0][0] if result else 0
+                self.set_goals_completed(count)
+        except Exception as e:
+            print(f"[PointsAndLevelsView] Error cargando metas completadas: {e}")
+
     """Vista principal de puntos y niveles con paneles de información"""
     
     def __init__(self, progress_service: Optional[ProgressService] = None, user_id: str = "default_user", on_verify_integrity=None, on_points_change: Optional[Callable[[float], None]] = None):
@@ -68,7 +86,7 @@ class PointsAndLevelsView(ft.Container):
         self.points_text = ft.Text("0.00", size=24, weight="bold", color="#4CAF50")
         self.tasks_completed_text = ft.Text("0 tareas completadas", size=14, color="#CCCCCC")
         self.habits_completed_text = ft.Text("0 hábitos completados", size=14, color="#CCCCCC")
-        self.missions_completed_text = ft.Text("0 misiones completadas", size=14, color="#CCCCCC")
+        self.goals_completed_text = ft.Text("0 metas completadas", size=14, color="#CCCCCC")
         
         # Botón de verificación de integridad
         self.verify_button = ft.IconButton(
@@ -181,16 +199,17 @@ class PointsAndLevelsView(ft.Container):
                         ],
                     ),
                     ft.Divider(height=1, color="#3a3a3a"),
-                    # Tercera fila: Tareas | Hábitos | Misiones
+                    # Tercera fila: Tareas | Hábitos | Metas
                     ft.Row(
                         alignment=ft.MainAxisAlignment.SPACE_AROUND,
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         controls=[
                             self.tasks_completed_text,
                             self.habits_completed_text,
-                            self.missions_completed_text,
+                            self.goals_completed_text,
                         ],
                     ),
+                    # ...existing code...
                 ],
             ),
         )
@@ -348,6 +367,7 @@ class PointsAndLevelsView(ft.Container):
         self.update_progress_from_stats(stats)
         await self._load_completed_tasks_count()
         await self._load_completed_habits_count()
+        await self._load_completed_goals_count()
         print(f"[PointsAndLevelsView] Stats cargados desde ProgressService")
     
     def _on_verify_integrity_click(self, e):
@@ -441,6 +461,8 @@ class PointsAndLevelsView(ft.Container):
         had_correction,
         completed_habits: int = 0,
         habit_points: float = 0.0,
+        completed_goals: int = 0,
+        goal_points: float = 0.0,
         difference: float = 0.0,
     ):
         """Muestra el resultado de la verificación en el panel"""
@@ -454,6 +476,7 @@ class PointsAndLevelsView(ft.Container):
             ft.Text(f"📋 Tareas completadas: {completed_tasks} × 0.05 = {completed_tasks * 0.05:.2f} puntos", size=13, color="#CCCCCC"),
             ft.Text(f"✓ Subtareas completadas: {completed_subtasks} × 0.02 = {completed_subtasks * 0.02:.2f} puntos", size=13, color="#CCCCCC"),
             ft.Text(f"🔁 Hábitos completados (estimados): {completed_habits} → {habit_points:.2f} puntos", size=13, color="#CCCCCC"),
+            ft.Text(f"🎯 Metas completadas: {completed_goals} × 0.25 = {goal_points:.2f} puntos", size=13, color="#4CAF50"),
             ft.Text(f"🎯 Total esperado: {expected_points:.2f} puntos", size=13, color="#4CAF50", weight="bold"),
         ]
         

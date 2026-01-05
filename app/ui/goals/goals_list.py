@@ -15,11 +15,37 @@ class GoalsList(ft.Column):
         self.on_progress_update = on_progress_update
         self.spacing = 10
         self.controls = []
+        self.filter_state = "in_progress"  # Opciones: in_progress, completed
+
+        # Barra de filtro
+        self.filter_bar = ft.Row([
+            ft.Text("Filtrar:", size=13, color="#FF1744"),
+            ft.RadioGroup(
+                content=ft.Row([
+                    ft.Radio(value="in_progress", label="Metas en progreso"),
+                    ft.Radio(value="completed", label="Metas completadas"),
+                ], spacing=10),
+                value="in_progress",
+                on_change=self._on_filter_change,
+            ),
+        ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=20)
+
+        self.controls.append(self.filter_bar)
+        self.refresh()
+
+    def _on_filter_change(self, e):
+        self.filter_state = e.control.value
         self.refresh()
 
     def refresh(self):
-        self.controls.clear()
-        for goal in self.goals:
+        # Mantener la barra de filtro arriba
+        self.controls = [self.filter_bar]
+        # Filtrar metas según el estado seleccionado
+        if self.filter_state == "in_progress":
+            filtered_goals = [g for g in self.goals if not (g.target > 0 and g.progress >= g.target)]
+        else:
+            filtered_goals = [g for g in self.goals if g.target > 0 and g.progress >= g.target]
+        for goal in filtered_goals:
             card = GoalsCard(
                 goal,
                 on_edit=self.on_edit,
@@ -27,7 +53,6 @@ class GoalsList(ft.Column):
                 on_progress_update=self.on_progress_update,
             )
             self.controls.append(card)
-        # self.update() eliminado para evitar error antes de estar en la página
 
     def set_goals(self, goals: List[Goal]):
         self.goals = goals
