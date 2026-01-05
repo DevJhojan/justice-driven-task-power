@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Callable
 
 from app.models.habit import Habit
-from app.services.database_service import DatabaseService
+from app.services.habits_service import HabitsService
 
 
 class HabitsView:
@@ -22,8 +22,7 @@ class HabitsView:
         Args:
             on_update: Callback opcional al actualizar hábitos
         """
-        self.database_service = DatabaseService()
-        self.habits: Dict[str, Habit] = {}
+        self.habits_service = HabitsService()
         self.on_update = on_update
         self.showing_form = False
         
@@ -42,138 +41,57 @@ class HabitsView:
         self.habits_list_container = None
         self.main_column = None
     
-    async def _init_db(self):
-        """Inicializa la tabla de hábitos en la BD"""
-        try:
-            await self.database_service.execute(
-                """
-                CREATE TABLE IF NOT EXISTS habits (
-                    id TEXT PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    description TEXT,
-                    frequency TEXT DEFAULT 'daily',
-                    streak INTEGER DEFAULT 0,
-                    last_completed TEXT,
-                    created_at TEXT
-                )
-                """
-            )
-            await self.database_service.commit()
-            print("[HabitsView] Tabla de hábitos creada/verificada")
-        except Exception as e:
-            print(f"[HabitsView] Error inicializando BD: {e}")
-    
-    async def _load_from_db(self):
-        """Carga hábitos desde la BD"""
-        try:
-            habits_data = await self.database_service.get_all("habits")
-            self.habits = {}
-            for habit_data in habits_data:
-                habit = Habit.from_dict(habit_data)
-                self.habits[habit.id] = habit
-            print(f"[HabitsView] Cargados {len(self.habits)} hábitos desde BD")
-        except Exception as e:
-            print(f"[HabitsView] Error cargando hábitos: {e}")
-    
-    async def _save_to_db(self, habit: Habit):
-        """Guarda un hábito en la BD"""
-        try:
-            await self.database_service.execute(
-                """
-                INSERT INTO habits (id, title, description, frequency, streak, last_completed, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    habit.id,
-                    habit.title,
-                    habit.description,
-                    habit.frequency,
-                    habit.streak,
-                    habit.last_completed,
-                    habit.created_at,
-                ),
-            )
-            await self.database_service.commit()
-        except Exception as e:
-            print(f"[HabitsView] Error guardando hábito: {e}")
-    
-    async def _update_in_db(self, habit: Habit):
-        """Actualiza un hábito en la BD"""
-        try:
-            await self.database_service.execute(
-                """
-                UPDATE habits
-                SET title = ?, description = ?, frequency = ?, streak = ?, last_completed = ?
-                WHERE id = ?
-                """,
-                (
-                    habit.title,
-                    habit.description,
-                    habit.frequency,
-                    habit.streak,
-                    habit.last_completed,
-                    habit.id,
-                ),
-            )
-            await self.database_service.commit()
-        except Exception as e:
-            print(f"[HabitsView] Error actualizando hábito: {e}")
-    
-    async def _delete_from_db(self, habit_id: str):
-        """Elimina un hábito de la BD"""
-        try:
-            await self.database_service.execute("DELETE FROM habits WHERE id = ?", (habit_id,))
-            await self.database_service.commit()
-        except Exception as e:
-            print(f"[HabitsView] Error eliminando hábito: {e}")
-    
     def _create_habit(self):
         """Crea un nuevo hábito"""
         if not self.title_input.value or self.title_input.value.strip() == "":
             return
         
-        habit = Habit(
-            title=self.title_input.value,
-            description=self.description_input.value or "",
-            frequency=self.frequency_dropdown.value or "daily",
-        )
-        
-        self.habits[habit.id] = habit
-        asyncio.create_task(self._save_to_db(habit))
-        
-        # Limpiar inputs
-        self.title_input.value = ""
-        self.description_input.value = ""
-        self.frequency_dropdown.value = "daily"
-        
-        self._toggle_form()
-        self._refresh_list()
+        asyncio.create_task(self._async_create_habit())
+    
+    async def _async_create_habit(self):
+        """Crea un hábito de forma asíncrona"""
+        try:
+            habit = await self.habits_service.create_habit(
+                title=self.title_input.value,
+                description=self.description_input.value or "",
+                frequency=self.frequency_dropdown.value or "daily",
+            )
+            
+            # Limpiar inputs
+            self.title_input.value = ""
+            self.description_input.value = ""
+            self.frequency_dropdown.value = "daily"
+            
+            self._toggle_form()
+            self._refresh_list()
+        except Exception as e:
+            print(f"[HabitsView] Error creando hábito: {e}")
     
     def _complete_habit(self, habit_id: str):
         """Marca/desmarca un hábito como completado"""
-        if habit_id in self.habits:
-            habit = self.habits[habit_id]
-            
-            # Si ya fue completado hoy, desmarcarlo
-            if habit.was_completed_today():
-                # Desmarcar: restar 1 a la racha (mínimo 0)
-                habit.streak = max(0, habit.streak - 1)
-                habit.last_completed = None
-            else:
-                # Marcar como completado
-                habit.complete_today()
-            
-            asyncio.create_task(self._update_in_db(habit))
+        asyncio.create_task(self._async_complete_habit(habit_id))
+    
+    async def _async_complete_habit(self, habit_id: str):
+        """Marca/desmarca un hábito como completado de forma asíncrona"""
+        try:
+            await self.habits_service.complete_habit(habit_id)
             self._refresh_list()
             if self.on_update:
                 self.on_update()
+        except Exception as e:
+            print(f"[HabitsView] Error completando hábito: {e}")
     
     def _delete_habit(self, habit_id: str):
         """Elimina un hábito"""
-        if habit_id in self.habits:
-            del self.habits[habit_id]
-            asyncio.create_task(self._delete_from_db(habit_id))
+        asyncio.create_task(self._async_delete_habit(habit_id))
+    
+    async def _async_delete_habit(self, habit_id: str):
+        """Elimina un hábito de forma asíncrona"""
+        try:
+            await self.habits_service.delete_habit(habit_id)
             self._refresh_list()
+        except Exception as e:
+            print(f"[HabitsView] Error eliminando hábito: {e}")
     
     def _toggle_form(self):
         """Alterna entre mostrar/ocultar el formulario"""
@@ -198,14 +116,20 @@ class HabitsView:
                 scroll=ft.ScrollMode.AUTO,
                 expand=True,
             )
-            if self.habits_list_container.content:
-                self.habits_list_container.update()
+            # Solo actualizar si el control está en la página
+            try:
+                if self.habits_list_container.page:
+                    self.habits_list_container.update()
+            except Exception as e:
+                # Si aún no está en la página, se actualizará cuando se agregue
+                pass
     
     def _build_habit_cards(self) -> List[ft.Container]:
         """Construye las tarjetas de hábitos"""
         cards = []
+        habits = self.habits_service.get_all_habits()
         
-        if not self.habits:
+        if not habits:
             return [
                 ft.Container(
                     content=ft.Column(
@@ -228,7 +152,7 @@ class HabitsView:
                 )
             ]
         
-        for habit in self.habits.values():
+        for habit in habits:
             completed_today = habit.was_completed_today()
             
             card = ft.Container(
@@ -414,9 +338,9 @@ class HabitsView:
         
         # Inicializar BD de forma asíncrona
         async def init():
-            await self._init_db()
-            await self._load_from_db()
-            await self._refresh_list()            
+            await self.habits_service.initialize()
+            # Actualizar la lista después de cargar los hábitos
+            self._refresh_list()
         
         asyncio.create_task(init())
         

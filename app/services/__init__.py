@@ -4,6 +4,7 @@ from .database_service import DatabaseService, TableSchema
 from .progress_service import ProgressService
 from .task_service import TaskService
 from .rewards_service import RewardsService
+from .habits_service import HabitsService
 
 __all__ = [
 	"DatabaseService",
@@ -11,4 +12,5 @@ __all__ = [
 	"ProgressService",
 	"TaskService",
 	"RewardsService",
+	"HabitsService",
 ]
