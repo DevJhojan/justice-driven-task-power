@@ -1,3 +1,5 @@
+dist/
+*.exe
 # Python
 __pycache__/
 *.py[cod]
@@ -40,6 +42,8 @@ env/
 # Google OAuth tokens (no subir credenciales de usuario)
 build.sh
 build_android_apk.sh
+build.bat
+build_android_apk.bat
 token.pickle
 *.pickle
 
